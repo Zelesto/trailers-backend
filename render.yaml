@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: logistics-backend
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: production
+      - key: APP_DB_INIT_ENABLED
+        value: "true"
+      - key: APP_DB_INIT_SEED
+        value: "true"
+      - key: APP_DB_INIT_DROP
+        value: "false"
+      - key: OPENROUTESERVICE_API_KEY
+        value: "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImE4ZmFlZjFiNmFmMjQyNjQ4ZDA5MzBiOGRjMzIzMDlhIiwiaCI6Im11cm11cjY0In0="
+      - key: JWT_SECRET
+        value: "Y2hpZWZzdHJhaWdodHN1Y2Nlc3NmdWxiYXNpY2FueW9uZXN0YXl0cmlwY2xpbWJ1c2U="
+      - key: JWT_EXPIRATION
+        value: "86400000"
+    healthCheckPath: /api/actuator/health
+    autoDeploy: true

@@ -1,0 +1,227 @@
+PS C:\Users\theo.zwane\IdeaProjects\trailers> mvn clean compile
+[INFO] Scanning for projects...
+[INFO]
+[INFO] -------------------------< com.pgsa:trailers >--------------------------
+[INFO] Building trailers 0.0.1-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.3.2:clean (default-clean) @ trailers ---
+[INFO] Deleting C:\Users\theo.zwane\IdeaProjects\trailers\target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ trailers ---
+[INFO] Copying 1 resource from src\main\resources to target\classes
+[INFO] Copying 0 resource from src\main\resources to target\classes
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ trailers ---
+[INFO] Changes detected - recompiling the module! :source
+[INFO] Compiling 70 source files with javac [debug release 17] to target\classes
+[INFO] Some messages have been simplified; recompile with -Xdiags:verbose to get full output
+[INFO] -------------------------------------------------------------
+[ERROR] COMPILATION ERROR :
+[INFO] -------------------------------------------------------------
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[35,27] constructor TripKpiDTO in record com.pgsa.trailers.dto.TripKpiDTO cannot be applied to given types;
+  required: java.lang.Long,java.lang.String,java.math.BigDecimal,java.math.BigDecimal,java.math.BigDecimal,java.math.BigDecimal,java.math.BigDecimal
+  found:    java.lang.Long,java.math.BigDecimal,java.math.BigDecimal
+  reason: actual and formal argument lists differ in length
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[36,25] incompatible types: inference variable T has incompatible bounds
+    equality constraints: com.pgsa.trailers.dto.TripKpiDTO
+    lower bounds: java.lang.Object
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[42,52] incompatible types: java.lang.Long cannot be converted to java.lang.String
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[43,25] incompatible types: inference variable T has incompatible bounds
+    equality constraints: com.pgsa.trailers.dto.VehicleKpiDTO
+    lower bounds: java.lang.Object
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[49,51] incompatible types: java.lang.Long cannot be converted to java.lang.String
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[50,25] incompatible types: inference variable T has incompatible bounds
+    equality constraints: com.pgsa.trailers.dto.DriverKpiDTO
+    lower bounds: java.lang.Object
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/FuelMonthCloseService.java:[46,13] cannot find symbol
+  symbol:   method setFinalized(boolean)
+  location: variable slip of type com.pgsa.trailers.entity.ops.FuelSlip
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/InventoryController.java:[25,33] cannot find symbol
+  symbol:   method getShrinkageReport(java.lang.Long)
+  location: variable stockCountService of type com.pgsa.trailers.service.StockCountService
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/FuelSlipController.java:[22,27] cannot find symbol
+  symbol:   method createFuelSlip(com.pgsa.trailers.entity.ops.FuelSlip)
+  location: variable fuelService of type com.pgsa.trailers.service.FuelMonthCloseService
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/FuelSlipController.java:[28,27] cannot find symbol
+  symbol:   method getFuelSlipById(java.lang.Long)
+  location: variable fuelService of type com.pgsa.trailers.service.FuelMonthCloseService
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/FuelSlipController.java:[34,38] incompatible types: java.lang.Long cannot be converted to com.pgsa.trailers.entity.ops.FuelSlip
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/AccountStatementController.java:[22,33] cannot find symbol
+  symbol:   method createAccountStatement(com.pgsa.trailers.entity.finance.AccountStatement)
+  location: variable complianceService of type com.pgsa.trailers.service.ComplianceService
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/AccountStatementController.java:[28,33] cannot find symbol
+  symbol:   method getAccountStatementById(java.lang.Long)
+  location: variable complianceService of type com.pgsa.trailers.service.ComplianceService
+[INFO] 13 errors
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  4.712 s
+[INFO] Finished at: 2026-01-09T19:48:51+02:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.11.0:compile (default-compile) on project trailers: Compilation failure: Compilation failure:
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[35,27] constructor TripKpiDTO in record com.pgsa.trailers.dto.TripKpiDTO cannot be applied to given types;
+[ERROR]   required: java.lang.Long,java.lang.String,java.math.BigDecimal,java.math.BigDecimal,java.math.BigDecimal,java.math.BigDecimal,java.math.BigDecimal
+[ERROR]   found:    java.lang.Long,java.math.BigDecimal,java.math.BigDecimal
+[ERROR]   reason: actual and formal argument lists differ in length
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[36,25] incompatible types: inference variable T has incompatible bounds
+[ERROR]     equality constraints: com.pgsa.trailers.dto.TripKpiDTO
+[ERROR]     lower bounds: java.lang.Object
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[42,52] incompatible types: java.lang.Long cannot be converted to java.lang.String
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[43,25] incompatible types: inference variable T has incompatible bounds
+[ERROR]     equality constraints: com.pgsa.trailers.dto.VehicleKpiDTO
+[ERROR]     lower bounds: java.lang.Object
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[49,51] incompatible types: java.lang.Long cannot be converted to java.lang.String
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[50,25] incompatible types: inference variable T has incompatible bounds
+[ERROR]     equality constraints: com.pgsa.trailers.dto.DriverKpiDTO
+[ERROR]     lower bounds: java.lang.Object
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/FuelMonthCloseService.java:[46,13] cannot find symbol
+[ERROR]   symbol:   method setFinalized(boolean)
+[ERROR]   location: variable slip of type com.pgsa.trailers.entity.ops.FuelSlip
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/InventoryController.java:[25,33] cannot find symbol
+[ERROR]   symbol:   method getShrinkageReport(java.lang.Long)
+[ERROR]   location: variable stockCountService of type com.pgsa.trailers.service.StockCountService
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/FuelSlipController.java:[22,27] cannot find symbol
+[ERROR]   symbol:   method createFuelSlip(com.pgsa.trailers.entity.ops.FuelSlip)
+[ERROR]   location: variable fuelService of type com.pgsa.trailers.service.FuelMonthCloseService
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/FuelSlipController.java:[28,27] cannot find symbol
+[ERROR]   symbol:   method getFuelSlipById(java.lang.Long)
+[ERROR]   location: variable fuelService of type com.pgsa.trailers.service.FuelMonthCloseService
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/FuelSlipController.java:[34,38] incompatible types: java.lang.Long cannot be converted to com.pgsa.trailers.entity.ops.FuelSlip
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/AccountStatementController.java:[22,33] cannot find symbol
+[ERROR]   symbol:   method createAccountStatement(com.pgsa.trailers.entity.finance.AccountStatement)
+[ERROR]   location: variable complianceService of type com.pgsa.trailers.service.ComplianceService
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/AccountStatementController.java:[28,33] cannot find symbol
+[ERROR]   symbol:   method getAccountStatementById(java.lang.Long)
+[ERROR]   location: variable complianceService of type com.pgsa.trailers.service.ComplianceService
+[ERROR] -> [Help 1]
+[ERROR]
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR]
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+PS C:\Users\theo.zwane\IdeaProjects\trailers> mvn clean compile
+[INFO] Scanning for projects...
+[INFO]
+[INFO] -------------------------< com.pgsa:trailers >--------------------------
+[INFO] Building trailers 0.0.1-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.3.2:clean (default-clean) @ trailers ---
+[INFO] Deleting C:\Users\theo.zwane\IdeaProjects\trailers\target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ trailers ---
+[INFO] Copying 1 resource from src\main\resources to target\classes
+[INFO] Copying 0 resource from src\main\resources to target\classes
+[INFO]
+[INFO] --- compiler:3.11.0:compile (default-compile) @ trailers ---
+[INFO] Changes detected - recompiling the module! :source
+[INFO] Compiling 70 source files with javac [debug release 17] to target\classes
+[INFO] Some messages have been simplified; recompile with -Xdiags:verbose to get full output
+[INFO] -------------------------------------------------------------
+[ERROR] COMPILATION ERROR :
+[INFO] -------------------------------------------------------------
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[49,26] cannot find symbol
+  symbol:   method getVehicleRegistration()
+  location: variable t of type com.pgsa.trailers.entity.ops.TripMetrics
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[68,26] cannot find symbol
+  symbol:   method getTotalKm()
+  location: variable v of type com.pgsa.trailers.entity.assets.Vehicle
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[69,26] cannot find symbol
+  symbol:   method getFuelLiters()
+  location: variable v of type com.pgsa.trailers.entity.assets.Vehicle
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[70,26] cannot find symbol
+  symbol:   method getFuelCost()
+  location: variable v of type com.pgsa.trailers.entity.assets.Vehicle
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[71,26] cannot find symbol
+  symbol:   method getKmPerLiter()
+  location: variable v of type com.pgsa.trailers.entity.assets.Vehicle
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[72,26] cannot find symbol
+  symbol:   method getCostPerKm()
+  location: variable v of type com.pgsa.trailers.entity.assets.Vehicle
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[85,32] incompatible types: java.lang.Long cannot be converted to java.lang.String
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[88,25] incompatible types: inference variable T has incompatible bounds
+    equality constraints: com.pgsa.trailers.dto.DriverKpiDTO
+    lower bounds: java.lang.Object
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/FuelMonthCloseService.java:[46,13] cannot find symbol
+  symbol:   method setFinalized(boolean)
+  location: variable slip of type com.pgsa.trailers.entity.ops.FuelSlip
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/InventoryController.java:[25,33] cannot find symbol
+  symbol:   method getShrinkageReport(java.lang.Long)
+  location: variable stockCountService of type com.pgsa.trailers.service.StockCountService
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/FuelSlipController.java:[22,27] cannot find symbol
+  symbol:   method createFuelSlip(com.pgsa.trailers.entity.ops.FuelSlip)
+  location: variable fuelService of type com.pgsa.trailers.service.FuelMonthCloseService
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/FuelSlipController.java:[28,27] cannot find symbol
+  symbol:   method getFuelSlipById(java.lang.Long)
+  location: variable fuelService of type com.pgsa.trailers.service.FuelMonthCloseService
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/FuelSlipController.java:[34,38] incompatible types: java.lang.Long cannot be converted to com.pgsa.trailers.entity.ops.FuelSlip
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/AccountStatementController.java:[22,33] cannot find symbol
+  symbol:   method createAccountStatement(com.pgsa.trailers.entity.finance.AccountStatement)
+  location: variable complianceService of type com.pgsa.trailers.service.ComplianceService
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/AccountStatementController.java:[28,33] cannot find symbol
+  symbol:   method getAccountStatementById(java.lang.Long)
+  location: variable complianceService of type com.pgsa.trailers.service.ComplianceService
+[INFO] 15 errors
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  3.391 s
+[INFO] Finished at: 2026-01-09T19:54:17+02:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.11.0:compile (default-compile) on project trailers: Compilation failure: Compilation failure:
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[49,26] cannot find symbol
+[ERROR]   symbol:   method getVehicleRegistration()
+[ERROR]   location: variable t of type com.pgsa.trailers.entity.ops.TripMetrics
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[68,26] cannot find symbol
+[ERROR]   symbol:   method getTotalKm()
+[ERROR]   location: variable v of type com.pgsa.trailers.entity.assets.Vehicle
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[69,26] cannot find symbol
+[ERROR]   symbol:   method getFuelLiters()
+[ERROR]   location: variable v of type com.pgsa.trailers.entity.assets.Vehicle
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[70,26] cannot find symbol
+[ERROR]   symbol:   method getFuelCost()
+[ERROR]   location: variable v of type com.pgsa.trailers.entity.assets.Vehicle
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[71,26] cannot find symbol
+[ERROR]   symbol:   method getKmPerLiter()
+[ERROR]   location: variable v of type com.pgsa.trailers.entity.assets.Vehicle
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[72,26] cannot find symbol
+[ERROR]   symbol:   method getCostPerKm()
+[ERROR]   location: variable v of type com.pgsa.trailers.entity.assets.Vehicle
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[85,32] incompatible types: java.lang.Long cannot be converted to java.lang.String
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/AnalyticsService.java:[88,25] incompatible types: inference variable T has incompatible bounds
+[ERROR]     equality constraints: com.pgsa.trailers.dto.DriverKpiDTO
+[ERROR]     lower bounds: java.lang.Object
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/service/FuelMonthCloseService.java:[46,13] cannot find symbol
+[ERROR]   symbol:   method setFinalized(boolean)
+[ERROR]   location: variable slip of type com.pgsa.trailers.entity.ops.FuelSlip
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/InventoryController.java:[25,33] cannot find symbol
+[ERROR]   symbol:   method getShrinkageReport(java.lang.Long)
+[ERROR]   location: variable stockCountService of type com.pgsa.trailers.service.StockCountService
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/FuelSlipController.java:[22,27] cannot find symbol
+[ERROR]   symbol:   method createFuelSlip(com.pgsa.trailers.entity.ops.FuelSlip)
+[ERROR]   location: variable fuelService of type com.pgsa.trailers.service.FuelMonthCloseService
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/FuelSlipController.java:[28,27] cannot find symbol
+[ERROR]   symbol:   method getFuelSlipById(java.lang.Long)
+[ERROR]   location: variable fuelService of type com.pgsa.trailers.service.FuelMonthCloseService
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/FuelSlipController.java:[34,38] incompatible types: java.lang.Long cannot be converted to com.pgsa.trailers.entity.ops.FuelSlip
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/AccountStatementController.java:[22,33] cannot find symbol
+[ERROR]   symbol:   method createAccountStatement(com.pgsa.trailers.entity.finance.AccountStatement)
+[ERROR]   location: variable complianceService of type com.pgsa.trailers.service.ComplianceService
+[ERROR] /C:/Users/theo.zwane/IdeaProjects/trailers/src/main/java/com/pgsa/trailers/controller/AccountStatementController.java:[28,33] cannot find symbol
+[ERROR]   symbol:   method getAccountStatementById(java.lang.Long)
+[ERROR]   location: variable complianceService of type com.pgsa.trailers.service.ComplianceService
+[ERROR] -> [Help 1]
+[ERROR]
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR]
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+PS C:\Users\theo.zwane\IdeaProjects\trailers>

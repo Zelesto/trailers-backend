@@ -1,0 +1,23 @@
+#!/bin/bash
+echo "Deploying to Render..."
+
+# 1. Build the project
+echo "Building project..."
+mvn clean package -DskipTests
+
+# 2. Test Docker build locally
+echo "Testing Docker build..."
+docker build -t logistics-backend .
+
+# 3. Login to Render (if you have CLI installed)
+# render login
+
+# 4. Deploy
+echo "Pushing to Render..."
+# render deploy
+
+# 5. Check logs
+echo "To check logs after deployment:"
+echo "1. Go to: https://dashboard.render.com"
+echo "2. Find 'logistics-backend' service"
+echo "3. Click 'Logs' tab"

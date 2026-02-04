@@ -22,6 +22,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.beans.factory.annotation.Value;
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 
 import java.util.HashMap;
 import java.util.List;
@@ -40,7 +44,52 @@ public class AuthController {
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
     private final CustomUserDetailsService userDetailsService;
-    private final AppUserRepository userRepository; // Added missing dependency
+    private final AppUserRepository userRepository;
+    private final DataSource dataSource; // Added for database info
+    
+    @Value("${spring.datasource.url:Not configured}")
+    private String datasourceUrl;
+    
+    @Value("${spring.datasource.username:Not configured}")
+    private String datasourceUsername;
+
+    @GetMapping("/db-info")
+    public ResponseEntity<?> getDatabaseInfo() {
+        try (Connection connection = dataSource.getConnection()) {
+            DatabaseMetaData metaData = connection.getMetaData();
+            
+            Map<String, Object> dbInfo = new HashMap<>();
+            dbInfo.put("databaseProductName", metaData.getDatabaseProductName());
+            dbInfo.put("databaseProductVersion", metaData.getDatabaseProductVersion());
+            dbInfo.put("url", metaData.getURL());
+            dbInfo.put("userName", metaData.getUserName());
+            
+            // From application.properties
+            dbInfo.put("configuredUrl", datasourceUrl);
+            dbInfo.put("configuredUsername", datasourceUsername);
+            
+            log.info("=== DATABASE CONNECTION INFO ===");
+            log.info("Database: {}", metaData.getDatabaseProductName());
+            log.info("Version: {}", metaData.getDatabaseProductVersion());
+            log.info("JDBC URL: {}", metaData.getURL());
+            log.info("Connected as: {}", metaData.getUserName());
+            log.info("Configured URL: {}", datasourceUrl);
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "database", dbInfo
+            ));
+            
+        } catch (Exception e) {
+            log.error("Error getting database info", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                "success", false,
+                "error", "Failed to get database info: " + e.getMessage(),
+                "configuredUrl", datasourceUrl,
+                "configuredUsername", datasourceUsername
+            ));
+        }
+    }
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {

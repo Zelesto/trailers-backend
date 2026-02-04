@@ -1,7 +1,7 @@
 package com.pgsa.trailers.controller;
 
 import com.pgsa.trailers.dto.AppUserDTO;
-import com.pgsa.trailers.entity.ops.AppUser;
+import com.pgsa.trailers.entity.security.AppUser;
 import com.pgsa.trailers.repository.AppUserRepository;
 import com.pgsa.trailers.service.security.JwtService;
 import com.pgsa.trailers.service.security.UserService;

@@ -138,7 +138,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
             t.cost_amount as cost,
             (t.revenue_amount - t.cost_amount) as profit,
             t.duration_hours as duration
-        FROM trips t
+        FROM trip t
         JOIN vehicles v ON t.vehicle_id = v.id
         WHERE DATE(t.start_time) BETWEEN :startDate AND :endDate
         ORDER BY t.start_time DESC

@@ -1,6 +1,8 @@
 package com.pgsa.trailers.controller;
 
 import com.pgsa.trailers.dto.AppUserDTO;
+import com.pgsa.trailers.model.AppUser;
+import com.pgsa.trailers.repository.AppUserRepository;
 import com.pgsa.trailers.service.security.JwtService;
 import com.pgsa.trailers.service.security.UserService;
 import com.pgsa.trailers.service.security.CustomUserDetailsService;
@@ -24,11 +26,12 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@CrossOrigin(origins = {"http://localhost:8081", "http://localhost:5173","https://trailers-backend.onrender.com"})
+@CrossOrigin(origins = {"http://localhost:8081", "http://localhost:5173", "https://trailers-backend.onrender.com","https://trailers-1.onrender.com"})
 @Slf4j
 public class AuthController {
 
@@ -36,27 +39,28 @@ public class AuthController {
     private final JwtService jwtService;
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
-    private final CustomUserDetailsService userDetailsService; // Added this
+    private final CustomUserDetailsService userDetailsService;
+    private final AppUserRepository userRepository; // Added missing dependency
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
         log.info("Login attempt for email: {}", request.getEmail());
 
-        / DEBUG: Check user before authentication
-    try {
-        Optional<AppUser> userCheck = userRepository.findByEmailIgnoreCase(request.getEmail());
-        log.info("👤 User found: {}", userCheck.isPresent());
-        if (userCheck.isPresent()) {
-            AppUser u = userCheck.get();
-            boolean pwdMatch = passwordEncoder.matches(request.getPassword(), u.getPasswordHash());
-            log.info("🔑 Password matches: {}", pwdMatch);
-            log.info("✅ User enabled: {}", u.isEnabled());
-            log.info("📋 Roles count: {}", u.getRoles().size());
+        // DEBUG: Check user before authentication
+        try {
+            Optional<AppUser> userCheck = userRepository.findByEmailIgnoreCase(request.getEmail());
+            log.info("👤 User found: {}", userCheck.isPresent());
+            if (userCheck.isPresent()) {
+                AppUser u = userCheck.get();
+                boolean pwdMatch = passwordEncoder.matches(request.getPassword(), u.getPasswordHash());
+                log.info("🔑 Password matches: {}", pwdMatch);
+                log.info("✅ User enabled: {}", u.isEnabled());
+                log.info("📋 Roles count: {}", u.getRoles().size());
+            }
+        } catch (Exception e) {
+            log.error("❌ Pre-auth check failed", e);
         }
-    } catch (Exception e) {
-        log.error("❌ Pre-auth check failed", e);
-    }
-        
+
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
@@ -87,6 +91,7 @@ public class AuthController {
             ));
         }
     }
+
     @GetMapping("/check-token")
     public ResponseEntity<?> checkToken(@RequestHeader(value = "Authorization", required = false) String authHeader) {
         Map<String, Object> response = new HashMap<>();
@@ -119,7 +124,6 @@ public class AuthController {
                             .stream()
                             .map(GrantedAuthority::getAuthority)
                             .toList()
-
             ));
 
         } catch (Exception e) {
@@ -129,6 +133,7 @@ public class AuthController {
 
         return ResponseEntity.ok(response);
     }
+
     @PutMapping("/password")
     public ResponseEntity<?> changePassword(@RequestBody PasswordChangeRequest request) {
         try {
@@ -247,16 +252,18 @@ public class AuthController {
         }
     }
 
-    private boolean isAuthenticated(Authentication authentication) {
-        return authentication != null &&
-                authentication.isAuthenticated() &&
-                !"anonymousUser".equals(authentication.getPrincipal());
-    }
     @PostMapping("/logout")
     public ResponseEntity<?> logout(HttpServletRequest request, HttpServletResponse response) {
         SecurityContextHolder.clearContext();
         return ResponseEntity.ok("Logged out successfully");
     }
+
+    private boolean isAuthenticated(Authentication authentication) {
+        return authentication != null &&
+                authentication.isAuthenticated() &&
+                !"anonymousUser".equals(authentication.getPrincipal());
+    }
+
     @Data
     public static class LoginRequest {
         private String email;

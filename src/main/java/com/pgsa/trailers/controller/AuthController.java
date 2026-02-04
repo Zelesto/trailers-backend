@@ -42,6 +42,21 @@ public class AuthController {
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
         log.info("Login attempt for email: {}", request.getEmail());
 
+        / DEBUG: Check user before authentication
+    try {
+        Optional<AppUser> userCheck = userRepository.findByEmailIgnoreCase(request.getEmail());
+        log.info("👤 User found: {}", userCheck.isPresent());
+        if (userCheck.isPresent()) {
+            AppUser u = userCheck.get();
+            boolean pwdMatch = passwordEncoder.matches(request.getPassword(), u.getPasswordHash());
+            log.info("🔑 Password matches: {}", pwdMatch);
+            log.info("✅ User enabled: {}", u.isEnabled());
+            log.info("📋 Roles count: {}", u.getRoles().size());
+        }
+    } catch (Exception e) {
+        log.error("❌ Pre-auth check failed", e);
+    }
+        
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())

@@ -60,11 +60,23 @@ public class TripMetricsController {
         TripMetricsDTO updatedMetrics = tripMetricsService.updateTripMetrics(tripId, request);
         return ResponseEntity.ok(updatedMetrics);
     }
+    /**
+ * Calculate metrics preview without saving (no tripId needed).
+ * POST {{baseUrl}}/api/trip-metrics/preview
+ */
+@PostMapping("/preview")
+public ResponseEntity<TripMetricsDTO> previewMetrics(
+        @RequestBody RouteCalculationRequestDTO request
+) {
+    TripMetricsDTO metrics = tripMetricsService.calculateMetricsOnly(request);
+    return ResponseEntity.ok(metrics);
+}
 
     /**
      * Calculate and save trip metrics for a specific trip ID.
      * POST {{baseUrl}}/api/trip-metrics/{tripId}/calculate
      */
+    
     @PostMapping("/{tripId}/calculate")
     public ResponseEntity<TripMetricsDTO> calculateMetrics(
             @PathVariable Long tripId,

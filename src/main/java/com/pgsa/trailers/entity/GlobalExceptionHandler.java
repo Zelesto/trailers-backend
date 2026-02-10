@@ -193,7 +193,11 @@ public class GlobalExceptionHandler {
             String causeMessage = ex.getCause().getMessage();
             if (causeMessage.contains("duplicate key")) {
                 message = "Duplicate entry detected";
-            } else if (causeMessage.contains("foreign key constraint")) {
+             } else if (causeMessage.contains("violates foreign key constraint")) {
+
+            if (causeMessage.contains("update or delete")) {
+                message = "Cannot delete record because dependent records exist";
+            } else {
                 message = "Referenced data does not exist";
             } else if (causeMessage.contains("null value")) {
                 message = "Required field cannot be null";

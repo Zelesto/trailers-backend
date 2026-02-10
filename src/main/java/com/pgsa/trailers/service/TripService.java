@@ -208,21 +208,20 @@ public class TripService {
 
 
 
-    /* ========================
+   /* ========================
    DELETE
    ======================== */
 @Transactional
 public void deleteTrip(Long id) {
-    // Check if trip exists
     Trip trip = tripRepository.findById(id)
             .orElseThrow(() -> new NoSuchElementException("Trip not found"));
 
-    // Delete associated TripMetrics if exists
+    // Access metrics to ensure JPA deletes it
     if (trip.getMetrics() != null) {
-        tripMetricsRepository.delete(trip.getMetrics());
+        log.debug("Deleting associated TripMetrics for trip id: {}", id);
+        trip.setMetrics(null); // optional if orphanRemoval = true
     }
 
-    // Delete the trip
     tripRepository.delete(trip);
 }
 

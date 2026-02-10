@@ -1,4 +1,4 @@
-package com.pgsa.trailers.exception; // Changed from .entity to .exception (recommended)
+package com.pgsa.trailers.entity; // Changed from .entity to .exception (recommended)
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;

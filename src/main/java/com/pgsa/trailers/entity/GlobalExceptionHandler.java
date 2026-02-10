@@ -1,4 +1,4 @@
-package com.pgsa.trailers.entity;
+package com.pgsa.trailers.exception; // Changed from .entity to .exception (recommended)
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
@@ -9,7 +9,6 @@ import jakarta.validation.ValidationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -17,8 +16,6 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.validation.FieldError;
-import org.springframework.web.ErrorResponse;
-import org.springframework.web.ErrorResponseException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -26,7 +23,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
-import java.net.URI;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -40,7 +36,8 @@ public class GlobalExceptionHandler {
     private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     // ========== CUSTOM EXCEPTIONS ==========
-
+    // You need to create these custom exception classes or import them
+    
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ProblemDetail> handleResourceNotFound(ResourceNotFoundException ex) {
         log.warn("Resource not found: {}", ex.getMessage());
@@ -189,19 +186,18 @@ public class GlobalExceptionHandler {
         log.error("Data integrity violation: ", ex);
 
         String message = "Data integrity violation";
-        if (ex.getCause() != null && ex.getCause().getMessage() != null) {
-            String causeMessage = ex.getCause().getMessage();
-            if (causeMessage.contains("duplicate key")) {
-                message = "Duplicate entry detected";
-             } else if (causeMessage.contains("violates foreign key constraint")) {
-
+        String causeMessage = ex.getCause() != null ? ex.getCause().getMessage() : "";
+        
+        if (causeMessage.contains("duplicate key")) {
+            message = "Duplicate entry detected";
+        } else if (causeMessage.contains("violates foreign key constraint")) {
             if (causeMessage.contains("update or delete")) {
                 message = "Cannot delete record because dependent records exist";
             } else {
                 message = "Referenced data does not exist";
-            } else if (causeMessage.contains("null value")) {
-                message = "Required field cannot be null";
             }
+        } else if (causeMessage.contains("null value")) {
+            message = "Required field cannot be null";
         }
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
@@ -237,9 +233,10 @@ public class GlobalExceptionHandler {
         log.warn("Invalid request body: {}", ex.getMessage());
 
         String message = "Invalid request body";
-        if (ex.getCause() instanceof JsonParseException) {
+        Throwable cause = ex.getCause();
+        if (cause instanceof JsonParseException) {
             message = "Invalid JSON format";
-        } else if (ex.getCause() instanceof JsonMappingException) {
+        } else if (cause instanceof JsonMappingException) {
             message = "Invalid JSON mapping";
         }
 
@@ -320,9 +317,12 @@ public class GlobalExceptionHandler {
         if (isDevelopmentEnvironment()) {
             Map<String, String> debugInfo = new HashMap<>();
             debugInfo.put("exception", ex.getClass().getName());
-            debugInfo.put("message", ex.getMessage());
+            debugInfo.put("message", ex.getMessage() != null ? ex.getMessage() : "No message");
             if (ex.getCause() != null) {
                 debugInfo.put("cause", ex.getCause().getClass().getName());
+                if (ex.getCause().getMessage() != null) {
+                    debugInfo.put("causeMessage", ex.getCause().getMessage());
+                }
             }
             problemDetail.setProperty("debug", debugInfo);
         }
@@ -333,8 +333,10 @@ public class GlobalExceptionHandler {
     // ========== HELPER METHODS ==========
 
     private boolean isDevelopmentEnvironment() {
-        String env = System.getProperty("spring.profiles.active", "dev");
-        return "dev".equals(env) || "development".equals(env);
+        String env = System.getProperty("spring.profiles.active");
+        if (env == null) {
+            env = System.getenv("SPRING_PROFILES_ACTIVE");
+        }
+        return "dev".equals(env) || "development".equals(env) || env == null;
     }
 }
-

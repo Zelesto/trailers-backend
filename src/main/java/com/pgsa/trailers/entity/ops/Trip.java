@@ -150,6 +150,12 @@ public class Trip {
        Metrics (read-only relation)
        ======================== */
 
-    @OneToOne(mappedBy = "trip", fetch = FetchType.LAZY)
-    private TripMetrics metrics;
+    @OneToOne(
+    mappedBy = "trip",
+    cascade = CascadeType.ALL,
+    orphanRemoval = true,
+    fetch = FetchType.LAZY
+)
+private TripMetrics metrics;
+
 }

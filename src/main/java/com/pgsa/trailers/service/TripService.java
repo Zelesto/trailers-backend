@@ -45,6 +45,7 @@ import java.util.Optional;
 public class TripService {
 
     private final TripRepository tripRepository;
+    private final TripMetricsRepository metricsRepository;
     private final VehicleRepository vehicleRepository;
     private final DriverRepository driverRepository;
     private final TripFinalisationService tripFinalisationService;
@@ -208,14 +209,22 @@ public class TripService {
 
 
     /* ========================
-       DELETE
-       ======================== */
-    public void deleteTrip(Long id) {
-        if (!tripRepository.existsById(id)) {
-            throw new NoSuchElementException("Trip not found");
-        }
-        tripRepository.deleteById(id);
+   DELETE
+   ======================== */
+@Transactional
+public void deleteTrip(Long id) {
+    // Check if trip exists
+    Trip trip = tripRepository.findById(id)
+            .orElseThrow(() -> new NoSuchElementException("Trip not found"));
+
+    // Delete associated TripMetrics if exists
+    if (trip.getMetrics() != null) {
+        tripMetricsRepository.delete(trip.getMetrics());
     }
+
+    // Delete the trip
+    tripRepository.delete(trip);
+}
 
 
     @Transactional

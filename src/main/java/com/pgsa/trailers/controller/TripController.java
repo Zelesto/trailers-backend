@@ -138,15 +138,20 @@ public class TripController {
     }
 
     /* ========================
-       DELETE
-       ======================== */
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteTrip(@PathVariable Long id) {
-        log.debug("Deleting trip id: {}", id);
-        tripService.deleteTrip(id);
-    }
+   DELETE
+   ======================== */
+@DeleteMapping("/{id}")
+@PreAuthorize("hasRole('SUPER_ADMIN')")
+@ResponseStatus(HttpStatus.NO_CONTENT)
+public void deleteTrip(@PathVariable Long id) {
+    log.debug("Deleting trip id: {}", id);
+
+    // Call service to delete trip and associated metrics
+    tripService.deleteTrip(id);
+
+    log.debug("Trip and associated metrics deleted for id: {}", id);
+}
+
 
     /* ========================
        HELPER METHODS

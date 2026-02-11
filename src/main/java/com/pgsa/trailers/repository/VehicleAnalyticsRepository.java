@@ -23,16 +23,16 @@ public interface VehicleAnalyticsRepository extends JpaRepository<Vehicle, Long>
                  THEN COALESCE(SUM(fs.total_amount), 0) / SUM(tm.total_distance_km) 
                  ELSE 0 END as costPerKm
         FROM vehicle v
-        LEFT JOIN trip t ON t.vehicle_id = v.id
+        LEFT JOIN trip t ON t.vehicle_id = v.id 
+            AND t.status IN ('COMPLETED', 'CLOSED', 'FINALIZED')
+            AND DATE(t.actual_end_date) BETWEEN :from AND :to
         LEFT JOIN trip_metrics tm ON tm.trip_id = t.id
         LEFT JOIN fuel_slip fs ON fs.vehicle_id = v.id 
             AND DATE(fs.transaction_date) BETWEEN :from AND :to
-        WHERE t.status IN ('COMPLETED', 'CLOSED', 'FINALIZED')
-        AND DATE(t.actual_end_date) BETWEEN :from AND :to
         GROUP BY v.registration_number
         """, nativeQuery = true)
     List<Object[]> vehicleEfficiencyRaw(
-            @Param("from") LocalDate from,
-            @Param("to") LocalDate to
+            @Param("from") String from,  // ✅ Change to String
+            @Param("to") String to       // ✅ Change to String
     );
 }

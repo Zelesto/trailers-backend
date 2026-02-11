@@ -30,217 +30,349 @@ public class AnalyticsService {
     private static final int DEFAULT_TRIP_HISTORY_DAYS = 30;
     private static final int DEFAULT_ALL_TRIPS_YEARS = 1;
 
-    /** -------------------- Vehicle KPIs -------------------- */
-   public List<VehicleKpiDTO> getVehicleKpis(LocalDate startDate, LocalDate endDate) {
-    try {
-        // Convert LocalDate to ISO format strings (YYYY-MM-DD)
-        String fromStr = startDate.toString();  // "2026-01-12"
-        String toStr = endDate.toString();      // "2026-02-11"
-        
-        return vehicleRepository.vehicleEfficiencyRaw(fromStr, toStr).stream()
-                .map(this::mapToVehicleKpiDTO)
-                .collect(Collectors.toList());
-    } catch (Exception e) {
-        log.error("Error fetching vehicle KPIs from {} to {}", startDate, endDate, e);
-        return Collections.emptyList();
-    }
-}
-    /** -------------------- Driver KPIs -------------------- */
-    public List<DriverKpiDTO> getDriverKpis(LocalDate startDate, LocalDate endDate) {
-    try {
-        // Convert LocalDate to ISO format strings (YYYY-MM-DD)
-        String fromStr = startDate.toString();
-        String toStr = endDate.toString();
-        
-        log.info("Fetching driver KPIs from {} to {}", fromStr, toStr);
-        
-        List<Object[]> results = driverRepository.driverPerformanceRaw(fromStr, toStr);
-        log.info("Found {} driver records", results.size());
-        
-        return results.stream()
-                .map(this::mapToDriverKpiDTO)
-                .collect(Collectors.toList());
-    } catch (Exception e) {
-        log.error("Error fetching driver KPIs from {} to {}", startDate, endDate, e);
-        return Collections.emptyList();
-    }
-}
+    // ==================== VEHICLE KPIs ====================
 
-    /** -------------------- Trip KPIs -------------------- */
-
-    /** Get trip KPIs for a specific trip */
-    public List<TripKpiDTO> getTripKpis(Long tripId) {
-        LocalDateTime end = LocalDateTime.now();
-        LocalDateTime start = end.minusDays(DEFAULT_TRIP_HISTORY_DAYS);
-        return getTripKpis(start, end, tripId);
-    }
-
-    /** Get trip KPIs for a date range with LocalDateTime */
-    public List<TripKpiDTO> getTripKpis(LocalDateTime start, LocalDateTime end) {
-        return getTripKpis(start, end, null);
-    }
-
-    /** Get trip KPIs for a date range with LocalDate */
-    public List<TripKpiDTO> getTripKpis(LocalDate start, LocalDate end) {
-        LocalDateTime startDateTime = start.atStartOfDay();
-        LocalDateTime endDateTime = end.atTime(23, 59, 59, 999999999);
-        return getTripKpis(startDateTime, endDateTime, null);
-    }
-
-    /** Get all trip KPIs for the last year */
-    public List<TripKpiDTO> getAllTripKpis() {
-        LocalDateTime end = LocalDateTime.now();
-        LocalDateTime start = end.minusYears(DEFAULT_ALL_TRIPS_YEARS);
-        log.info("Fetching all trip KPIs from {} to {}", start, end);
-        return getTripKpis(start, end, null);
-    }
-
-    /** Internal helper to fetch trip KPIs with optional tripId filter */
-    private List<TripKpiDTO> getTripKpis(LocalDateTime start, LocalDateTime end, Long tripId) {
+    /**
+     * Get vehicle performance KPIs for a date range
+     */
+    public List<VehicleKpiDTO> getVehicleKpis(LocalDate startDate, LocalDate endDate) {
         try {
-            // Convert LocalDateTime to LocalDate for the repository method
-            LocalDate startDate = start.toLocalDate();
-            LocalDate endDate = end.toLocalDate();
-
-           return tripRepository.findTripProfitabilityRaw(startDate, endDate).stream()
-                    .filter(row -> tripId == null || extractTripId(row[0]) == tripId)
-                    .map(this::mapToTripKpiDTO)
+            String fromStr = startDate.toString();
+            String toStr = endDate.toString();
+            
+            log.info("Fetching vehicle KPIs from {} to {}", fromStr, toStr);
+            
+            List<Object[]> results = vehicleRepository.vehicleEfficiencyRaw(fromStr, toStr);
+            log.info("Found {} vehicle records", results.size());
+            
+            return results.stream()
+                    .map(this::mapToVehicleKpiDTO)
                     .collect(Collectors.toList());
         } catch (Exception e) {
-            log.error("Error fetching trip KPIs for date range {} to {}: {}", start, end, e.getMessage(), e);
+            log.error("Error fetching vehicle KPIs from {} to {}: {}", startDate, endDate, e.getMessage(), e);
             return Collections.emptyList();
         }
     }
 
-    /** -------------------- Dashboard Summary -------------------- */
+    // ==================== DRIVER KPIs ====================
+
+    /**
+     * Get driver performance KPIs for a date range
+     */
+    public List<DriverKpiDTO> getDriverKpis(LocalDate startDate, LocalDate endDate) {
+        try {
+            String fromStr = startDate.toString();
+            String toStr = endDate.toString();
+            
+            log.info("Fetching driver KPIs from {} to {}", fromStr, toStr);
+            
+            List<Object[]> results = driverRepository.driverPerformanceRaw(fromStr, toStr);
+            log.info("Found {} driver records", results.size());
+            
+            return results.stream()
+                    .map(this::mapToDriverKpiDTO)
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Error fetching driver KPIs from {} to {}: {}", startDate, endDate, e.getMessage(), e);
+            return Collections.emptyList();
+        }
+    }
+
+    // ==================== TRIP KPIs ====================
+
+    /**
+     * Get trip KPIs for a date range (LocalDate version)
+     */
+    public List<TripKpiDTO> getTripKpis(LocalDate startDate, LocalDate endDate) {
+        try {
+            log.info("Fetching trip KPIs from {} to {}", startDate, endDate);
+            
+            List<Object[]> results = tripRepository.findTripProfitabilityRaw(startDate, endDate);
+            log.info("Found {} trip records", results.size());
+            
+            return results.stream()
+                    .map(this::mapToTripKpiDTO)
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Error fetching trip KPIs from {} to {}: {}", startDate, endDate, e.getMessage(), e);
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Get trip KPIs for a specific trip ID (last 30 days)
+     */
+    public List<TripKpiDTO> getTripKpis(Long tripId) {
+        try {
+            LocalDate end = LocalDate.now();
+            LocalDate start = end.minusDays(DEFAULT_TRIP_HISTORY_DAYS);
+            
+            log.info("Fetching KPIs for trip {} from {} to {}", tripId, start, end);
+            
+            return getTripKpis(start, end).stream()
+                    .filter(trip -> trip.getTripId() != null && trip.getTripId().equals(tripId))
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Error fetching KPIs for trip {}: {}", tripId, e.getMessage(), e);
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Get all trip KPIs for the last year
+     */
+    public List<TripKpiDTO> getAllTripKpis() {
+        try {
+            LocalDate end = LocalDate.now();
+            LocalDate start = end.minusYears(DEFAULT_ALL_TRIPS_YEARS);
+            
+            log.info("Fetching all trip KPIs from {} to {}", start, end);
+            
+            return getTripKpis(start, end);
+        } catch (Exception e) {
+            log.error("Error fetching all trip KPIs: {}", e.getMessage(), e);
+            return Collections.emptyList();
+        }
+    }
+
+    // ==================== DASHBOARD SUMMARY ====================
+
+    /**
+     * Get complete dashboard summary for a date range
+     */
     public DashboardSummary getDashboardSummary(LocalDate startDate, LocalDate endDate) {
+        log.info("Building dashboard summary from {} to {}", startDate, endDate);
+        
         List<VehicleKpiDTO> vehicleKpis = getVehicleKpis(startDate, endDate);
         List<DriverKpiDTO> driverKpis = getDriverKpis(startDate, endDate);
         List<TripKpiDTO> tripKpis = getTripKpis(startDate, endDate);
+        
+        log.info("Dashboard summary: {} vehicles, {} drivers, {} trips", 
+                vehicleKpis.size(), driverKpis.size(), tripKpis.size());
 
         return new DashboardSummary(vehicleKpis, driverKpis, tripKpis);
     }
 
-    /** -------------------- Helper Methods -------------------- */
+    // ==================== MAPPING METHODS ====================
+
+    /**
+     * Map database result row to VehicleKpiDTO
+     * Expected column order:
+     * [0] registration_number
+     * [1] total_distance_km
+     * [2] fuel_liters
+     * [3] fuel_cost
+     */
     private VehicleKpiDTO mapToVehicleKpiDTO(Object[] row) {
-        return VehicleKpiDTO.withCalculations(
-                extractString(row[0]),
-                toBigDecimal(row[1]),
-                toBigDecimal(row[2]),
-                toBigDecimal(row[3])
-        );
+        try {
+            return VehicleKpiDTO.withCalculations(
+                    extractString(row[0]),
+                    toBigDecimal(row[1]),
+                    toBigDecimal(row[2]),
+                    toBigDecimal(row[3])
+            );
+        } catch (Exception e) {
+            log.error("Error mapping vehicle KPI row: {}", e.getMessage());
+            return VehicleKpiDTO.withCalculations("Unknown", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+        }
     }
 
-   private DriverKpiDTO mapToDriverKpiDTO(Object[] row) {
-    return new DriverKpiDTO(
-        extractString(row[0]), // driver_name
-        toBigDecimal(row[1]),  // trips_completed
-        toBigDecimal(row[2]),  // total_km
-        toBigDecimal(row[3]),  // fuel_cost
-        toBigDecimal(row[4]),  // efficiency_score
-        toBigDecimal(row[5]),  // total_revenue
-        toBigDecimal(row[6]),  // total_cost
-        toBigDecimal(row[7])   // profit
-    );
-}
-    private TripKpiDTO mapToTripKpiDTO(Object[] row) {
-        return new TripKpiDTO(
-                extractTripId(row[0]),
-                extractString(row[1]),
-                extractString(row[2]),
-                extractTripDate(row[3]),
-                toBigDecimal(row[4]),
-                toBigDecimal(row[5]),
-                toBigDecimal(row[6]),
-                toBigDecimal(row[7]),
-                toBigDecimal(row[8]),
-                toBigDecimal(row[9])
-        );
+    /**
+     * Map database result row to DriverKpiDTO
+     * Expected column order:
+     * [0] driver_name
+     * [1] trips_completed
+     * [2] total_km
+     * [3] fuel_cost
+     * [4] efficiency_score
+     * [5] total_revenue
+     * [6] total_cost
+     * [7] profit
+     */
+    private DriverKpiDTO mapToDriverKpiDTO(Object[] row) {
+        try {
+            return new DriverKpiDTO(
+                    extractString(row[0]),
+                    toBigDecimal(row[1]),
+                    toBigDecimal(row[2]),
+                    toBigDecimal(row[3]),
+                    toBigDecimal(row[4]),
+                    toBigDecimal(row[5]),
+                    toBigDecimal(row[6]),
+                    toBigDecimal(row[7])
+            );
+        } catch (Exception e) {
+            log.error("Error mapping driver KPI row: {}", e.getMessage());
+            return new DriverKpiDTO("Unknown", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 
+                                  BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+        }
     }
+
+    /**
+     * Map database result row to TripKpiDTO
+     * Expected column order from findTripProfitabilityRaw:
+     * [0] t.id
+     * [1] v.registrationNumber
+     * [2] v.vehicleType
+     * [3] t.plannedStartDate
+     * [4] m.totalDistanceKm
+     * [5] m.revenueAmount
+     * [6] m.costAmount
+     * [7] profit (revenue - cost)
+     * [8] m.fuelUsedLiters
+     * [9] m.totalDurationHours
+     */
+    private TripKpiDTO mapToTripKpiDTO(Object[] row) {
+        try {
+            return new TripKpiDTO(
+                    extractLong(row[0]),
+                    extractString(row[1]),
+                    extractString(row[2]),
+                    extractLocalDate(row[3]),
+                    toBigDecimal(row[4]),
+                    toBigDecimal(row[5]),
+                    toBigDecimal(row[6]),
+                    toBigDecimal(row[7]),
+                    toBigDecimal(row[8]),
+                    toBigDecimal(row[9])
+            );
+        } catch (Exception e) {
+            log.error("Error mapping trip KPI row: {}", e.getMessage());
+            return new TripKpiDTO(0L, "Unknown", "Unknown", LocalDate.now(), 
+                                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 
+                                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+        }
+    }
+
+    // ==================== EXTRACTOR METHODS ====================
 
     private String extractString(Object value) {
         return value != null ? value.toString() : "";
     }
 
-    private Long extractTripId(Object value) {
-        if (value instanceof Number) {
-            return ((Number) value).longValue();
+    private Long extractLong(Object value) {
+        if (value == null) return 0L;
+        if (value instanceof Number) return ((Number) value).longValue();
+        try {
+            return Long.parseLong(value.toString().trim());
+        } catch (NumberFormatException e) {
+            log.warn("Could not convert '{}' to Long", value);
+            return 0L;
         }
-        return 0L;
     }
 
-    private LocalDate extractTripDate(Object value) {
-        if (value instanceof java.sql.Timestamp timestamp) {
-            return timestamp.toLocalDateTime().toLocalDate();
-        } else if (value instanceof java.sql.Date date) {
-            return date.toLocalDate();
-        } else if (value instanceof LocalDate localDate) {
-            return localDate;
-        } else if (value instanceof LocalDateTime localDateTime) {
-            return localDateTime.toLocalDate();
+    private LocalDate extractLocalDate(Object value) {
+        if (value == null) return LocalDate.now();
+        
+        try {
+            if (value instanceof java.sql.Timestamp timestamp) {
+                return timestamp.toLocalDateTime().toLocalDate();
+            } else if (value instanceof java.sql.Date date) {
+                return date.toLocalDate();
+            } else if (value instanceof LocalDate localDate) {
+                return localDate;
+            } else if (value instanceof LocalDateTime localDateTime) {
+                return localDateTime.toLocalDate();
+            } else if (value instanceof String) {
+                return LocalDate.parse((String) value);
+            }
+        } catch (Exception e) {
+            log.warn("Could not convert '{}' to LocalDate: {}", value, e.getMessage());
         }
+        
         return LocalDate.now();
     }
 
     private BigDecimal toBigDecimal(Object value) {
         if (value == null) return BigDecimal.ZERO;
-        if (value instanceof BigDecimal) return (BigDecimal) value;
-        if (value instanceof Number) return BigDecimal.valueOf(((Number) value).doubleValue());
+        
         try {
-            return new BigDecimal(value.toString().trim());
-        } catch (NumberFormatException e) {
-            log.warn("Could not convert value '{}' to BigDecimal: {}", value, e.getMessage());
-            return BigDecimal.ZERO;
+            if (value instanceof BigDecimal) return (BigDecimal) value;
+            if (value instanceof Number) return BigDecimal.valueOf(((Number) value).doubleValue());
+            if (value instanceof String && !((String) value).trim().isEmpty()) {
+                return new BigDecimal(((String) value).trim());
+            }
+        } catch (Exception e) {
+            log.warn("Could not convert '{}' to BigDecimal: {}", value, e.getMessage());
         }
+        
+        return BigDecimal.ZERO;
     }
 
-    /** -------------------- Dashboard Summary Model -------------------- */
+    // ==================== DASHBOARD SUMMARY MODEL ====================
+
     @RequiredArgsConstructor
     public static class DashboardSummary {
         private final List<VehicleKpiDTO> vehicleKpis;
         private final List<DriverKpiDTO> driverKpis;
         private final List<TripKpiDTO> tripKpis;
 
+        // ========== COUNT METHODS ==========
+        
         public long getActiveVehicles() {
-            return vehicleKpis.size();
+            return vehicleKpis != null ? vehicleKpis.size() : 0L;
         }
 
         public long getActiveDrivers() {
-            return driverKpis.size();
+            return driverKpis != null ? driverKpis.size() : 0L;
         }
 
         public long getActiveTrips() {
-            return tripKpis.size();
+            return tripKpis != null ? tripKpis.size() : 0L;
         }
 
+        // ========== VEHICLE TOTALS ==========
+        
         public BigDecimal getTotalKm() {
-            return sumVehicleValues(VehicleKpiDTO::totalKm);
+            return sumValues(vehicleKpis, VehicleKpiDTO::totalKm);
         }
 
         public BigDecimal getTotalFuelLiters() {
-            return sumVehicleValues(VehicleKpiDTO::fuelLiters);
+            return sumValues(vehicleKpis, VehicleKpiDTO::fuelLiters);
         }
 
         public BigDecimal getTotalFuelCost() {
-            return sumVehicleValues(VehicleKpiDTO::fuelCost);
+            return sumValues(vehicleKpis, VehicleKpiDTO::fuelCost);
         }
 
+        // ========== DRIVER TOTALS ==========
+        
         public BigDecimal getTotalDriverRevenue() {
-            return sumDriverValues(DriverKpiDTO::totalRevenue);
+            return sumValues(driverKpis, DriverKpiDTO::totalRevenue);
         }
 
         public BigDecimal getTotalDriverProfit() {
-            return sumDriverValues(DriverKpiDTO::profit);
+            return sumValues(driverKpis, DriverKpiDTO::profit);
         }
 
+        public BigDecimal getTotalDriverCost() {
+            return sumValues(driverKpis, DriverKpiDTO::totalCost);
+        }
+
+        // ========== TRIP TOTALS ==========
+        
         public BigDecimal getTotalTripRevenue() {
-            return sumTripValues(TripKpiDTO::revenueAmount);
+            return sumValues(tripKpis, TripKpiDTO::revenueAmount);
         }
 
         public BigDecimal getTotalTripProfit() {
-            return sumTripValues(TripKpiDTO::profit);
+            return sumValues(tripKpis, TripKpiDTO::profit);
         }
 
+        public BigDecimal getTotalTripCost() {
+            return sumValues(tripKpis, TripKpiDTO::costAmount);
+        }
+
+        public BigDecimal getTotalTripDistance() {
+            return sumValues(tripKpis, TripKpiDTO::distance);
+        }
+
+        public BigDecimal getTotalFuelUsed() {
+            return sumValues(tripKpis, TripKpiDTO::fuelUsed);
+        }
+
+        // ========== AVERAGES ==========
+        
         public BigDecimal getAvgFuelEfficiency() {
             return calculateAverage(vehicleKpis, VehicleKpiDTO::kmPerLiter);
         }
@@ -249,32 +381,39 @@ public class AnalyticsService {
             return calculateAverage(driverKpis, DriverKpiDTO::efficiencyScore);
         }
 
-        // Helper methods for calculating sums and averages
-        private BigDecimal sumVehicleValues(java.util.function.Function<VehicleKpiDTO, BigDecimal> extractor) {
-            return vehicleKpis.stream()
-                    .map(extractor)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+        public BigDecimal getAvgProfitPerTrip() {
+            if (tripKpis == null || tripKpis.isEmpty()) return BigDecimal.ZERO;
+            BigDecimal totalProfit = getTotalTripProfit();
+            return totalProfit.divide(BigDecimal.valueOf(tripKpis.size()), 2, RoundingMode.HALF_UP);
         }
 
-        private BigDecimal sumDriverValues(java.util.function.Function<DriverKpiDTO, BigDecimal> extractor) {
-            return driverKpis.stream()
-                    .map(extractor)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+        public BigDecimal getAvgDistancePerTrip() {
+            if (tripKpis == null || tripKpis.isEmpty()) return BigDecimal.ZERO;
+            BigDecimal totalDistance = getTotalTripDistance();
+            return totalDistance.divide(BigDecimal.valueOf(tripKpis.size()), 2, RoundingMode.HALF_UP);
         }
 
-        private BigDecimal sumTripValues(java.util.function.Function<TripKpiDTO, BigDecimal> extractor) {
-            return tripKpis.stream()
+        public BigDecimal getAvgCostPerKm() {
+            BigDecimal totalDistance = getTotalTripDistance();
+            if (totalDistance.compareTo(BigDecimal.ZERO) == 0) return BigDecimal.ZERO;
+            BigDecimal totalCost = getTotalTripCost().add(getTotalFuelCost());
+            return totalCost.divide(totalDistance, 2, RoundingMode.HALF_UP);
+        }
+
+        // ========== HELPER METHODS ==========
+        
+        private <T> BigDecimal sumValues(List<T> items, java.util.function.Function<T, BigDecimal> extractor) {
+            if (items == null || items.isEmpty()) return BigDecimal.ZERO;
+            return items.stream()
                     .map(extractor)
+                    .filter(v -> v != null)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
         }
 
         private <T> BigDecimal calculateAverage(List<T> items, java.util.function.Function<T, BigDecimal> extractor) {
-            if (items.isEmpty()) return BigDecimal.ZERO;
-
-            BigDecimal total = items.stream()
-                    .map(extractor)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
+            if (items == null || items.isEmpty()) return BigDecimal.ZERO;
+            
+            BigDecimal total = sumValues(items, extractor);
             return total.divide(BigDecimal.valueOf(items.size()), 2, RoundingMode.HALF_UP);
         }
     }

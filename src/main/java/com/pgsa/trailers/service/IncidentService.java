@@ -1,13 +1,13 @@
 package com.pgsa.trailers.service;
 
-import com.pgsa.trailers.dto.ops.CreateIncidentRequest;
-import com.pgsa.trailers.dto.ops.IncidentDTO;
-import com.pgsa.trailers.dto.ops.UpdateIncidentRequest;
+import com.pgsa.trailers.dto.CreateIncidentRequest;
+import com.pgsa.trailers.dto.IncidentDTO;
+import com.pgsa.trailers.dto.UpdateIncidentRequest;
 import com.pgsa.trailers.entity.ops.Incident;
 import com.pgsa.trailers.entity.ops.Trip;
 import com.pgsa.trailers.exception.ResourceNotFoundException;
-import com.pgsa.trailers.repository.ops.IncidentRepository;
-import com.pgsa.trailers.repository.ops.TripRepository;
+import com.pgsa.trailers.repository.IncidentRepository;
+import com.pgsa.trailers.repository.TripRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;

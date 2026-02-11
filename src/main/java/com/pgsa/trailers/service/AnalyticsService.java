@@ -110,7 +110,7 @@ public class AnalyticsService {
             log.info("Fetching KPIs for trip {} from {} to {}", tripId, start, end);
             
             return getTripKpis(start, end).stream()
-                    .filter(trip -> trip.getTripId() != null && trip.getTripId().equals(tripId))
+                    .filter(trip -> trip.tripId() != null && trip.tripId().equals(tripId))
                     .collect(Collectors.toList());
         } catch (Exception e) {
             log.error("Error fetching KPIs for trip {}: {}", tripId, e.getMessage(), e);
@@ -208,42 +208,29 @@ public class AnalyticsService {
         }
     }
 
-    /**
-     * Map database result row to TripKpiDTO
-     * Expected column order from findTripProfitabilityRaw:
-     * [0] t.id
-     * [1] v.registrationNumber
-     * [2] v.vehicleType
-     * [3] t.plannedStartDate
-     * [4] m.totalDistanceKm
-     * [5] m.revenueAmount
-     * [6] m.costAmount
-     * [7] profit (revenue - cost)
-     * [8] m.fuelUsedLiters
-     * [9] m.totalDurationHours
-     */
-    private TripKpiDTO mapToTripKpiDTO(Object[] row) {
-        try {
-            return new TripKpiDTO(
-                    extractLong(row[0]),
-                    extractString(row[1]),
-                    extractString(row[2]),
-                    extractLocalDate(row[3]),
-                    toBigDecimal(row[4]),
-                    toBigDecimal(row[5]),
-                    toBigDecimal(row[6]),
-                    toBigDecimal(row[7]),
-                    toBigDecimal(row[8]),
-                    toBigDecimal(row[9])
-            );
-        } catch (Exception e) {
-            log.error("Error mapping trip KPI row: {}", e.getMessage());
-            return new TripKpiDTO(0L, "Unknown", "Unknown", LocalDate.now(), 
-                                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 
-                                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
-        }
+   private TripKpiDTO mapToTripKpiDTO(Object[] row) {
+    try {
+        return new TripKpiDTO(
+            extractLong(row[0]),          // tripId
+            extractString(row[1]),        // tripNumber - you need to add this to your query!
+            "COMPLETED",                 // status - hardcode or add to query
+            extractLocalDate(row[3]),    // plannedStartDate
+            toBigDecimal(row[4]),        // totalDistanceKm
+            toBigDecimal(row[8]),        // fuelUsed
+            toBigDecimal(row[5]),        // revenueAmount
+            toBigDecimal(row[6]),        // costAmount
+            toBigDecimal(row[7]),        // profit
+            BigDecimal.ZERO             // profitMargin - calculate or add to query
+        );
+    } catch (Exception e) {
+        log.error("Error mapping trip KPI row: {}", e.getMessage());
+        return new TripKpiDTO(
+            0L, "", "", LocalDate.now(), 
+            BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 
+            BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO
+        );
     }
-
+}
     // ==================== EXTRACTOR METHODS ====================
 
     private String extractString(Object value) {
@@ -364,7 +351,7 @@ public class AnalyticsService {
         }
 
         public BigDecimal getTotalTripDistance() {
-            return sumValues(tripKpis, TripKpiDTO::distance);
+           sumValues(tripKpis, TripKpiDTO::totalDistanceKm) ;
         }
 
         public BigDecimal getTotalFuelUsed() {

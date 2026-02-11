@@ -177,36 +177,44 @@ public class AnalyticsService {
         }
     }
 
-    /**
-     * Map database result row to DriverKpiDTO
-     * Expected column order:
-     * [0] driver_name
-     * [1] trips_completed
-     * [2] total_km
-     * [3] fuel_cost
-     * [4] efficiency_score
-     * [5] total_revenue
-     * [6] total_cost
-     * [7] profit
-     */
-    private DriverKpiDTO mapToDriverKpiDTO(Object[] row) {
-        try {
-            return new DriverKpiDTO(
-                    extractString(row[0]),
-                    toBigDecimal(row[1]),
-                    toBigDecimal(row[2]),
-                    toBigDecimal(row[3]),
-                    toBigDecimal(row[4]),
-                    toBigDecimal(row[5]),
-                    toBigDecimal(row[6]),
-                    toBigDecimal(row[7])
-            );
-        } catch (Exception e) {
-            log.error("Error mapping driver KPI row: {}", e.getMessage());
-            return new DriverKpiDTO("Unknown", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 
-                                  BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
-        }
+  private DriverKpiDTO mapToDriverKpiDTO(Object[] row) {
+    try {
+        return new DriverKpiDTO(
+                extractString(row[0]),                    // driver_name
+                extractInteger(row[1]),                  // ✅ trips_completed as Integer
+                toBigDecimal(row[2]),                    // total_km
+                toBigDecimal(row[3]),                    // fuel_cost
+                toBigDecimal(row[4]),                    // efficiency_score
+                toBigDecimal(row[5]),                    // total_revenue
+                toBigDecimal(row[6]),                    // total_cost
+                toBigDecimal(row[7])                     // profit
+        );
+    } catch (Exception e) {
+        log.error("Error mapping driver KPI row: {}", e.getMessage());
+        return new DriverKpiDTO(
+                "Unknown", 
+                0,                                      // ✅ Integer default
+                BigDecimal.ZERO, 
+                BigDecimal.ZERO, 
+                BigDecimal.ZERO, 
+                BigDecimal.ZERO, 
+                BigDecimal.ZERO, 
+                BigDecimal.ZERO
+        );
     }
+}
+
+// ✅ Add this helper method
+private Integer extractInteger(Object value) {
+    if (value == null) return 0;
+    if (value instanceof Number) return ((Number) value).intValue();
+    try {
+        return Integer.parseInt(value.toString().trim());
+    } catch (NumberFormatException e) {
+        log.warn("Could not convert '{}' to Integer: {}", value, e.getMessage());
+        return 0;
+    }
+}
 
    private TripKpiDTO mapToTripKpiDTO(Object[] row) {
     try {
@@ -336,27 +344,27 @@ public class AnalyticsService {
             return sumValues(driverKpis, DriverKpiDTO::totalCost);
         }
 
-        // ========== TRIP TOTALS ==========
-        
-        public BigDecimal getTotalTripRevenue() {
-            return sumValues(tripKpis, TripKpiDTO::revenueAmount);
-        }
+       // ========== TRIP TOTALS ==========
 
-        public BigDecimal getTotalTripProfit() {
-            return sumValues(tripKpis, TripKpiDTO::profit);
-        }
+public BigDecimal getTotalTripRevenue() {
+    return sumValues(tripKpis, TripKpiDTO::revenueAmount);
+}
 
-        public BigDecimal getTotalTripCost() {
-            return sumValues(tripKpis, TripKpiDTO::costAmount);
-        }
+public BigDecimal getTotalTripProfit() {
+    return sumValues(tripKpis, TripKpiDTO::profit);
+}
 
-        public BigDecimal getTotalTripDistance() {
-           sumValues(tripKpis, TripKpiDTO::totalDistanceKm) ;
-        }
+public BigDecimal getTotalTripCost() {
+    return sumValues(tripKpis, TripKpiDTO::costAmount);
+}
 
-        public BigDecimal getTotalFuelUsed() {
-            return sumValues(tripKpis, TripKpiDTO::fuelUsed);
-        }
+public BigDecimal getTotalTripDistance() {
+    return sumValues(tripKpis, TripKpiDTO::totalDistanceKm);  // ✅ Fixed
+}
+
+public BigDecimal getTotalFuelUsed() {
+    return sumValues(tripKpis, TripKpiDTO::fuelUsed);
+}
 
         // ========== AVERAGES ==========
         

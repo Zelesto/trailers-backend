@@ -159,12 +159,11 @@ public class TripService {
      * Determines if incidents can be reported for a trip
      * Allows incidents for trips that are active, in progress, on hold, or delayed
      */
-    public boolean canReportIncident(Trip trip) {
-        return trip.getStatus() == TripStatus.IN_PROGRESS || 
-               trip.getStatus() == TripStatus.ACTIVE ||
-               trip.getStatus() == TripStatus.ON_HOLD ||
-               trip.getStatus() == TripStatus.DELAYED;
-    }
+public boolean canReportIncident(Trip trip) {
+    return trip.getStatus() == TripStatus.IN_PROGRESS || 
+           trip.getStatus() == TripStatus.ACTIVE ||
+           trip.getStatus() == TripStatus.PLANNED;  // Optional: allow for planned trips too
+}
 
     /* ========================
        READ

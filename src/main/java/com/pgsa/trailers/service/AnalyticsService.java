@@ -119,18 +119,18 @@ public class AnalyticsService {
         );
     }
 
-    private DriverKpiDTO mapToDriverKpiDTO(Object[] row) {
-        return new DriverKpiDTO(
-                extractString(row[0]),
-                toBigDecimal(row[1]),
-                toBigDecimal(row[2]),
-                0,
-                BigDecimal.ZERO,
-                BigDecimal.ZERO,
-                BigDecimal.ZERO
-        );
-    }
-
+   private DriverKpiDTO mapToDriverKpiDTO(Object[] row) {
+    return new DriverKpiDTO(
+        extractString(row[0]), // driver_name
+        toBigDecimal(row[1]),  // trips_completed
+        toBigDecimal(row[2]),  // total_km
+        toBigDecimal(row[3]),  // fuel_cost
+        toBigDecimal(row[4]),  // efficiency_score
+        toBigDecimal(row[5]),  // total_revenue
+        toBigDecimal(row[6]),  // total_cost
+        toBigDecimal(row[7])   // profit
+    );
+}
     private TripKpiDTO mapToTripKpiDTO(Object[] row) {
         return new TripKpiDTO(
                 extractTripId(row[0]),

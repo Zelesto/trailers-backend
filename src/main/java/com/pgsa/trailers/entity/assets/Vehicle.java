@@ -5,6 +5,7 @@ import com.pgsa.trailers.enums.VehicleType;
 import com.pgsa.trailers.helpers.JsonConverter;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
@@ -14,6 +15,7 @@ import java.util.Map;
 
 @Data
 @NoArgsConstructor
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(
         name = "vehicle",

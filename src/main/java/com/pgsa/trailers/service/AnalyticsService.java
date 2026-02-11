@@ -47,15 +47,24 @@ public class AnalyticsService {
 }
     /** -------------------- Driver KPIs -------------------- */
     public List<DriverKpiDTO> getDriverKpis(LocalDate startDate, LocalDate endDate) {
-        try {
-            return driverRepository.driverPerformanceRaw().stream()
-                    .map(this::mapToDriverKpiDTO)
-                    .collect(Collectors.toList());
-        } catch (Exception e) {
-            log.error("Dashboard driver data error for date range {} to {}", startDate, endDate, e);
-            return Collections.emptyList();
-        }
+    try {
+        // Convert LocalDate to ISO format strings (YYYY-MM-DD)
+        String fromStr = startDate.toString();
+        String toStr = endDate.toString();
+        
+        log.info("Fetching driver KPIs from {} to {}", fromStr, toStr);
+        
+        List<Object[]> results = driverRepository.driverPerformanceRaw(fromStr, toStr);
+        log.info("Found {} driver records", results.size());
+        
+        return results.stream()
+                .map(this::mapToDriverKpiDTO)
+                .collect(Collectors.toList());
+    } catch (Exception e) {
+        log.error("Error fetching driver KPIs from {} to {}", startDate, endDate, e);
+        return Collections.emptyList();
     }
+}
 
     /** -------------------- Trip KPIs -------------------- */
 

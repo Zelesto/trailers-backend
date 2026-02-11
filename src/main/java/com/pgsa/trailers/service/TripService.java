@@ -156,6 +156,13 @@ public class TripService {
     }
 
 
+    public boolean canReportIncident(Trip trip) {
+    return "IN_PROGRESS".equals(trip.getStatus()) || 
+           "ACTIVE".equals(trip.getStatus()) ||
+           "PAUSED".equals(trip.getStatus());
+}
+    
+
     /* ========================
        READ
        ======================== */

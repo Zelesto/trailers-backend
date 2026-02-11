@@ -64,7 +64,7 @@ public class AnalyticsController {
      * Main dashboard endpoint
      */
     @GetMapping("/dashboard")
-    @PreAuthorize("hasAnyRole( 'SUPER_ADMIN','DISPATCHER', 'FINANCE', 'DRIVER', 'ANONYMOUS')")
+   @PreAuthorize("permitAll()")
     public ResponseEntity<Map<String, Object>> getDashboard(
             Authentication authentication,
             @RequestParam(required = false)

@@ -31,17 +31,20 @@ public class AnalyticsService {
     private static final int DEFAULT_ALL_TRIPS_YEARS = 1;
 
     /** -------------------- Vehicle KPIs -------------------- */
-    public List<VehicleKpiDTO> getVehicleKpis(LocalDate startDate, LocalDate endDate) {
-        try {
-            return vehicleRepository.vehicleEfficiencyRaw(startDate, endDate).stream()
-                    .map(this::mapToVehicleKpiDTO)
-                    .collect(Collectors.toList());
-        } catch (Exception e) {
-            log.error("Error fetching vehicle KPIs from {} to {}", startDate, endDate, e);
-            return Collections.emptyList();
-        }
+   public List<VehicleKpiDTO> getVehicleKpis(LocalDate startDate, LocalDate endDate) {
+    try {
+        // Convert LocalDate to ISO format strings (YYYY-MM-DD)
+        String fromStr = startDate.toString();  // "2026-01-12"
+        String toStr = endDate.toString();      // "2026-02-11"
+        
+        return vehicleRepository.vehicleEfficiencyRaw(fromStr, toStr).stream()
+                .map(this::mapToVehicleKpiDTO)
+                .collect(Collectors.toList());
+    } catch (Exception e) {
+        log.error("Error fetching vehicle KPIs from {} to {}", startDate, endDate, e);
+        return Collections.emptyList();
     }
-
+}
     /** -------------------- Driver KPIs -------------------- */
     public List<DriverKpiDTO> getDriverKpis(LocalDate startDate, LocalDate endDate) {
         try {

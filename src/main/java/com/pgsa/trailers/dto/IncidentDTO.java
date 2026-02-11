@@ -1,4 +1,4 @@
-package com.pgsa.trailers.dto.ops;
+package com.pgsa.trailers.dto;
 
 import lombok.Data;
 import java.time.LocalDateTime;

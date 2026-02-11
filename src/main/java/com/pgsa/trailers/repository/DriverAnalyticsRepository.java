@@ -1,17 +1,15 @@
 package com.pgsa.trailers.repository;
 
-import com.pgsa.trailers.dto.DriverKpiDTO;
-import com.pgsa.trailers.entity.assets.DriverMetrics;
 import com.pgsa.trailers.entity.assets.Driver;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
-
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
-
-public interface DriverAnalyticsRepository extends JpaRepository<Driver, Long> {
+@Repository
+public interface DriverAnalyticsRepository extends JpaRepository<Driver, Long> {  // ✅ Fixed
 
    @Query(value = """
     SELECT 
@@ -32,9 +30,10 @@ public interface DriverAnalyticsRepository extends JpaRepository<Driver, Long> {
         AND DATE(fs.transaction_date) BETWEEN :from AND :to
     WHERE d.status = 'ACTIVE'
     GROUP BY d.id, d.first_name, d.last_name
+    ORDER BY profit DESC
     """, nativeQuery = true)
-List<Object[]> driverPerformanceRaw(
-        @Param("from") String from,  // ✅ String parameters
-        @Param("to") String to
-);
+    List<Object[]> driverPerformanceRaw(
+            @Param("from") String from,
+            @Param("to") String to
+    );
 }

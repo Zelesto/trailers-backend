@@ -155,14 +155,16 @@ public class TripService {
         return tripResponseMapper.toResponse(updated);
     }
 
-
-   public boolean canReportIncident(Trip trip) {
-    return trip.getStatus() == TripStatus.IN_PROGRESS || 
-           trip.getStatus() == TripStatus.ACTIVE ||
-           trip.getStatus() == TripStatus.ON_HOLD ||
-           trip.getStatus() == TripStatus.DELAYED;
-}
-    
+    /**
+     * Determines if incidents can be reported for a trip
+     * Allows incidents for trips that are active, in progress, on hold, or delayed
+     */
+    public boolean canReportIncident(Trip trip) {
+        return trip.getStatus() == TripStatus.IN_PROGRESS || 
+               trip.getStatus() == TripStatus.ACTIVE ||
+               trip.getStatus() == TripStatus.ON_HOLD ||
+               trip.getStatus() == TripStatus.DELAYED;
+    }
 
     /* ========================
        READ
@@ -215,29 +217,25 @@ public class TripService {
         }
     }
 
-
-
    /* ========================
    DELETE
    ======================== */
-@Transactional
-public void deleteTrip(Long id) {
-    Trip trip = tripRepository.findById(id)
-            .orElseThrow(() -> new NoSuchElementException("Trip not found"));
+    @Transactional
+    public void deleteTrip(Long id) {
+        Trip trip = tripRepository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("Trip not found"));
 
-    // Access metrics to ensure JPA deletes it
-    if (trip.getMetrics() != null) {
-        log.debug("Deleting associated TripMetrics for trip id: {}", id);
-        trip.setMetrics(null); // optional if orphanRemoval = true
+        // Access metrics to ensure JPA deletes it
+        if (trip.getMetrics() != null) {
+            log.debug("Deleting associated TripMetrics for trip id: {}", id);
+            trip.setMetrics(null); // optional if orphanRemoval = true
+        }
+
+        tripRepository.delete(trip);
     }
-
-    tripRepository.delete(trip);
-}
-
 
     @Transactional
     public TripResponse updateTrip(Long tripId, UpdateTripRequest request, Long userId) {
-
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException(
                         "Trip not found with ID: " + tripId
@@ -257,7 +255,7 @@ public void deleteTrip(Long id) {
             trip.setDriver(driver);
         }
 
-        // Route (THIS was missing)
+        // Route
         Optional.ofNullable(request.getOriginLocation())
                 .ifPresent(trip::setOriginLocation);
 
@@ -271,7 +269,7 @@ public void deleteTrip(Long id) {
         Optional.ofNullable(request.getActualEndDate())
                 .ifPresent(trip::setActualEndDate);
 
-        // Status (THIS was missing)
+        // Status
         if (request.getStatus() != null &&
                 !request.getStatus().equals(trip.getStatus())) {
 
@@ -287,5 +285,4 @@ public void deleteTrip(Long id) {
 
         return tripResponseMapper.toResponse(updated);
     }
-
 }

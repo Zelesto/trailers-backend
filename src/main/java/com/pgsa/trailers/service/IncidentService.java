@@ -1,4 +1,4 @@
-package com.pgsa.trailers.service.ops;
+package com.pgsa.trailers.service;
 
 import com.pgsa.trailers.dto.ops.CreateIncidentRequest;
 import com.pgsa.trailers.dto.ops.IncidentDTO;
@@ -9,6 +9,9 @@ import com.pgsa.trailers.exception.ResourceNotFoundException;
 import com.pgsa.trailers.repository.ops.IncidentRepository;
 import com.pgsa.trailers.repository.ops.TripRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
@@ -17,6 +20,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 @Transactional
 public class IncidentService {
     private final IncidentRepository incidentRepository;
@@ -27,21 +31,29 @@ public class IncidentService {
         Trip trip = tripRepository.findById(tripId)
             .orElseThrow(() -> new ResourceNotFoundException("Trip", "id", tripId));
         
-        // Validate that trip can have incidents (should be active/in progress)
+        // Validate trip status
         if (!tripService.canReportIncident(trip)) {
             throw new IllegalStateException("Cannot report incident for trip in status: " + trip.getStatus());
+        }
+
+        // Validate severity
+        List<String> validSeverities = List.of("LOW", "MEDIUM", "HIGH", "CRITICAL");
+        if (!validSeverities.contains(request.getSeverity())) {
+            throw new IllegalArgumentException("Invalid severity. Must be one of: " + validSeverities);
         }
 
         Incident incident = new Incident();
         incident.setTrip(trip);
         incident.setIncidentType(request.getIncidentType());
-        incident.setSeverity(request.getSeverity() != null ? request.getSeverity() : "MEDIUM");
+        incident.setSeverity(request.getSeverity());
         incident.setDescription(request.getDescription());
         incident.setLocation(request.getLocation());
         incident.setRequiresAssistance(request.getRequiresAssistance() != null ? request.getRequiresAssistance() : false);
         incident.setResolved(false);
         
         Incident saved = incidentRepository.save(incident);
+        log.info("Created incident {} for trip {}", saved.getId(), tripId);
+        
         return toDTO(saved);
     }
 
@@ -49,13 +61,17 @@ public class IncidentService {
         Incident incident = incidentRepository.findById(incidentId)
             .orElseThrow(() -> new ResourceNotFoundException("Incident", "id", incidentId));
         
+        boolean wasResolved = incident.getResolved();
+        
         if (request.getResolved() != null) {
             incident.setResolved(request.getResolved());
-            if (request.getResolved()) {
+            if (request.getResolved() && !wasResolved) {
                 incident.setResolvedAt(LocalDateTime.now());
                 incident.setResolutionNotes(request.getResolutionNotes());
-            } else {
+                log.info("Resolved incident {}", incidentId);
+            } else if (!request.getResolved() && wasResolved) {
                 incident.setResolvedAt(null);
+                incident.setResolutionNotes(null);
             }
         }
         
@@ -74,6 +90,11 @@ public class IncidentService {
             .collect(Collectors.toList());
     }
 
+    public Page<IncidentDTO> getIncidentsByTripId(Long tripId, Pageable pageable) {
+        return incidentRepository.findAllByTripId(tripId, pageable)
+            .map(this::toDTO);
+    }
+
     public IncidentDTO getIncidentById(Long incidentId) {
         Incident incident = incidentRepository.findById(incidentId)
             .orElseThrow(() -> new ResourceNotFoundException("Incident", "id", incidentId));
@@ -85,6 +106,7 @@ public class IncidentService {
             throw new ResourceNotFoundException("Incident", "id", incidentId);
         }
         incidentRepository.deleteById(incidentId);
+        log.info("Deleted incident {}", incidentId);
     }
 
     public List<IncidentDTO> getActiveIncidents(Long tripId) {
@@ -101,6 +123,34 @@ public class IncidentService {
             .collect(Collectors.toList());
     }
 
+    public List<IncidentDTO> getUrgentIncidents() {
+        List<Incident> incidents = incidentRepository.findUrgentIncidents();
+        return incidents.stream()
+            .map(this::toDTO)
+            .collect(Collectors.toList());
+    }
+
+    public List<IncidentDTO> getIncidentsBySeverity(String severity) {
+        List<Incident> incidents = incidentRepository.findBySeverity(severity);
+        return incidents.stream()
+            .map(this::toDTO)
+            .collect(Collectors.toList());
+    }
+
+    public IncidentStatsDTO getIncidentStats(Long tripId) {
+        Long totalIncidents = incidentRepository.countByTripId(tripId);
+        Long activeIncidents = (long) incidentRepository.findActiveIncidentsByTripId(tripId).size();
+        Long urgentIncidents = (long) incidentRepository.findUrgentIncidents().stream()
+            .filter(i -> i.getTrip().getId().equals(tripId))
+            .count();
+        
+        return IncidentStatsDTO.builder()
+            .totalIncidents(totalIncidents)
+            .activeIncidents(activeIncidents)
+            .urgentIncidents(urgentIncidents)
+            .build();
+    }
+
     private IncidentDTO toDTO(Incident incident) {
         IncidentDTO dto = new IncidentDTO();
         dto.setId(incident.getId());
@@ -115,6 +165,24 @@ public class IncidentService {
         dto.setResolutionNotes(incident.getResolutionNotes());
         dto.setReportedAt(incident.getReportedAt());
         dto.setResolvedAt(incident.getResolvedAt());
+        dto.setCreatedAt(incident.getCreatedAt());
+        dto.setUpdatedAt(incident.getUpdatedAt());
         return dto;
     }
+}
+
+// Add these DTOs
+@Data
+@Builder
+class IncidentStatsDTO {
+    private Long totalIncidents;
+    private Long activeIncidents;
+    private Long urgentIncidents;
+}
+
+// Update Repository interface
+interface IncidentRepository extends JpaRepository<Incident, Long> {
+    // ... existing methods ...
+    
+    Page<Incident> findAllByTripId(Long tripId, Pageable pageable);
 }

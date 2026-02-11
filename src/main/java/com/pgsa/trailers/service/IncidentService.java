@@ -89,11 +89,11 @@ public class IncidentService {
             .collect(Collectors.toList());
     }
 
-    public Page<IncidentDTO> getIncidentsByTripId(Long tripId, Pageable pageable) {
-        return incidentRepository.findAllByTripId(tripId, pageable)
-            .map(this::toDTO);
-    }
-
+   public Page<IncidentDTO> getIncidentsByTripId(Long tripId, Pageable pageable) {
+    return incidentRepository.findByTripId(tripId, pageable)  // Changed from findAllByTripId to findByTripId
+        .map(this::toDTO);
+}
+    
     public IncidentDTO getIncidentById(Long incidentId) {
         Incident incident = incidentRepository.findById(incidentId)
             .orElseThrow(() -> new ResourceNotFoundException("Incident", "id", incidentId));

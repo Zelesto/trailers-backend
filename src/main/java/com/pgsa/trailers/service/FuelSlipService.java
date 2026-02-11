@@ -330,11 +330,27 @@ public class FuelSlipService {
                 .collect(Collectors.toList());
     }
 
-    public List<FuelSlipDTO> getFuelSlipsByTripId(Long tripId) {
-        return fuelSlipRepository.findByTripId(tripId).stream()
-                .map(FuelSlipDTO::fromEntity)
-                .collect(Collectors.toList());
+   public List<FuelSlipDTO> getFuelSlipsByTripId(Long tripId) {
+    log.info("🔍 FuelSlipService: Getting fuel slips for trip ID: {}", tripId);
+    List<FuelSlip> slips = fuelSlipRepository.findByTripId(tripId);
+    log.info("📊 Found {} fuel slips for trip {}", slips.size(), tripId);
+    if (slips.isEmpty()) {
+        log.warn("No fuel slips found for trip ID: {}", tripId);
+    } else {
+        for (FuelSlip slip : slips) {
+            log.debug("Slip ID: {}, Trip ID from entity: {}", 
+                slip.getId(), slip.getTripId());
+            if (!tripId.equals(slip.getTripId())) {
+                log.warn("Repository returned slip {} with wrong tripId: {}", 
+                    slip.getId(), slip.getTripId());
+            }
+        }
     }
+    
+    return slips.stream()
+            .map(FuelSlipDTO::fromEntity)
+            .collect(Collectors.toList());
+}
 
     public List<FuelSlipDTO> getFuelSlipsByDriver(Long driverId) {
         return fuelSlipRepository.findByDriverId(driverId).stream()

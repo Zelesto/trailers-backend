@@ -46,6 +46,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
     @Query("""
         SELECT 
             t.id,
+           t.tripNumber, 
             v.registrationNumber,
             v.vehicleType,
             t.plannedStartDate,
@@ -54,7 +55,8 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
             m.costAmount,
             (m.revenueAmount - m.costAmount),
             m.fuelUsedLiters,
-            m.totalDurationHours
+            m.totalDurationHours,
+            t.status 
         FROM Trip t
         JOIN t.vehicle v
         JOIN t.metrics m

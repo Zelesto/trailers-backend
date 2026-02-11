@@ -3,7 +3,7 @@ package com.pgsa.trailers.service;
 import com.pgsa.trailers.dto.*;
 import com.pgsa.trailers.entity.ops.Incident;
 import com.pgsa.trailers.entity.ops.Trip;
-import com.pgsa.trailers.exception.ResourceNotFoundException;
+import com.pgsa.trailers.entity.ResourceNotFoundException;
 import com.pgsa.trailers.repository.IncidentRepository;
 import com.pgsa.trailers.repository.TripRepository;
 import lombok.RequiredArgsConstructor;

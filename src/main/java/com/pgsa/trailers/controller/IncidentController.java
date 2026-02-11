@@ -4,7 +4,7 @@ import com.pgsa.trailers.dto.CreateIncidentRequest;
 import com.pgsa.trailers.dto.IncidentDTO;
 import com.pgsa.trailers.dto.UpdateIncidentRequest;
 import com.pgsa.trailers.dto.IncidentStatsDTO;
-import com.pgsa.trailers.service.ops.IncidentService;
+import com.pgsa.trailers.service.IncidentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;

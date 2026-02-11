@@ -1,12 +1,12 @@
 package com.pgsa.trailers.controller.ops;
 
-import com.pgsa.trailers.dto.CreateIncidentRequest;
-import comgsa.trailers.dto.IncidentDTO;
-import com.pgsa.trailers.dto.UpdateIncidentRequest;
-import com.pgsa.trailers.dto.IncidentStatsDTO;
+import com.pgsa.trailers.dto.CreateIncidentRequest;  // ✅
+import com.pgsa.trailers.dto.IncidentDTO;  // ✅ Fixed typo
+import com.pgsa.trailers.dto.UpdateIncidentRequest;  // ✅
+import com.pgsa.trailers.dto.IncidentStatsDTO;  // ✅
 import com.pgsa.trailers.service.IncidentService;
-import io.swagger.v3.oas.annotations.Operation;  // Add this import
-import io.swagger.v3.oas.annotations.tags.Tag;  // Add this import
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

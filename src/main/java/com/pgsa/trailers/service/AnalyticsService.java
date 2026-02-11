@@ -90,7 +90,7 @@ public class AnalyticsService {
             LocalDate startDate = start.toLocalDate();
             LocalDate endDate = end.toLocalDate();
 
-            return tripRepository.tripProfitabilityRaw(startDate, endDate).stream()
+           return tripRepository.findTripProfitabilityRaw(startDate, endDate).stream()
                     .filter(row -> tripId == null || extractTripId(row[0]) == tripId)
                     .map(this::mapToTripKpiDTO)
                     .collect(Collectors.toList());

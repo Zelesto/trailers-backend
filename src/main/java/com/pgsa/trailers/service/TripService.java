@@ -156,10 +156,11 @@ public class TripService {
     }
 
 
-    public boolean canReportIncident(Trip trip) {
-    return "IN_PROGRESS".equals(trip.getStatus()) || 
-           "ACTIVE".equals(trip.getStatus()) ||
-           "PAUSED".equals(trip.getStatus());
+   public boolean canReportIncident(Trip trip) {
+    return trip.getStatus() == TripStatus.IN_PROGRESS || 
+           trip.getStatus() == TripStatus.ACTIVE ||
+           trip.getStatus() == TripStatus.ON_HOLD ||
+           trip.getStatus() == TripStatus.DELAYED;
 }
     
 

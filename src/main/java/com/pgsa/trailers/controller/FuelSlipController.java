@@ -37,7 +37,6 @@ public class FuelSlipController {
         return ResponseEntity.ok().build();
     }
 
-
     // ----------------------
     // READ
     // ----------------------
@@ -49,15 +48,19 @@ public class FuelSlipController {
         return ResponseEntity.ok(slip);
     }
 
-    // 2️⃣ Get all slips (with optional filters)
+    // 2️⃣ Get all slips (with optional filters) - ✅ FIXED
     @GetMapping
     public ResponseEntity<List<FuelSlipDTO>> getAll(
+            @RequestParam(required = false) Long tripId,      // 🔥 ADDED
             @RequestParam(required = false) Long driverId,
             @RequestParam(required = false) Long vehicleId
     ) {
         List<FuelSlipDTO> slips;
 
-        if (driverId != null && vehicleId != null) {
+        // 🔥 FIX: Handle tripId filter FIRST
+        if (tripId != null) {
+            slips = fuelSlipService.getFuelSlipsByTripId(tripId);
+        } else if (driverId != null && vehicleId != null) {
             slips = fuelSlipService.getFuelSlipsByDriverAndVehicle(driverId, vehicleId);
         } else if (driverId != null) {
             slips = fuelSlipService.getFuelSlipsByDriver(driverId);

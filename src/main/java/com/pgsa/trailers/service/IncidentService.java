@@ -1,8 +1,6 @@
 package com.pgsa.trailers.service;
 
-import com.pgsa.trailers.dto.CreateIncidentRequest;
-import com.pgsa.trailers.dto.IncidentDTO;
-import com.pgsa.trailers.dto.UpdateIncidentRequest;
+import com.pgsa.trailers.dto.*;
 import com.pgsa.trailers.entity.ops.Incident;
 import com.pgsa.trailers.entity.ops.Trip;
 import com.pgsa.trailers.exception.ResourceNotFoundException;
@@ -14,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -169,20 +168,4 @@ public class IncidentService {
         dto.setUpdatedAt(incident.getUpdatedAt());
         return dto;
     }
-}
-
-// Add these DTOs
-@Data
-@Builder
-class IncidentStatsDTO {
-    private Long totalIncidents;
-    private Long activeIncidents;
-    private Long urgentIncidents;
-}
-
-// Update Repository interface
-interface IncidentRepository extends JpaRepository<Incident, Long> {
-    // ... existing methods ...
-    
-    Page<Incident> findAllByTripId(Long tripId, Pageable pageable);
 }

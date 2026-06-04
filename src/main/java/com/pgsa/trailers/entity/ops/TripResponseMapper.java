@@ -18,8 +18,25 @@ public class TripResponseMapper {
         response.setTripNumber(trip.getTripNumber());
         response.setTripType(trip.getTripType());
 
+        // Original location fields (for backward compatibility)
         response.setOriginLocation(trip.getOriginLocation());
         response.setDestinationLocation(trip.getDestinationLocation());
+
+        // New detailed origin address fields
+        response.setOriginStreetAddress(trip.getOriginStreetAddress());
+        response.setOriginCity(trip.getOriginCity());
+        response.setOriginZipCode(trip.getOriginZipCode());
+        response.setOriginProvince(trip.getOriginProvince());
+        response.setOriginLatitude(trip.getOriginLatitude());
+        response.setOriginLongitude(trip.getOriginLongitude());
+
+        // New detailed destination address fields
+        response.setDestinationStreetAddress(trip.getDestinationStreetAddress());
+        response.setDestinationCity(trip.getDestinationCity());
+        response.setDestinationZipCode(trip.getDestinationZipCode());
+        response.setDestinationProvince(trip.getDestinationProvince());
+        response.setDestinationLatitude(trip.getDestinationLatitude());
+        response.setDestinationLongitude(trip.getDestinationLongitude());
 
         response.setPlannedStartDate(trip.getPlannedStartDate());
         response.setPlannedEndDate(trip.getPlannedEndDate());
@@ -62,6 +79,14 @@ public class TripResponseMapper {
         dto.setTasksCompleted(metrics.getTasksCompleted());
         dto.setRevenueAmount(metrics.getRevenueAmount());
         dto.setCostAmount(metrics.getCostAmount());
+        
+        // New location-based metrics
+        dto.setOriginCityTravelTimeHours(metrics.getOriginCityTravelTimeHours());
+        dto.setDestinationCityTravelTimeHours(metrics.getDestinationCityTravelTimeHours());
+        dto.setPlannedVsActualDistanceVarianceKm(metrics.getPlannedVsActualDistanceVarianceKm());
+        dto.setPlannedVsActualDurationVarianceHours(metrics.getPlannedVsActualDurationVarianceHours());
+        dto.setGeocodingConfidenceScore(metrics.getGeocodingConfidenceScore());
+        
         return dto;
     }
 }

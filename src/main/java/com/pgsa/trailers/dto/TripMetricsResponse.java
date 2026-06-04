@@ -18,4 +18,11 @@ public class TripMetricsResponse {
 
     private BigDecimal revenueAmount;
     private BigDecimal costAmount;
+
+    // New location-based metrics
+    private BigDecimal originCityTravelTimeHours;
+    private BigDecimal destinationCityTravelTimeHours;
+    private BigDecimal plannedVsActualDistanceVarianceKm;
+    private BigDecimal plannedVsActualDurationVarianceHours;
+    private BigDecimal geocodingConfidenceScore;
 }

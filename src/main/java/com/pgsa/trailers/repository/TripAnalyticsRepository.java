@@ -40,6 +40,23 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
             @Param("to") LocalDate to
     );
 
+
+    // In your repository, you could use a query like this:
+@Query("SELECT new com.pgsa.trailers.dto.TripSummaryDTO(" +
+       "t.id, t.tripNumber, t.status, v.registrationNumber, " +
+       "CONCAT(d.firstName, ' ', d.lastName), t.plannedStartDate, t.actualEndDate, " +
+       "t.originLocation, t.destinationLocation, " +
+       "t.originCity, t.destinationCity, " +
+       "t.originZipCode, t.destinationZipCode, " +
+       "m.totalDistanceKm, t.plannedDistanceKm) " +
+       "FROM Trip t " +
+       "LEFT JOIN t.vehicle v " +
+       "LEFT JOIN t.driver d " +
+       "LEFT JOIN t.metrics m " +
+       "WHERE t.status = :status")
+List<TripSummaryDTO> findTripSummariesByStatus(@Param("status") TripStatus status);
+
+    
     /**
      * Get trip profitability data with all details (for compatibility with existing code)
      */

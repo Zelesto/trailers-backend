@@ -18,7 +18,9 @@ import java.time.LocalDateTime;
         indexes = {
                 @Index(name = "idx_trip_trip_number", columnList = "trip_number"),
                 @Index(name = "idx_trip_status", columnList = "status"),
-                @Index(name = "idx_trip_vehicle", columnList = "vehicle_id")
+                @Index(name = "idx_trip_vehicle", columnList = "vehicle_id"),
+                @Index(name = "idx_trip_origin_city", columnList = "origin_city"),
+                @Index(name = "idx_trip_destination_city", columnList = "destination_city")
         }
 )
 public class Trip {
@@ -54,7 +56,7 @@ public class Trip {
     private Load load;
 
     /* ========================
-       Locations
+       Locations (Original fields kept for backward compatibility)
        ======================== */
 
     @Column(name = "origin_location", nullable = false)
@@ -62,6 +64,50 @@ public class Trip {
 
     @Column(name = "destination_location", nullable = false)
     private String destinationLocation;
+
+    /* ========================
+       New: Detailed origin address fields
+       ======================== */
+
+    @Column(name = "origin_street_address", length = 255)
+    private String originStreetAddress;
+
+    @Column(name = "origin_city", length = 100)
+    private String originCity;
+
+    @Column(name = "origin_zip_code", length = 10)
+    private String originZipCode;
+
+    @Column(name = "origin_province", length = 50)
+    private String originProvince;
+
+    @Column(name = "origin_latitude")
+    private Double originLatitude;
+
+    @Column(name = "origin_longitude")
+    private Double originLongitude;
+
+    /* ========================
+       New: Detailed destination address fields
+       ======================== */
+
+    @Column(name = "destination_street_address", length = 255)
+    private String destinationStreetAddress;
+
+    @Column(name = "destination_city", length = 100)
+    private String destinationCity;
+
+    @Column(name = "destination_zip_code", length = 10)
+    private String destinationZipCode;
+
+    @Column(name = "destination_province", length = 50)
+    private String destinationProvince;
+
+    @Column(name = "destination_latitude")
+    private Double destinationLatitude;
+
+    @Column(name = "destination_longitude")
+    private Double destinationLongitude;
 
     /* ========================
        Planning vs actuals
@@ -158,4 +204,99 @@ public class Trip {
 )
 private TripMetrics metrics;
 
+    /* ========================
+       Helper methods
+       ======================== */
+
+    /**
+     * Builds the complete origin address string from components
+     */
+    public String buildOriginAddress() {
+        StringBuilder address = new StringBuilder();
+        
+        if (originStreetAddress != null && !originStreetAddress.trim().isEmpty()) {
+            address.append(originStreetAddress);
+        }
+        
+        if (originCity != null && !originCity.trim().isEmpty()) {
+            if (address.length() > 0) address.append(", ");
+            address.append(originCity);
+        }
+        
+        if (originZipCode != null && !originZipCode.trim().isEmpty()) {
+            if (address.length() > 0) address.append(" ");
+            address.append(originZipCode);
+        }
+        
+        if (originProvince != null && !originProvince.trim().isEmpty()) {
+            if (address.length() > 0) address.append(", ");
+            address.append(originProvince);
+        }
+        
+        address.append(", South Africa");
+        
+        return address.toString();
+    }
+
+    /**
+     * Builds the complete destination address string from components
+     */
+    public String buildDestinationAddress() {
+        StringBuilder address = new StringBuilder();
+        
+        if (destinationStreetAddress != null && !destinationStreetAddress.trim().isEmpty()) {
+            address.append(destinationStreetAddress);
+        }
+        
+        if (destinationCity != null && !destinationCity.trim().isEmpty()) {
+            if (address.length() > 0) address.append(", ");
+            address.append(destinationCity);
+        }
+        
+        if (destinationZipCode != null && !destinationZipCode.trim().isEmpty()) {
+            if (address.length() > 0) address.append(" ");
+            address.append(destinationZipCode);
+        }
+        
+        if (destinationProvince != null && !destinationProvince.trim().isEmpty()) {
+            if (address.length() > 0) address.append(", ");
+            address.append(destinationProvince);
+        }
+        
+        address.append(", South Africa");
+        
+        return address.toString();
+    }
+
+    /**
+     * Updates the legacy origin_location field from components
+     */
+    public void updateOriginLocationFromComponents() {
+        this.originLocation = buildOriginAddress();
+    }
+
+    /**
+     * Updates the legacy destination_location field from components
+     */
+    public void updateDestinationLocationFromComponents() {
+        this.destinationLocation = buildDestinationAddress();
+    }
+
+    /**
+     * Populates all origin address fields from a single string (for backward compatibility)
+     */
+    public void setOriginFromAddressString(String fullAddress) {
+        this.originLocation = fullAddress;
+        // Note: This doesn't parse the string into components.
+        // Components would need to be set separately or use a geocoding service.
+    }
+
+    /**
+     * Populates all destination address fields from a single string (for backward compatibility)
+     */
+    public void setDestinationFromAddressString(String fullAddress) {
+        this.destinationLocation = fullAddress;
+        // Note: This doesn't parse the string into components.
+        // Components would need to be set separately or use a geocoding service.
+    }
 }

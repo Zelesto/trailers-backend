@@ -5,7 +5,6 @@ import lombok.Getter;
 
 import java.time.LocalDateTime;
 
-
 @Getter
 @Data
 public class TripResponse {
@@ -22,8 +21,25 @@ public class TripResponse {
 
     private Long loadId;
 
+    // Original location fields (backward compatibility)
     private String originLocation;
     private String destinationLocation;
+
+    // New detailed origin address fields
+    private String originStreetAddress;
+    private String originCity;
+    private String originZipCode;
+    private String originProvince;
+    private Double originLatitude;
+    private Double originLongitude;
+
+    // New detailed destination address fields
+    private String destinationStreetAddress;
+    private String destinationCity;
+    private String destinationZipCode;
+    private String destinationProvince;
+    private Double destinationLatitude;
+    private Double destinationLongitude;
 
     private LocalDateTime plannedStartDate;
     private LocalDateTime plannedEndDate;

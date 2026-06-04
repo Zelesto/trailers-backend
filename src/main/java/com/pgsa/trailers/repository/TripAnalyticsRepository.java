@@ -1,12 +1,17 @@
 package com.pgsa.trailers.repository;
 
 import com.pgsa.trailers.dto.TripKpiDTO;
+import com.pgsa.trailers.dto.TripSummaryDTO;
 import com.pgsa.trailers.entity.ops.Trip;
+import com.pgsa.trailers.enums.TripStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface TripAnalyticsRepository extends Repository<Trip, Long> {
@@ -40,30 +45,57 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
             @Param("to") LocalDate to
     );
 
+    /**
+     * Find trip summaries by status with city and zip code fields
+     */
+    @Query("SELECT new com.pgsa.trailers.dto.TripSummaryDTO(" +
+           "t.id, t.tripNumber, t.status, v.registrationNumber, " +
+           "CONCAT(COALESCE(d.firstName, ''), ' ', COALESCE(d.lastName, '')), " +
+           "t.plannedStartDate, t.actualEndDate, " +
+           "t.originLocation, t.destinationLocation, " +
+           "t.originCity, t.destinationCity, " +
+           "t.originZipCode, t.destinationZipCode, " +
+           "m.totalDistanceKm, t.plannedDistanceKm) " +
+           "FROM Trip t " +
+           "LEFT JOIN t.vehicle v " +
+           "LEFT JOIN t.driver d " +
+           "LEFT JOIN t.metrics m " +
+           "WHERE (:status IS NULL OR t.status = :status)")
+    List<TripSummaryDTO> findTripSummariesByStatus(@Param("status") TripStatus status);
 
-    // In your repository, you could use a query like this:
-@Query("SELECT new com.pgsa.trailers.dto.TripSummaryDTO(" +
-       "t.id, t.tripNumber, t.status, v.registrationNumber, " +
-       "CONCAT(d.firstName, ' ', d.lastName), t.plannedStartDate, t.actualEndDate, " +
-       "t.originLocation, t.destinationLocation, " +
-       "t.originCity, t.destinationCity, " +
-       "t.originZipCode, t.destinationZipCode, " +
-       "m.totalDistanceKm, t.plannedDistanceKm) " +
-       "FROM Trip t " +
-       "LEFT JOIN t.vehicle v " +
-       "LEFT JOIN t.driver d " +
-       "LEFT JOIN t.metrics m " +
-       "WHERE t.status = :status")
-List<TripSummaryDTO> findTripSummariesByStatus(@Param("status") TripStatus status);
+    /**
+     * Find trip summaries by status with pagination
+     */
+    @Query("SELECT new com.pgsa.trailers.dto.TripSummaryDTO(" +
+           "t.id, t.tripNumber, t.status, v.registrationNumber, " +
+           "CONCAT(COALESCE(d.firstName, ''), ' ', COALESCE(d.lastName, '')), " +
+           "t.plannedStartDate, t.actualEndDate, " +
+           "t.originLocation, t.destinationLocation, " +
+           "t.originCity, t.destinationCity, " +
+           "t.originZipCode, t.destinationZipCode, " +
+           "m.totalDistanceKm, t.plannedDistanceKm) " +
+           "FROM Trip t " +
+           "LEFT JOIN t.vehicle v " +
+           "LEFT JOIN t.driver d " +
+           "LEFT JOIN t.metrics m " +
+           "WHERE (:search IS NULL OR LOWER(t.tripNumber) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "OR LOWER(t.originCity) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "OR LOWER(t.destinationCity) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+           "AND (:status IS NULL OR t.status = :status) " +
+           "AND (:city IS NULL OR LOWER(t.originCity) = LOWER(:city) OR LOWER(t.destinationCity) = LOWER(:city))")
+    Page<TripSummaryDTO> findTripSummariesWithFilters(
+            @Param("search") String search,
+            @Param("status") TripStatus status,
+            @Param("city") String city,
+            Pageable pageable);
 
-    
     /**
      * Get trip profitability data with all details (for compatibility with existing code)
      */
     @Query("""
         SELECT 
             t.id,
-           t.tripNumber, 
+            t.tripNumber, 
             v.registrationNumber,
             v.vehicleType,
             t.plannedStartDate,
@@ -131,7 +163,8 @@ List<TripSummaryDTO> findTripSummariesByStatus(@Param("status") TripStatus statu
             v.registrationNumber,
             v.vehicleType,
             COUNT(t.id) as tripCount,
-            COALESCE(SUM(m.revenueAmount - m.costAmount), 0) as totalProfit
+            COALESCE(SUM(m.revenueAmount - m.costAmount), 0) as totalProfit,
+            COALESCE(AVG(m.revenueAmount - m.costAmount), 0) as avgProfitPerTrip
         FROM Trip t
         JOIN t.vehicle v
         JOIN t.metrics m
@@ -139,29 +172,54 @@ List<TripSummaryDTO> findTripSummariesByStatus(@Param("status") TripStatus statu
         GROUP BY v.registrationNumber, v.vehicleType
         HAVING COUNT(t.id) > 0
         ORDER BY totalProfit DESC
-        LIMIT 10
     """)
     List<Object[]> findTopPerformingVehicles(
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate
     );
-    @Query(value = """
+
+    /**
+     * Get trip profitability by city
+     */
+    @Query("""
         SELECT 
-            t.id as tripId,
-            v.registration as vehicleRegistration,
-            v.type as vehicleType,
-            t.start_time as tripDate,
-            t.distance_km as distance,
-            t.fuel_used_liters as fuelUsed,
-            t.revenue_amount as revenue,
-            t.cost_amount as cost,
-            (t.revenue_amount - t.cost_amount) as profit,
-            t.duration_hours as duration
-        FROM trip t
-        JOIN vehicles v ON t.vehicle_id = v.id
-        WHERE DATE(t.start_time) BETWEEN :startDate AND :endDate
-        ORDER BY t.start_time DESC
-        """, nativeQuery = true)
-    List<Object[]> tripProfitabilityRaw(@Param("startDate") LocalDate startDate,
-                                        @Param("endDate") LocalDate endDate);
+            t.originCity,
+            COUNT(t.id) as tripCount,
+            COALESCE(SUM(m.totalDistanceKm), 0) as totalDistance,
+            COALESCE(SUM(m.revenueAmount), 0) as totalRevenue,
+            COALESCE(SUM(m.costAmount), 0) as totalCost,
+            COALESCE(SUM(m.revenueAmount - m.costAmount), 0) as totalProfit
+        FROM Trip t
+        JOIN t.metrics m
+        WHERE t.plannedStartDate BETWEEN :startDate AND :endDate
+          AND t.originCity IS NOT NULL
+        GROUP BY t.originCity
+        ORDER BY totalProfit DESC
+    """)
+    List<Object[]> findProfitabilityByCity(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
+
+    /**
+     * Get monthly trip statistics
+     */
+    @Query("""
+        SELECT 
+            FUNCTION('DATE_FORMAT', t.plannedStartDate, '%Y-%m') as month,
+            COUNT(t.id) as tripCount,
+            COALESCE(SUM(m.totalDistanceKm), 0) as totalDistance,
+            COALESCE(SUM(m.revenueAmount), 0) as totalRevenue,
+            COALESCE(SUM(m.costAmount), 0) as totalCost,
+            COALESCE(SUM(m.revenueAmount - m.costAmount), 0) as totalProfit
+        FROM Trip t
+        JOIN t.metrics m
+        WHERE t.plannedStartDate BETWEEN :startDate AND :endDate
+        GROUP BY FUNCTION('DATE_FORMAT', t.plannedStartDate, '%Y-%m')
+        ORDER BY month DESC
+    """)
+    List<Object[]> findMonthlyStatistics(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
 }

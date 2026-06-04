@@ -35,6 +35,13 @@ public class TripMetricsDTO {
     private String destinationLocation;
     private String vehicleType;
 
+    // New location-based metrics
+    private BigDecimal originCityTravelTimeHours;
+    private BigDecimal destinationCityTravelTimeHours;
+    private BigDecimal plannedVsActualDistanceVarianceKm;
+    private BigDecimal plannedVsActualDurationVarianceHours;
+    private BigDecimal geocodingConfidenceScore;
+
     public static TripMetricsDTO fromEntity(TripMetrics entity) {
         if (entity == null) {
             return null;
@@ -74,6 +81,13 @@ public class TripMetricsDTO {
         // Financials
         dto.setRevenueAmount(entity.getRevenueAmount());
         dto.setCostAmount(entity.getCostAmount());
+
+        // New location-based metrics
+        dto.setOriginCityTravelTimeHours(entity.getOriginCityTravelTimeHours());
+        dto.setDestinationCityTravelTimeHours(entity.getDestinationCityTravelTimeHours());
+        dto.setPlannedVsActualDistanceVarianceKm(entity.getPlannedVsActualDistanceVarianceKm());
+        dto.setPlannedVsActualDurationVarianceHours(entity.getPlannedVsActualDurationVarianceHours());
+        dto.setGeocodingConfidenceScore(entity.getGeocodingConfidenceScore());
 
         return dto;
     }

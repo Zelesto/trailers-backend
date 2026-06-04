@@ -11,12 +11,32 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class TripSummaryDTO {
     private Long id;
-    private String tripNumber;  // Added
+    private String tripNumber;
     private String status;
     private String vehicleRegistration;
     private String driverName;
     private LocalDateTime plannedStartDate;
     private LocalDateTime endDate;
-    private String originLocation;  // Added
-    private String destinationLocation;  // Added
+    
+    // Original location fields (backward compatibility)
+    private String originLocation;
+    private String destinationLocation;
+    
+    // New detailed origin address fields
+    private String originCity;
+    private String originZipCode;
+    private String originProvince;
+    
+    // New detailed destination address fields
+    private String destinationCity;
+    private String destinationZipCode;
+    private String destinationProvince;
+    
+    // Optional: Add metrics summary for quick view
+    private BigDecimal totalDistanceKm;
+    private BigDecimal totalDurationHours;
+    
+    // Optional: Add formatted addresses for display
+    private String originDisplayAddress;
+    private String destinationDisplayAddress;
 }

@@ -2,7 +2,9 @@ package com.pgsa.trailers.service.routing.providers;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.pgsa.trailers.service.routing.*;
+import com.pgsa.trailers.service.routing.Coordinates;
+import com.pgsa.trailers.service.routing.RoutingProvider;
+import com.pgsa.trailers.service.routing.RoutingResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -28,7 +30,7 @@ public class ORSRoutingProvider implements RoutingProvider {
 
     @Override
     public boolean supports(String vehicleType) {
-        return true;
+        return apiKey != null && !apiKey.isBlank();
     }
 
     @Override
@@ -62,23 +64,36 @@ public class ORSRoutingProvider implements RoutingProvider {
                     String.class
             );
 
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                throw new RuntimeException("ORS API returned invalid response: " + response.getStatusCode());
+            }
+
             JsonNode json = objectMapper.readTree(response.getBody());
+
+            if (!json.has("features") || json.get("features").isEmpty()) {
+                throw new RuntimeException("ORS returned no route data");
+            }
+
             JsonNode route = json.get("features").get(0);
 
             double meters = route.at("/properties/segments/0/distance").asDouble();
             double seconds = route.at("/properties/segments/0/duration").asDouble();
 
+            String geometry = route.has("geometry")
+                    ? route.get("geometry").toString()
+                    : null;
+
             return new RoutingResult(
                     origin,
                     destination,
-                    BigDecimal.valueOf(meters / 1000),
-                    BigDecimal.valueOf(seconds / 3600),
+                    BigDecimal.valueOf(meters / 1000.0),
+                    BigDecimal.valueOf(seconds / 3600.0),
                     name(),
-                    route.get("geometry").toString()
+                    geometry
             );
 
         } catch (Exception e) {
-            throw new RuntimeException("ORS failed", e);
+            throw new RuntimeException("ORS routing failed: " + e.getMessage(), e);
         }
     }
 }

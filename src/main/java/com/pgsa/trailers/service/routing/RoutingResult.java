@@ -1,11 +1,14 @@
 package com.pgsa.trailers.service.routing;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import java.math.BigDecimal;
 
 /**
  * Unified routing result used across all providers (ORS, Google, Mapbox)
- * Keeps structure consistent for enterprise routing engine
+ * Enterprise-safe + null-safe + API-ready
  */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class RoutingResult {
 
     private final Coordinates origin;
@@ -29,10 +32,14 @@ public class RoutingResult {
     ) {
         this.origin = origin;
         this.destination = destination;
-        this.distanceKm = distanceKm;
-        this.durationHours = durationHours;
+        this.distanceKm = safe(distanceKm);
+        this.durationHours = safe(durationHours);
         this.provider = provider;
         this.geometry = geometry;
+    }
+
+    private BigDecimal safe(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
     }
 
     public Coordinates getOrigin() {
@@ -59,17 +66,21 @@ public class RoutingResult {
         return geometry;
     }
 
+    // =========================
     // Convenience helpers
+    // =========================
 
     public BigDecimal getDistanceMiles() {
-        if (distanceKm == null) return BigDecimal.ZERO;
         return distanceKm.multiply(BigDecimal.valueOf(0.621371));
     }
 
     public BigDecimal getDurationMinutes() {
-        if (durationHours == null) return BigDecimal.ZERO;
         return durationHours.multiply(BigDecimal.valueOf(60));
     }
+
+    // =========================
+    // Debug / logging
+    // =========================
 
     @Override
     public String toString() {

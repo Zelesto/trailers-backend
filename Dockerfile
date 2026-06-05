@@ -13,7 +13,7 @@ RUN mvn dependency:go-offline
 
 # Copy source code and build
 COPY src ./src
-RUN mvn clean package -DskipTests -X
+RUN mvn clean package -DskipTests -e
 
 # Stage 2: Create the runtime image
 FROM eclipse-temurin:17-jre-alpine

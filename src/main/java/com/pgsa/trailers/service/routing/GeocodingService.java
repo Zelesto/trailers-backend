@@ -30,31 +30,40 @@ public class GeocodingService {
                     .queryParam("format", "json")
                     .queryParam("q", encoded)
                     .queryParam("limit", "1")
+                    .queryParam("addressdetails", "1")
                     .build()
                     .toUriString();
 
             HttpHeaders headers = new HttpHeaders();
-            headers.set("User-Agent", "TrailersApp/1.0");
+            headers.set("User-Agent", "TrailersApp/1.0 (routing-service)");
             headers.set("Accept", "application/json");
 
             ResponseEntity<String> response = restTemplate.exchange(
-                    url, HttpMethod.GET, new HttpEntity<>(headers), String.class
+                    url,
+                    HttpMethod.GET,
+                    new HttpEntity<>(headers),
+                    String.class
             );
+
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                throw new RuntimeException("Geocoding API failed: " + response.getStatusCode());
+            }
 
             JsonNode arr = objectMapper.readTree(response.getBody());
 
-            if (!arr.isArray() || arr.size() == 0) {
+            if (!arr.isArray() || arr.isEmpty()) {
                 throw new RuntimeException("Location not found: " + location);
             }
 
             JsonNode node = arr.get(0);
 
-            return new Coordinates(
-                    node.get("lat").asDouble(),
-                    node.get("lon").asDouble()
-            );
+            double lat = node.path("lat").asDouble();
+            double lon = node.path("lon").asDouble();
+
+            return new Coordinates(lat, lon);
 
         } catch (Exception e) {
+            log.error("Geocoding failed for: {}", location, e);
             throw new RuntimeException("Geocoding failed: " + location, e);
         }
     }

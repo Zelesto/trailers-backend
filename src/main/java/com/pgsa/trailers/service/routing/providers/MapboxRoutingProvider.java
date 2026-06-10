@@ -2,17 +2,13 @@ package com.pgsa.trailers.service.routing.providers;
 
 import com.pgsa.trailers.service.routing.*;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
+import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
 public class MapboxRoutingProvider implements RoutingProvider {
-
-    @Value("${mapbox.token:}")
-    private String token;
 
     @Override
     public String name() {
@@ -21,16 +17,16 @@ public class MapboxRoutingProvider implements RoutingProvider {
 
     @Override
     public boolean supports(String vehicleType) {
-        return token != null && !token.isBlank();
+        return true; // or API key check if you have one
     }
 
     @Override
     public RoutingResult calculate(Coordinates origin,
                                    Coordinates destination,
-                                   String vehicleType) {
+                                   String vehicleType,
+                                   Map<String, Object> context) {
 
-        throw new UnsupportedOperationException(
-                "Mapbox provider not implemented yet"
-        );
+        // Example placeholder (replace with real Mapbox API call)
+        throw new UnsupportedOperationException("Mapbox routing not implemented yet");
     }
 }

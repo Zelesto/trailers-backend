@@ -19,6 +19,7 @@ import com.pgsa.trailers.repository.TripRepository;
 import com.pgsa.trailers.repository.VehicleRepository;
 import com.pgsa.trailers.service.util.SecurityUtil;
 import com.pgsa.trailers.service.util.TripNumberGenerator;
+import com.pgsa.trailers.service.TripMetricsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -46,6 +47,7 @@ import java.util.Optional;
 public class TripService {
 
     private final TripRepository tripRepository;
+    private final TripMetricsService tripMetricsService;
     private final TripMetricsRepository metricsRepository;
     private final VehicleRepository vehicleRepository;
     private final DriverRepository driverRepository;
@@ -87,6 +89,7 @@ public class TripService {
 
         // Initialize metrics
         tripMetricsService.initializeMetrics(saved.getId());
+        log.debug("Initialized metrics for new trip: {}", saved.getId());
 
         return tripResponseMapper.toResponse(saved);
     }

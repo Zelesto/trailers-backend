@@ -29,8 +29,8 @@ public class TripMetrics {
        Relationship (owner side)
        ======================== */
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "trip_id", nullable = false)
+    @OneToOne
+    @JoinColumn(name = "trip_id", referencedColumnName = "id")
     private Trip trip;
 
     /* ========================

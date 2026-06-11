@@ -284,4 +284,6 @@ public class TripMetrics {
         this.plannedVsActualDurationVarianceHours = BigDecimal.ZERO;
         this.geocodingConfidenceScore = BigDecimal.ZERO;
     }
+
+        
 }

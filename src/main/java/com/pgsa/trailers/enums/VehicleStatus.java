@@ -6,5 +6,10 @@ public enum VehicleStatus {
     MAINTENANCE,
     REPAIR,
     SOLD,
-    DECOMMISSIONED
+    DECOMMISSIONED,
+    AVAILABLE,
+    ASSIGNED,
+    IN_USE,
+    OUT_OF_SERVICE,
+    RETIRED
 }

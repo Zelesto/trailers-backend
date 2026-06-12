@@ -6,6 +6,11 @@ import com.pgsa.trailers.enums.TripStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -16,13 +21,17 @@ import java.time.LocalDateTime;
 @Table(
         name = "trip",
         indexes = {
-                @Index(name = "idx_trip_trip_number", columnList = "trip_number"),
+                @Index(name = "idx_trip_trip_number", columnList = "trip_number", unique = true),
                 @Index(name = "idx_trip_status", columnList = "status"),
                 @Index(name = "idx_trip_vehicle", columnList = "vehicle_id"),
+                @Index(name = "idx_trip_driver", columnList = "driver_id"),
+                @Index(name = "idx_trip_load", columnList = "load_id"),
                 @Index(name = "idx_trip_origin_city", columnList = "origin_city"),
-                @Index(name = "idx_trip_destination_city", columnList = "destination_city")
+                @Index(name = "idx_trip_destination_city", columnList = "destination_city"),
+                @Index(name = "idx_trip_created_at", columnList = "created_at")
         }
 )
+@EntityListeners(AuditingEntityListener.class)
 public class Trip {
 
     @Id
@@ -205,7 +214,7 @@ public class Trip {
        ======================== */
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", length = 50)
+    @Column(name = "status", length = 50, nullable = false)
     private TripStatus status;
 
     @Column(name = "approval_status", length = 30)
@@ -228,15 +237,19 @@ public class Trip {
        Audit
        ======================== */
 
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @LastModifiedDate
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @CreatedBy
     @Column(name = "created_by", updatable = false)
     private Long createdBy;
 
+    @LastModifiedBy
     @Column(name = "updated_by")
     private Long updatedBy;
 
@@ -245,6 +258,10 @@ public class Trip {
 
     @Column(name = "audit_trail", columnDefinition = "TEXT")
     private String auditTrail;
+
+    @Version
+    @Column(name = "version")
+    private Integer version;
 
     /* ========================
        Metrics
@@ -257,6 +274,43 @@ public class Trip {
             fetch = FetchType.LAZY
     )
     private TripMetrics metrics;
+
+    /* ========================
+       Business Methods
+       ======================== */
+
+    public void calculateActualDistance() {
+        if (actualStartOdometer != null && actualEndOdometer != null) {
+            this.actualDistanceKm = actualEndOdometer.subtract(actualStartOdometer);
+        }
+    }
+
+    public void calculateActualDuration() {
+        if (actualStartDate != null && actualEndDate != null) {
+            long hours = java.time.Duration.between(actualStartDate, actualEndDate).toHours();
+            this.actualDurationHours = BigDecimal.valueOf(hours);
+        }
+    }
+
+    public boolean isPlanned() {
+        return status == TripStatus.PLANNED;
+    }
+
+    public boolean isInProgress() {
+        return status == TripStatus.IN_PROGRESS;
+    }
+
+    public boolean isCompleted() {
+        return status == TripStatus.COMPLETED;
+    }
+
+    public boolean isCancelled() {
+        return status == TripStatus.CANCELLED;
+    }
+
+    public boolean isActive() {
+        return status == TripStatus.PLANNED || status == TripStatus.IN_PROGRESS || status == TripStatus.ON_HOLD;
+    }
 
     /* ========================
        Convenience Methods
@@ -275,11 +329,13 @@ public class Trip {
         }
 
         if (originZipCode != null && !originZipCode.isBlank()) {
-            address.append(" ").append(originZipCode);
+            if (!address.isEmpty()) address.append(" ");
+            address.append(originZipCode);
         }
 
         if (originProvince != null && !originProvince.isBlank()) {
-            address.append(", ").append(originProvince);
+            if (!address.isEmpty()) address.append(", ");
+            address.append(originProvince);
         }
 
         return address.toString();
@@ -298,11 +354,13 @@ public class Trip {
         }
 
         if (destinationZipCode != null && !destinationZipCode.isBlank()) {
-            address.append(" ").append(destinationZipCode);
+            if (!address.isEmpty()) address.append(" ");
+            address.append(destinationZipCode);
         }
 
         if (destinationProvince != null && !destinationProvince.isBlank()) {
-            address.append(", ").append(destinationProvince);
+            if (!address.isEmpty()) address.append(", ");
+            address.append(destinationProvince);
         }
 
         return address.toString();
@@ -314,5 +372,26 @@ public class Trip {
 
     public void updateDestinationLocationFromComponents() {
         this.destinationLocation = buildDestinationAddress();
+    }
+
+    @PrePersist
+    protected void onCreate() {
+        if (status == null) {
+            status = TripStatus.PLANNED;
+        }
+        if (incidentsLogged == null) {
+            incidentsLogged = 0;
+        }
+        if (lastStatusUpdate == null) {
+            lastStatusUpdate = LocalDateTime.now();
+        }
+        updateOriginLocationFromComponents();
+        updateDestinationLocationFromComponents();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updateOriginLocationFromComponents();
+        updateDestinationLocationFromComponents();
     }
 }

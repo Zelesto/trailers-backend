@@ -3,74 +3,54 @@ package com.pgsa.trailers.entity.ops;
 import com.pgsa.trailers.dto.CreateTripRequest;
 import com.pgsa.trailers.entity.assets.Driver;
 import com.pgsa.trailers.entity.assets.Vehicle;
-import com.pgsa.trailers.repository.DriverRepository;
-import com.pgsa.trailers.repository.LoadRepository;
-import com.pgsa.trailers.repository.VehicleRepository;
 import org.springframework.stereotype.Component;
+
+import java.time.LocalDateTime;
 
 @Component
 public class CreateTripMapper {
 
-    private final VehicleRepository vehicleRepository;
-    private final DriverRepository driverRepository;
-    private final LoadRepository loadRepository;
-
-    public CreateTripMapper(
-            VehicleRepository vehicleRepository,
-            DriverRepository driverRepository,
-            LoadRepository loadRepository
+    public Trip toEntity(
+            CreateTripRequest request,
+            Vehicle vehicle,
+            Driver driver,
+            Driver supervisor,
+            Long userId
     ) {
-        this.vehicleRepository = vehicleRepository;
-        this.driverRepository = driverRepository;
-        this.loadRepository = loadRepository;
-    }
-
-    public Trip toEntity(CreateTripRequest request) {
-        if (request == null) {
-            return null;
-        }
+        if (request == null) return null;
 
         Trip trip = new Trip();
 
         /* ========================
            RELATIONSHIPS
            ======================== */
-        if (request.getVehicleId() != null) {
-            Vehicle vehicle = vehicleRepository.getReferenceById(request.getVehicleId());
-            trip.setVehicle(vehicle);
-        }
+        trip.setVehicle(vehicle);
+        trip.setDriver(driver);
+        trip.setSupervisor(supervisor);
 
-        if (request.getDriverId() != null) {
-            Driver driver = driverRepository.getReferenceById(request.getDriverId());
-            trip.setDriver(driver);
-        }
-
-        if (request.getSupervisorId() != null) {
-            Driver supervisor = driverRepository.getReferenceById(request.getSupervisorId());
-            trip.setSupervisor(supervisor);
-        }
-
-        if (request.getLoadId() != null) {
-            Load load = loadRepository.getReferenceById(request.getLoadId());
-            trip.setLoad(load);
-        }
+        // loadId if applicable in entity
+        trip.setLoadId(request.getLoadId());
 
         /* ========================
            IDENTITY
            ======================== */
         trip.setTripType(request.getTripType());
+        trip.setReferenceNumber(request.getReferenceNumber());
+        trip.setPurchaseOrderNumber(request.getPurchaseOrderNumber());
 
         /* ========================
            WORKFLOW
            ======================== */
         trip.setStatus(request.getStatus());
         trip.setApprovalStatus(request.getApprovalStatus());
+        trip.setPriority(request.getPriority());
 
         /* ========================
            PLANNING
            ======================== */
         trip.setPlannedStartDate(request.getPlannedStartDate());
         trip.setPlannedEndDate(request.getPlannedEndDate());
+
         trip.setPlannedDistanceKm(request.getPlannedDistanceKm());
         trip.setPlannedDurationHours(request.getPlannedDurationHours());
         trip.setEstimatedDurationHours(request.getEstimatedDurationHours());
@@ -124,12 +104,6 @@ public class CreateTripMapper {
         trip.setDriverNotes(request.getDriverNotes());
 
         /* ========================
-           REFERENCES
-           ======================== */
-        trip.setReferenceNumber(request.getReferenceNumber());
-        trip.setPurchaseOrderNumber(request.getPurchaseOrderNumber());
-
-        /* ========================
            OPERATIONS
            ======================== */
         trip.setIncidentsLogged(
@@ -149,6 +123,13 @@ public class CreateTripMapper {
            AUDIT
            ======================== */
         trip.setAuditTrail(request.getAuditTrail());
+
+        /* ========================
+           SYSTEM FIELDS
+           ======================== */
+        trip.setCreatedAt(LocalDateTime.now());
+        trip.setCreatedBy(userId);
+        trip.setLastStatusUpdate(LocalDateTime.now());
 
         return trip;
     }

@@ -4,35 +4,43 @@ import com.pgsa.trailers.config.BaseEntity;
 import com.pgsa.trailers.enums.DriverStatus;
 import com.pgsa.trailers.entity.security.AppUser;
 import jakarta.persistence.*;
-import java.time.LocalDate;
+import lombok.Getter;
+import lombok.Setter;
 
+import java.time.LocalDate;
+import java.time.Period;
+
+@Getter
+@Setter
 @Entity
 @Table(
         name = "driver",
         indexes = {
-                @Index(name = "idx_driver_license", columnList = "license_number")
+                @Index(name = "idx_driver_license", columnList = "license_number"),
+                @Index(name = "idx_driver_status", columnList = "status"),
+                @Index(name = "idx_driver_app_user", columnList = "app_user_id")
         },
         uniqueConstraints = {
-                @UniqueConstraint(name = "driver_license_number_key", columnNames = {"license_number"})
+                @UniqueConstraint(name = "uk_driver_license_number", columnNames = {"license_number"}),
+                @UniqueConstraint(name = "uk_driver_app_user", columnNames = {"app_user_id"})
         }
 )
 public class Driver extends BaseEntity {
 
-    // Link to app_user (required: every driver is an app_user)
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "app_user_id", nullable = false, foreignKey = @ForeignKey(name = "fk_driver_app_user"))
+    @JoinColumn(name = "app_user_id", nullable = false)
     private AppUser appUser;
 
-    @Column(name = "first_name", nullable = false)
+    @Column(name = "first_name", nullable = false, length = 100)
     private String firstName;
 
-    @Column(name = "last_name", nullable = false)
+    @Column(name = "last_name", nullable = false, length = 100)
     private String lastName;
 
-    @Column(name = "license_number", unique = true, nullable = false)
+    @Column(name = "license_number", unique = true, nullable = false, length = 50)
     private String licenseNumber;
 
-    @Column(name = "license_type")
+    @Column(name = "license_type", length = 50)
     private String licenseType;
 
     @Column(name = "license_expiry")
@@ -41,98 +49,26 @@ public class Driver extends BaseEntity {
     @Column(name = "hire_date")
     private LocalDate hireDate;
 
-    @Column(name = "phone_number")
+    @Column(name = "phone_number", length = 20)
     private String phoneNumber;
 
-    @Column(name = "email")
+    @Column(name = "email", length = 100)
     private String email;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", columnDefinition = "driver_status")
+    @Column(name = "status", nullable = false)
     private DriverStatus status;
 
-    // ========== GETTERS ==========
+    @Column(name = "termination_date")
+    private LocalDate terminationDate;
 
-    public AppUser getAppUser() {
-        return appUser;
-    }
+    @Column(name = "termination_reason", length = 255)
+    private String terminationReason;
 
-    public String getFirstName() {
-        return firstName;
-    }
+    // ========== CONSTRUCTORS ==========
 
-    public String getLastName() {
-        return lastName;
-    }
-
-    public String getLicenseNumber() {
-        return licenseNumber;
-    }
-
-    public String getLicenseType() {
-        return licenseType;
-    }
-
-    public LocalDate getLicenseExpiry() {
-        return licenseExpiry;
-    }
-
-    public LocalDate getHireDate() {
-        return hireDate;
-    }
-
-    public String getPhoneNumber() {
-        return phoneNumber;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public DriverStatus getStatus() {
-        return status;
-    }
-
-    // ========== SETTERS ==========
-
-    public void setAppUser(AppUser appUser) {
-        this.appUser = appUser;
-    }
-
-    public void setFirstName(String firstName) {
-        this.firstName = firstName;
-    }
-
-    public void setLastName(String lastName) {
-        this.lastName = lastName;
-    }
-
-    public void setLicenseNumber(String licenseNumber) {
-        this.licenseNumber = licenseNumber;
-    }
-
-    public void setLicenseType(String licenseType) {
-        this.licenseType = licenseType;
-    }
-
-    public void setLicenseExpiry(LocalDate licenseExpiry) {
-        this.licenseExpiry = licenseExpiry;
-    }
-
-    public void setHireDate(LocalDate hireDate) {
-        this.hireDate = hireDate;
-    }
-
-    public void setPhoneNumber(String phoneNumber) {
-        this.phoneNumber = phoneNumber;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public void setStatus(DriverStatus status) {
-        this.status = status;
+    public Driver() {
+        this.status = DriverStatus.ACTIVE;
     }
 
     // ========== HELPER METHODS ==========
@@ -171,26 +107,31 @@ public class Driver extends BaseEntity {
     }
 
     /**
+     * Check if driver is available for assignment
+     */
+    public boolean isAvailableForAssignment() {
+        return isActive() && 
+               !isLicenseExpired() && 
+               status != DriverStatus.SUSPENDED &&
+               status != DriverStatus.ON_LEAVE;
+    }
+
+    /**
      * Get years of service
      */
     public Integer getYearsOfService() {
         if (hireDate == null) {
             return null;
         }
-        return LocalDate.now().getYear() - hireDate.getYear();
+        return Period.between(hireDate, LocalDate.now()).getYears();
     }
 
     /**
      * Get driver's age (if date of birth is available in AppUser)
      */
     public Integer getAge() {
-        // Assuming AppUser has getDateOfBirth() method
-        if (appUser != null) {
-            // You would need to add dateOfBirth to AppUser entity
-            // LocalDate dateOfBirth = appUser.getDateOfBirth();
-            // if (dateOfBirth != null) {
-            //     return Period.between(dateOfBirth, LocalDate.now()).getYears();
-            // }
+        if (appUser != null && appUser.getDateOfBirth() != null) {
+            return Period.between(appUser.getDateOfBirth(), LocalDate.now()).getYears();
         }
         return null;
     }
@@ -237,6 +178,8 @@ public class Driver extends BaseEntity {
      */
     public void activate() {
         this.status = DriverStatus.ACTIVE;
+        this.terminationDate = null;
+        this.terminationReason = null;
     }
 
     /**
@@ -244,16 +187,41 @@ public class Driver extends BaseEntity {
      */
     public void deactivate(String reason) {
         this.status = DriverStatus.INACTIVE;
-        // Could add to audit trail
+        this.terminationDate = LocalDate.now();
+        this.terminationReason = reason;
+    }
+
+    /**
+     * Suspend driver
+     */
+    public void suspend(String reason) {
+        this.status = DriverStatus.SUSPENDED;
+        this.terminationReason = reason;
+    }
+
+    /**
+     * Reinstate suspended driver
+     */
+    public void reinstate() {
+        this.status = DriverStatus.ACTIVE;
+        this.terminationReason = null;
+    }
+
+    /**
+     * Set driver on leave
+     */
+    public void setOnLeave() {
+        this.status = DriverStatus.ON_LEAVE;
     }
 
     /**
      * Check if driver can be assigned to a vehicle
      */
-    public boolean canBeAssignedToVehicle() {
+    public boolean canBeAssigned() {
         return isActive() &&
                 !isLicenseExpired() &&
-                status != DriverStatus.SUSPENDED;
+                status != DriverStatus.SUSPENDED &&
+                status != DriverStatus.ON_LEAVE;
     }
 
     // ========== EQUALS & HASHCODE ==========
@@ -289,46 +257,7 @@ public class Driver extends BaseEntity {
                 ", fullName='" + getFullName() + '\'' +
                 ", licenseNumber='" + licenseNumber + '\'' +
                 ", status=" + status +
-                ", appUser=" + (appUser != null ? appUser.getId() : "null") +
+                ", appUserId=" + (appUser != null ? appUser.getId() : "null") +
                 '}';
-    }
-
-    // ========== BUILDER PATTERN (Optional) ==========
-
-    public static Builder builder() {
-        return new Builder();
-    }
-
-    public static class Builder {
-        private Driver driver = new Driver();
-
-        public Builder firstName(String firstName) {
-            driver.setFirstName(firstName);
-            return this;
-        }
-
-        public Builder lastName(String lastName) {
-            driver.setLastName(lastName);
-            return this;
-        }
-
-        public Builder licenseNumber(String licenseNumber) {
-            driver.setLicenseNumber(licenseNumber);
-            return this;
-        }
-
-        public Builder appUser(AppUser appUser) {
-            driver.setAppUser(appUser);
-            return this;
-        }
-
-        public Builder status(DriverStatus status) {
-            driver.setStatus(status);
-            return this;
-        }
-
-        public Driver build() {
-            return driver;
-        }
     }
 }

@@ -12,10 +12,13 @@ import com.pgsa.trailers.entity.ops.auto.TripCompletedEvent;
 import com.pgsa.trailers.entity.ops.auto.TripPlannedEvent;
 import com.pgsa.trailers.entity.ops.auto.TripStartedEvent;
 import com.pgsa.trailers.enums.TripStatus;
+import com.pgsa.trailers.exception.TripNotFoundException;
+import com.pgsa.trailers.exception.TripValidationException;
 import com.pgsa.trailers.repository.DriverRepository;
 import com.pgsa.trailers.repository.TripRepository;
 import com.pgsa.trailers.repository.VehicleRepository;
 import com.pgsa.trailers.service.util.TripNumberGenerator;
+import com.pgsa.trailers.service.util.TripValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -26,7 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 
 @Service
@@ -39,46 +41,51 @@ public class TripService {
     private final TripMetricsService tripMetricsService;
     private final VehicleRepository vehicleRepository;
     private final DriverRepository driverRepository;
-    private final TripFinalisationService tripFinalisationService;
     private final TripNumberGenerator tripNumberGenerator;
     private final CreateTripMapper createTripMapper;
     private final TripResponseMapper tripResponseMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final TripValidator tripValidator;
 
     /* ========================
        CREATE
        ======================== */
     public TripResponse createTrip(CreateTripRequest request, Long userId) {
-
+        log.debug("Creating trip for vehicle: {}, user: {}", request.getVehicleId(), userId);
+        
+        tripValidator.validateCreateRequest(request);
+        
         Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found"));
+                .orElseThrow(() -> new TripValidationException("Vehicle not found with ID: " + request.getVehicleId()));
 
         Driver driver = null;
         if (request.getDriverId() != null) {
             driver = driverRepository.findById(request.getDriverId())
-                    .orElseThrow(() -> new IllegalArgumentException("Driver not found"));
+                    .orElseThrow(() -> new TripValidationException("Driver not found with ID: " + request.getDriverId()));
         }
 
         Driver supervisor = null;
         if (request.getSupervisorId() != null) {
             supervisor = driverRepository.findById(request.getSupervisorId())
-                    .orElseThrow(() -> new IllegalArgumentException("Supervisor not found"));
+                    .orElseThrow(() -> new TripValidationException("Supervisor not found with ID: " + request.getSupervisorId()));
         }
 
-        Trip trip = createTripMapper.toEntity(
-                request,
-                vehicle,
-                driver,
-                supervisor,
-                userId
-        );
-
+        Trip trip = createTripMapper.toEntity(request);
+        trip.setVehicle(vehicle);
+        trip.setDriver(driver);
+        trip.setSupervisor(supervisor);
         trip.setTripNumber(tripNumberGenerator.generate());
-        trip.setStatus(TripStatus.PLANNED);
+        trip.setStatus(request.getStatus() != null ? request.getStatus() : TripStatus.DRAFT);
+        trip.setCreatedBy(userId);
         trip.setLastStatusUpdate(LocalDateTime.now());
 
         Trip saved = tripRepository.save(trip);
+        log.info("Created trip with ID: {}, Number: {}", saved.getId(), saved.getTripNumber());
 
+        if (saved.getStatus() == TripStatus.PLANNED) {
+            eventPublisher.publishEvent(new TripPlannedEvent(saved.getId()));
+        }
+        
         tripMetricsService.initializeMetrics(saved.getId());
 
         return tripResponseMapper.toResponse(saved);
@@ -89,13 +96,11 @@ public class TripService {
        ======================== */
     @Transactional
     public TripResponse startTrip(Long tripId, BigDecimal actualStartOdometer, Long userId) {
-
-        Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new NoSuchElementException("Trip not found"));
-
-        if (trip.getStatus() != TripStatus.PLANNED) {
-            throw new IllegalStateException("Trip must be PLANNED to start");
-        }
+        log.debug("Starting trip ID: {} with odometer: {}", tripId, actualStartOdometer);
+        
+        Trip trip = findTripOrThrow(tripId);
+        
+        tripValidator.validateCanStart(trip, actualStartOdometer);
 
         trip.setActualStartOdometer(actualStartOdometer);
         trip.setActualStartDate(LocalDateTime.now());
@@ -105,8 +110,9 @@ public class TripService {
         trip.setUpdatedBy(userId);
 
         Trip updated = tripRepository.save(trip);
-
+        
         eventPublisher.publishEvent(new TripStartedEvent(tripId));
+        log.info("Trip {} started", tripId);
 
         return tripResponseMapper.toResponse(updated);
     }
@@ -116,36 +122,31 @@ public class TripService {
        ======================== */
     @Transactional
     public TripResponse endTrip(Long tripId, BigDecimal actualEndOdometer, Long userId) {
-
-        Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new NoSuchElementException("Trip not found"));
-
-        if (trip.getStatus() != TripStatus.IN_PROGRESS) {
-            throw new IllegalStateException("Trip must be IN_PROGRESS to end");
-        }
+        log.debug("Ending trip ID: {} with odometer: {}", tripId, actualEndOdometer);
+        
+        Trip trip = findTripOrThrow(tripId);
+        
+        tripValidator.validateCanEnd(trip, actualEndOdometer);
 
         BigDecimal startOdo = trip.getActualStartOdometer();
-
-        if (startOdo == null) {
-            throw new IllegalStateException("Start odometer missing");
-        }
-
-        if (actualEndOdometer.compareTo(startOdo) < 0) {
-            throw new IllegalArgumentException("End odometer cannot be less than start");
-        }
-
+        
         trip.setActualEndOdometer(actualEndOdometer);
         trip.setActualEndDate(LocalDateTime.now());
         trip.setStatus(TripStatus.COMPLETED);
         trip.setLastStatusUpdate(LocalDateTime.now());
         trip.setUpdatedAt(LocalDateTime.now());
         trip.setUpdatedBy(userId);
-
         trip.setActualDistanceKm(actualEndOdometer.subtract(startOdo));
+        
+        if (trip.getActualStartDate() != null && trip.getActualEndDate() != null) {
+            long hours = java.time.Duration.between(trip.getActualStartDate(), trip.getActualEndDate()).toHours();
+            trip.setActualDurationHours(BigDecimal.valueOf(hours));
+        }
 
         Trip updated = tripRepository.save(trip);
-
+        
         eventPublisher.publishEvent(new TripCompletedEvent(tripId));
+        log.info("Trip {} completed. Distance: {} km", tripId, trip.getActualDistanceKm());
 
         return tripResponseMapper.toResponse(updated);
     }
@@ -155,8 +156,7 @@ public class TripService {
        ======================== */
     @Transactional(readOnly = true)
     public TripResponse getTrip(Long id) {
-        Trip trip = tripRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Trip not found"));
+        Trip trip = findTripOrThrow(id);
         return tripResponseMapper.toResponse(trip);
     }
 
@@ -167,16 +167,32 @@ public class TripService {
     }
 
     /* ========================
-       STATUS UPDATE (CLEAN)
+       STATUS UPDATE
        ======================== */
     @Transactional
-    public TripResponse updateTripStatus(Long tripId, TripStatus newStatus) {
-
-        Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new NoSuchElementException("Trip not found"));
-
+    public TripResponse updateTripStatus(Long tripId, TripStatus newStatus, Long userId) {
+        log.debug("Updating trip {} status to: {}", tripId, newStatus);
+        
+        Trip trip = findTripOrThrow(tripId);
+        
+        tripValidator.validateStatusTransition(trip.getStatus(), newStatus);
+        
+        TripStatus oldStatus = trip.getStatus();
         trip.setStatus(newStatus);
         trip.setLastStatusUpdate(LocalDateTime.now());
+        trip.setUpdatedBy(userId);
+        
+        if (newStatus == TripStatus.CANCELLED) {
+            trip.setCancelledAt(LocalDateTime.now());
+        }
+        
+        if (newStatus == TripStatus.COMPLETED && oldStatus != TripStatus.COMPLETED) {
+            trip.calculateActualDistance();
+            if (trip.getActualStartDate() != null && trip.getActualEndDate() != null) {
+                long hours = java.time.Duration.between(trip.getActualStartDate(), trip.getActualEndDate()).toHours();
+                trip.setActualDurationHours(BigDecimal.valueOf(hours));
+            }
+        }
 
         Trip saved = tripRepository.save(trip);
 
@@ -184,7 +200,10 @@ public class TripService {
             case PLANNED -> eventPublisher.publishEvent(new TripPlannedEvent(tripId));
             case IN_PROGRESS -> eventPublisher.publishEvent(new TripStartedEvent(tripId));
             case COMPLETED -> eventPublisher.publishEvent(new TripCompletedEvent(tripId));
+            default -> log.debug("Status changed from {} to {}, no event published", oldStatus, newStatus);
         }
+        
+        log.info("Trip {} status changed from {} to {}", tripId, oldStatus, newStatus);
 
         return tripResponseMapper.toResponse(saved);
     }
@@ -193,9 +212,7 @@ public class TripService {
        INCIDENT RULE
        ======================== */
     public boolean canReportIncident(Trip trip) {
-        return trip.getStatus() == TripStatus.IN_PROGRESS
-                || trip.getStatus() == TripStatus.ACTIVE
-                || trip.getStatus() == TripStatus.PLANNED;
+        return trip.isActive();
     }
 
     /* ========================
@@ -203,11 +220,20 @@ public class TripService {
        ======================== */
     @Transactional
     public void deleteTrip(Long id) {
-
-        Trip trip = tripRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Trip not found"));
-
+        log.debug("Deleting trip ID: {}", id);
+        
+        Trip trip = findTripOrThrow(id);
+        
+        if (trip.getStatus().isTerminal()) {
+            throw new TripValidationException("Cannot delete trip with terminal status: " + trip.getStatus());
+        }
+        
+        if (trip.getMetrics() != null) {
+            trip.setMetrics(null);
+        }
+        
         tripRepository.delete(trip);
+        log.info("Deleted trip ID: {}", id);
     }
 
     /* ========================
@@ -215,39 +241,54 @@ public class TripService {
        ======================== */
     @Transactional
     public TripResponse updateTrip(Long tripId, UpdateTripRequest request, Long userId) {
-
-        Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new NoSuchElementException("Trip not found"));
-
+        log.debug("Updating trip ID: {} with request", tripId);
+        
+        Trip trip = findTripOrThrow(tripId);
+        
+        tripValidator.validateCanUpdate(trip);
+        
         LocalDateTime now = LocalDateTime.now();
 
         if (request.getVehicleId() != null) {
             Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
-                    .orElseThrow(() -> new IllegalArgumentException("Vehicle not found"));
+                    .orElseThrow(() -> new TripValidationException("Vehicle not found with ID: " + request.getVehicleId()));
             trip.setVehicle(vehicle);
         }
 
         if (request.getDriverId() != null) {
             Driver driver = driverRepository.findById(request.getDriverId())
-                    .orElseThrow(() -> new IllegalArgumentException("Driver not found"));
+                    .orElseThrow(() -> new TripValidationException("Driver not found with ID: " + request.getDriverId()));
             trip.setDriver(driver);
         }
 
         if (request.getSupervisorId() != null) {
             Driver supervisor = driverRepository.findById(request.getSupervisorId())
-                    .orElseThrow(() -> new IllegalArgumentException("Supervisor not found"));
+                    .orElseThrow(() -> new TripValidationException("Supervisor not found with ID: " + request.getSupervisorId()));
             trip.setSupervisor(supervisor);
         }
 
         Optional.ofNullable(request.getOriginLocation()).ifPresent(trip::setOriginLocation);
         Optional.ofNullable(request.getDestinationLocation()).ifPresent(trip::setDestinationLocation);
+        
+        Optional.ofNullable(request.getOriginStreetAddress()).ifPresent(trip::setOriginStreetAddress);
+        Optional.ofNullable(request.getOriginCity()).ifPresent(trip::setOriginCity);
+        Optional.ofNullable(request.getOriginZipCode()).ifPresent(trip::setOriginZipCode);
+        Optional.ofNullable(request.getOriginProvince()).ifPresent(trip::setOriginProvince);
+
+        Optional.ofNullable(request.getDestinationStreetAddress()).ifPresent(trip::setDestinationStreetAddress);
+        Optional.ofNullable(request.getDestinationCity()).ifPresent(trip::setDestinationCity);
+        Optional.ofNullable(request.getDestinationZipCode()).ifPresent(trip::setDestinationZipCode);
+        Optional.ofNullable(request.getDestinationProvince()).ifPresent(trip::setDestinationProvince);
 
         Optional.ofNullable(request.getActualStartDate()).ifPresent(trip::setActualStartDate);
         Optional.ofNullable(request.getActualEndDate()).ifPresent(trip::setActualEndDate);
 
         Optional.ofNullable(request.getActualStartOdometer()).ifPresent(trip::setActualStartOdometer);
         Optional.ofNullable(request.getActualEndOdometer()).ifPresent(trip::setActualEndOdometer);
-        Optional.ofNullable(request.getActualDistanceKm()).ifPresent(trip::setActualDistanceKm);
+        
+        if (request.getActualStartOdometer() != null && request.getActualEndOdometer() != null) {
+            trip.setActualDistanceKm(request.getActualEndOdometer().subtract(request.getActualStartOdometer()));
+        }
 
         Optional.ofNullable(request.getPlannedStartDate()).ifPresent(trip::setPlannedStartDate);
         Optional.ofNullable(request.getPlannedEndDate()).ifPresent(trip::setPlannedEndDate);
@@ -256,17 +297,37 @@ public class TripService {
 
         Optional.ofNullable(request.getTollCost()).ifPresent(trip::setTollCost);
         Optional.ofNullable(request.getOtherExpenses()).ifPresent(trip::setOtherExpenses);
+        
+        Optional.ofNullable(request.getFuelConsumedLiters()).ifPresent(trip::setFuelConsumedLiters);
+        Optional.ofNullable(request.getDriverNotes()).ifPresent(trip::setDriverNotes);
 
         if (request.getStatus() != null && request.getStatus() != trip.getStatus()) {
+            tripValidator.validateStatusTransition(trip.getStatus(), request.getStatus());
             trip.setStatus(request.getStatus());
             trip.setLastStatusUpdate(now);
+            
+            if (request.getStatus() == TripStatus.CANCELLED) {
+                trip.setCancelledAt(now);
+            }
         }
 
         trip.setUpdatedAt(now);
         trip.setUpdatedBy(userId);
+        
+        trip.updateOriginLocationFromComponents();
+        trip.updateDestinationLocationFromComponents();
 
         Trip saved = tripRepository.save(trip);
+        log.info("Updated trip ID: {}", tripId);
 
         return tripResponseMapper.toResponse(saved);
+    }
+    
+    /* ========================
+       PRIVATE HELPERS
+       ======================== */
+    private Trip findTripOrThrow(Long id) {
+        return tripRepository.findById(id)
+                .orElseThrow(() -> new TripNotFoundException("Trip not found with ID: " + id));
     }
 }

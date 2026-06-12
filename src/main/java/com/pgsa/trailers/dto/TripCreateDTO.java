@@ -1,8 +1,10 @@
 package com.pgsa.trailers.dto;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
+
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
@@ -12,34 +14,64 @@ public class TripCreateDTO {
 
     private String tripNumber;
     private String tripType;
-    private Long vehicleId;
-    private Long driverId;
-    private Long loadId;
-
-    // Origin address components
-    private String originStreetAddress;
-    private String originCity;
-    private String originZipCode;
-    private String originProvince;
-
-    // Origin coordinates
-    private Double originLatitude;
-    private Double originLongitude;
-
-    // Destination address components
-    private String destinationStreetAddress;
-    private String destinationCity;
-    private String destinationZipCode;
-    private String destinationProvince;
-
-    // Destination coordinates
-    private Double destinationLatitude;
-    private Double destinationLongitude;
+    private String status;
+    private String approvalStatus;
+    private String priority;
 
     private LocalDateTime plannedStartDate;
     private LocalDateTime plannedEndDate;
 
-    // Route calculation preferences
-    private String vehicleType; // CAR, TRUCK, HGV, etc.
+    private Double estimatedDuration;
+    private Double plannedDistanceKm;
+    private Double plannedDurationHours;
+
+    private BigDecimal tollCost;
+    private BigDecimal otherExpenses;
+
+    private Long vehicleId;
+    private Long driverId;
+    private Long supervisorId;
+    private Long loadId;
+
+    private String commodityType;
+    private String cargoDescription;
+    private Double cargoWeight;
+    private BigDecimal cargoValue;
+    private Integer palletCount;
+    private String containerNumber;
+
+    // Origin
+    private String originStreetAddress;
+    private String originCity;
+    private String originZipCode;
+    private String originProvince;
+    private Double originLatitude;
+    private Double originLongitude;
+    private String originLocation;
+
+    // Destination
+    private String destinationStreetAddress;
+    private String destinationCity;
+    private String destinationZipCode;
+    private String destinationProvince;
+    private Double destinationLatitude;
+    private Double destinationLongitude;
+    private String destinationLocation;
+
+    private String notes;
+    private String specialInstructions;
+    private String driverNotes;
+
+    private String referenceNumber;
+    private String purchaseOrderNumber;
+
+    private String cancellationReason;
+
+    private String auditTrail;
+
+    private Integer incidentsLogged;
+
+    // Existing routing fields
+    private String vehicleType;
     private boolean calculateRoute = true;
 }

@@ -1,6 +1,7 @@
 package com.pgsa.trailers.entity.suppliers;
 
 import lombok.Getter;
+import java.math.BigDecimal;
 
 @Getter
 public class TripValidationException extends RuntimeException {

@@ -1,4 +1,4 @@
-package com.pgsa.trailers.config;
+package com.pgsa.trailers.entity.security;
 
 import com.pgsa.trailers.entity.security.AuditedEntity;
 import jakarta.persistence.*;

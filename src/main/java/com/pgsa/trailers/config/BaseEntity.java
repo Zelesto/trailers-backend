@@ -1,6 +1,6 @@
 package com.pgsa.trailers.config;
 
-import com.pgsa.trailers.entity.security.AuditedEntity;
+import com.pgsa.trailers.entity.security;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;

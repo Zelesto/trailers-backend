@@ -130,9 +130,9 @@ public class Driver extends BaseEntity {
      * Get driver's age (if date of birth is available in AppUser)
      */
     public Integer getAge() {
-        if (appUser != null && appUser.getDateOfBirth() != null) {
-            return Period.between(appUser.getDateOfBirth(), LocalDate.now()).getYears();
-        }
+      //  if (appUser != null && appUser.getDateOfBirth() != null) {
+      //      return Period.between(appUser.getDateOfBirth(), LocalDate.now()).getYears();
+      //  }
         return null;
     }
 

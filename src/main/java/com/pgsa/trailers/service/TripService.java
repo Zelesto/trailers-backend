@@ -13,10 +13,8 @@ import com.pgsa.trailers.entity.ops.auto.TripPlannedEvent;
 import com.pgsa.trailers.entity.ops.auto.TripStartedEvent;
 import com.pgsa.trailers.enums.TripStatus;
 import com.pgsa.trailers.repository.DriverRepository;
-import com.pgsa.trailers.repository.TripMetricsRepository;
 import com.pgsa.trailers.repository.TripRepository;
 import com.pgsa.trailers.repository.VehicleRepository;
-import com.pgsa.trailers.service.util.SecurityUtil;
 import com.pgsa.trailers.service.util.TripNumberGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,8 +36,7 @@ import java.util.Optional;
 public class TripService {
 
     private final TripRepository tripRepository;
-    private final TripMetricsService tripMetricsService;  // Only declare once
-    private final TripMetricsRepository metricsRepository;
+    private final TripMetricsService tripMetricsService;
     private final VehicleRepository vehicleRepository;
     private final DriverRepository driverRepository;
     private final TripFinalisationService tripFinalisationService;
@@ -47,54 +44,57 @@ public class TripService {
     private final CreateTripMapper createTripMapper;
     private final TripResponseMapper tripResponseMapper;
     private final ApplicationEventPublisher eventPublisher;
-    private final SecurityUtil securityUtil;
 
     /* ========================
        CREATE
        ======================== */
     public TripResponse createTrip(CreateTripRequest request, Long userId) {
-        Trip trip = createTripMapper.toEntity(request);
 
-        // Set vehicle
         Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle not found"));
-        trip.setVehicle(vehicle);
 
-        // Set driver if present
+        Driver driver = null;
         if (request.getDriverId() != null) {
-            Driver driver = driverRepository.findById(request.getDriverId())
+            driver = driverRepository.findById(request.getDriverId())
                     .orElseThrow(() -> new IllegalArgumentException("Driver not found"));
-            trip.setDriver(driver);
         }
+
+        Driver supervisor = null;
+        if (request.getSupervisorId() != null) {
+            supervisor = driverRepository.findById(request.getSupervisorId())
+                    .orElseThrow(() -> new IllegalArgumentException("Supervisor not found"));
+        }
+
+        Trip trip = createTripMapper.toEntity(
+                request,
+                vehicle,
+                driver,
+                supervisor,
+                userId
+        );
 
         trip.setTripNumber(tripNumberGenerator.generate());
         trip.setStatus(TripStatus.PLANNED);
-
-        // Audit info
-        trip.setCreatedAt(LocalDateTime.now());
-        trip.setCreatedBy(userId);
         trip.setLastStatusUpdate(LocalDateTime.now());
 
         Trip saved = tripRepository.save(trip);
 
-        // Initialize metrics
         tripMetricsService.initializeMetrics(saved.getId());
-        log.debug("Initialized metrics for new trip: {}", saved.getId());
 
         return tripResponseMapper.toResponse(saved);
     }
 
+    /* ========================
+       START TRIP
+       ======================== */
     @Transactional
     public TripResponse startTrip(Long tripId, BigDecimal actualStartOdometer, Long userId) {
+
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found"));
 
         if (trip.getStatus() != TripStatus.PLANNED) {
             throw new IllegalStateException("Trip must be PLANNED to start");
-        }
-
-        if (trip.getActualStartOdometer() != null) {
-            throw new IllegalStateException("Trip has already been started");
         }
 
         trip.setActualStartOdometer(actualStartOdometer);
@@ -107,13 +107,16 @@ public class TripService {
         Trip updated = tripRepository.save(trip);
 
         eventPublisher.publishEvent(new TripStartedEvent(tripId));
-        log.info("Trip {} started with odo {}", tripId, actualStartOdometer);
 
         return tripResponseMapper.toResponse(updated);
     }
 
+    /* ========================
+       END TRIP
+       ======================== */
     @Transactional
     public TripResponse endTrip(Long tripId, BigDecimal actualEndOdometer, Long userId) {
+
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found"));
 
@@ -122,12 +125,13 @@ public class TripService {
         }
 
         BigDecimal startOdo = trip.getActualStartOdometer();
+
         if (startOdo == null) {
-            throw new IllegalStateException("Trip start odo missing");
+            throw new IllegalStateException("Start odometer missing");
         }
 
         if (actualEndOdometer.compareTo(startOdo) < 0) {
-            throw new IllegalArgumentException("End odometer cannot be less than start odometer");
+            throw new IllegalArgumentException("End odometer cannot be less than start");
         }
 
         trip.setActualEndOdometer(actualEndOdometer);
@@ -137,25 +141,13 @@ public class TripService {
         trip.setUpdatedAt(LocalDateTime.now());
         trip.setUpdatedBy(userId);
 
-        // Calculate actual distance
         trip.setActualDistanceKm(actualEndOdometer.subtract(startOdo));
 
         Trip updated = tripRepository.save(trip);
 
         eventPublisher.publishEvent(new TripCompletedEvent(tripId));
-        log.info("Trip {} completed with odo {} -> {}", tripId, startOdo, actualEndOdometer);
 
         return tripResponseMapper.toResponse(updated);
-    }
-
-    /**
-     * Determines if incidents can be reported for a trip
-     * Allows incidents for trips that are active, in progress, on hold, or delayed
-     */
-    public boolean canReportIncident(Trip trip) {
-        return trip.getStatus() == TripStatus.IN_PROGRESS || 
-               trip.getStatus() == TripStatus.ACTIVE ||
-               trip.getStatus() == TripStatus.PLANNED;  // Optional: allow for planned trips too
     }
 
     /* ========================
@@ -175,39 +167,35 @@ public class TripService {
     }
 
     /* ========================
-       STATUS
+       STATUS UPDATE (CLEAN)
        ======================== */
     @Transactional
-    public TripResponse updateStatus(Long tripId, String newStatus) {
+    public TripResponse updateTripStatus(Long tripId, TripStatus newStatus) {
+
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found"));
 
-        TripStatus status = TripStatus.valueOf(newStatus.toUpperCase());
-        trip.setStatus(status);
-
-        if (status == TripStatus.COMPLETED) {
-            tripFinalisationService.finalizeTrip(trip.getId());
-        }
-
-        return tripResponseMapper.toResponse(tripRepository.save(trip));
-    }
-
-    @Transactional
-    public void updateTripStatus(Long tripId, TripStatus newStatus) {
-        Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new NoSuchElementException("Trip not found"));
-
-        // assign enum directly
         trip.setStatus(newStatus);
-        tripRepository.save(trip);
+        trip.setLastStatusUpdate(LocalDateTime.now());
 
-        // publish events
+        Trip saved = tripRepository.save(trip);
+
         switch (newStatus) {
             case PLANNED -> eventPublisher.publishEvent(new TripPlannedEvent(tripId));
             case IN_PROGRESS -> eventPublisher.publishEvent(new TripStartedEvent(tripId));
             case COMPLETED -> eventPublisher.publishEvent(new TripCompletedEvent(tripId));
-            default -> {} // No event for other statuses
         }
+
+        return tripResponseMapper.toResponse(saved);
+    }
+
+    /* ========================
+       INCIDENT RULE
+       ======================== */
+    public boolean canReportIncident(Trip trip) {
+        return trip.getStatus() == TripStatus.IN_PROGRESS
+                || trip.getStatus() == TripStatus.ACTIVE
+                || trip.getStatus() == TripStatus.PLANNED;
     }
 
     /* ========================
@@ -215,67 +203,70 @@ public class TripService {
        ======================== */
     @Transactional
     public void deleteTrip(Long id) {
+
         Trip trip = tripRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException("Trip not found"));
-
-        // Access metrics to ensure JPA deletes it
-        if (trip.getMetrics() != null) {
-            log.debug("Deleting associated TripMetrics for trip id: {}", id);
-            trip.setMetrics(null); // optional if orphanRemoval = true
-        }
 
         tripRepository.delete(trip);
     }
 
+    /* ========================
+       UPDATE (PATCH SAFE)
+       ======================== */
     @Transactional
     public TripResponse updateTrip(Long tripId, UpdateTripRequest request, Long userId) {
-        Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new NoSuchElementException(
-                        "Trip not found with ID: " + tripId
-                ));
 
-        // Vehicle
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new NoSuchElementException("Trip not found"));
+
+        LocalDateTime now = LocalDateTime.now();
+
         if (request.getVehicleId() != null) {
             Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
                     .orElseThrow(() -> new IllegalArgumentException("Vehicle not found"));
             trip.setVehicle(vehicle);
         }
 
-        // Driver
         if (request.getDriverId() != null) {
             Driver driver = driverRepository.findById(request.getDriverId())
                     .orElseThrow(() -> new IllegalArgumentException("Driver not found"));
             trip.setDriver(driver);
         }
 
-        // Route
-        Optional.ofNullable(request.getOriginLocation())
-                .ifPresent(trip::setOriginLocation);
-
-        Optional.ofNullable(request.getDestinationLocation())
-                .ifPresent(trip::setDestinationLocation);
-
-        // Execution dates
-        Optional.ofNullable(request.getActualStartDate())
-                .ifPresent(trip::setActualStartDate);
-
-        Optional.ofNullable(request.getActualEndDate())
-                .ifPresent(trip::setActualEndDate);
-
-        // Status
-        if (request.getStatus() != null &&
-                !request.getStatus().equals(trip.getStatus())) {
-
-            trip.setStatus(request.getStatus());
-            trip.setLastStatusUpdate(LocalDateTime.now());
+        if (request.getSupervisorId() != null) {
+            Driver supervisor = driverRepository.findById(request.getSupervisorId())
+                    .orElseThrow(() -> new IllegalArgumentException("Supervisor not found"));
+            trip.setSupervisor(supervisor);
         }
 
-        // Audit
-        trip.setUpdatedAt(LocalDateTime.now());
+        Optional.ofNullable(request.getOriginLocation()).ifPresent(trip::setOriginLocation);
+        Optional.ofNullable(request.getDestinationLocation()).ifPresent(trip::setDestinationLocation);
+
+        Optional.ofNullable(request.getActualStartDate()).ifPresent(trip::setActualStartDate);
+        Optional.ofNullable(request.getActualEndDate()).ifPresent(trip::setActualEndDate);
+
+        Optional.ofNullable(request.getActualStartOdometer()).ifPresent(trip::setActualStartOdometer);
+        Optional.ofNullable(request.getActualEndOdometer()).ifPresent(trip::setActualEndOdometer);
+        Optional.ofNullable(request.getActualDistanceKm()).ifPresent(trip::setActualDistanceKm);
+
+        Optional.ofNullable(request.getPlannedStartDate()).ifPresent(trip::setPlannedStartDate);
+        Optional.ofNullable(request.getPlannedEndDate()).ifPresent(trip::setPlannedEndDate);
+        Optional.ofNullable(request.getPlannedDistanceKm()).ifPresent(trip::setPlannedDistanceKm);
+        Optional.ofNullable(request.getEstimatedDurationHours()).ifPresent(trip::setEstimatedDurationHours);
+
+        Optional.ofNullable(request.getTollCost()).ifPresent(trip::setTollCost);
+        Optional.ofNullable(request.getOtherExpenses()).ifPresent(trip::setOtherExpenses);
+
+        if (request.getStatus() != null && request.getStatus() != trip.getStatus()) {
+            trip.setStatus(request.getStatus());
+            trip.setLastStatusUpdate(now);
+        }
+
+        trip.setUpdatedAt(now);
         trip.setUpdatedBy(userId);
 
-        Trip updated = tripRepository.save(trip);
+        Trip saved = tripRepository.save(trip);
 
-        return tripResponseMapper.toResponse(updated);
+        return tripResponseMapper.toResponse(saved);
     }
 }

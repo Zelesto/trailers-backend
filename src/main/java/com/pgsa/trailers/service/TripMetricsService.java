@@ -5,6 +5,8 @@ import com.pgsa.trailers.dto.TripMetricsDTO;
 import com.pgsa.trailers.dto.TripMetricsUpdateRequest;
 import com.pgsa.trailers.entity.ops.Trip;
 import com.pgsa.trailers.entity.ops.TripMetrics;
+import com.pgsa.trailers.enums.TripStatus;
+import com.pgsa.trailers.exception.TripNotFoundException;
 import com.pgsa.trailers.repository.TripMetricsRepository;
 import com.pgsa.trailers.repository.TripRepository;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +17,7 @@ import com.pgsa.trailers.service.routing.RoutingResult;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 
 @Slf4j
 @Service
@@ -22,6 +25,8 @@ import java.math.RoundingMode;
 public class TripMetricsService {
 
     private static final BigDecimal FUEL_PRICE_PER_LITER = new BigDecimal("23.50");
+    private static final BigDecimal DEFAULT_FUEL_RATE = new BigDecimal("35"); // L per 100km
+    private static final BigDecimal DEFAULT_AVG_SPEED = new BigDecimal("60"); // km/h
 
     private final TripMetricsRepository tripMetricsRepository;
     private final TripRepository tripRepository;
@@ -68,7 +73,6 @@ public class TripMetricsService {
         return TripMetricsDTO.fromEntity(saved);
     }
 
-
     /* =========================================================
        MANUAL ENTRY (UI-driven)
        ========================================================= */
@@ -99,13 +103,10 @@ public class TripMetricsService {
 
         // Fuel/cost derived from ACTUAL distance
         if (metrics.getTotalDistanceKm() != null) {
-            applyFuelAndCost(
-                    metrics,
-                    metrics.getTotalDistanceKm(),
-                    trip.getVehicle() != null
-                            ? trip.getVehicle().getVehicleType().name()
-                            : null
-            );
+            String vehicleType = trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null
+                    ? trip.getVehicle().getVehicleType().name()
+                    : null;
+            applyFuelAndCost(metrics, metrics.getTotalDistanceKm(), vehicleType);
         }
 
         applyDerivedMetrics(metrics);
@@ -119,27 +120,27 @@ public class TripMetricsService {
 
     @Transactional
     public void updateTripMetricsFromActualOdometer(Long tripId, BigDecimal startOdo, BigDecimal endOdo) {
-        TripMetrics metrics = tripMetricsRepository.findByTripId(tripId)
-                .orElseGet(() -> {
-                    Trip trip = new Trip();
-                    trip.setId(tripId);
-                    TripMetrics m = new TripMetrics();
-                    m.setTrip(trip);
-                    return m;
-                });
+        Trip trip = getTrip(tripId);
+        TripMetrics metrics = getOrCreateMetrics(trip);
 
         if (startOdo != null && endOdo != null) {
             BigDecimal distance = endOdo.subtract(startOdo);
             metrics.setTotalDistanceKm(distance);
+            
+            trip.setActualDistanceKm(distance);
+            tripRepository.save(trip);
 
             // Recalculate fuel and derived metrics
-            applyFuelAndCost(metrics, distance, null); // vehicle type optional
+            String vehicleType = trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null
+                    ? trip.getVehicle().getVehicleType().name()
+                    : null;
+            applyFuelAndCost(metrics, distance, vehicleType);
             applyDerivedMetrics(metrics);
         }
 
         tripMetricsRepository.save(metrics);
+        log.debug("Updated metrics from odometer for trip {}", tripId);
     }
-
 
     /* =========================================================
        READ
@@ -173,8 +174,7 @@ public class TripMetricsService {
         dto.setFuelUsedLiters(fuelUsed);
         dto.setCostAmount(fuelUsed.multiply(FUEL_PRICE_PER_LITER));
 
-        // Updated setters to match DTO
-        if (routing.getDurationHours().compareTo(BigDecimal.ZERO) > 0) {
+        if (routing.getDurationHours() != null && routing.getDurationHours().compareTo(BigDecimal.ZERO) > 0) {
             dto.setAverageSpeedKmh(
                     routing.getDistanceKm()
                             .divide(routing.getDurationHours(), 2, RoundingMode.HALF_UP)
@@ -183,7 +183,7 @@ public class TripMetricsService {
             dto.setAverageSpeedKmh(BigDecimal.ZERO);
         }
 
-        if (fuelUsed.compareTo(BigDecimal.ZERO) > 0) {
+        if (fuelUsed != null && fuelUsed.compareTo(BigDecimal.ZERO) > 0) {
             dto.setFuelEfficiencyKmPerLiter(
                     routing.getDistanceKm()
                             .divide(fuelUsed, 2, RoundingMode.HALF_UP)
@@ -195,39 +195,95 @@ public class TripMetricsService {
         return dto;
     }
 
-
+    /* =========================================================
+       INITIALIZE
+       ========================================================= */
     @Transactional
     public void initializeMetrics(Long tripId) {
         if (tripMetricsRepository.existsByTripId(tripId)) {
+            log.debug("Metrics already exist for trip {}", tripId);
             return;
         }
-        Trip trip = tripRepository.getReferenceById(tripId);
+        
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new TripNotFoundException("Trip not found with ID: " + tripId));
+        
         TripMetrics metrics = new TripMetrics();
         metrics.setTrip(trip);
+        metrics.setIncidentCount(0);
+        metrics.setTasksCompleted(0);
+        
         tripMetricsRepository.save(metrics);
+        log.info("Initialized metrics for trip {}", tripId);
     }
-
 
     /* =========================================================
        FINALIZATION
        ========================================================= */
     @Transactional
+    public void finalizeMetrics(Long tripId) {
+        Trip trip = getTrip(tripId);
+        TripMetrics metrics = getOrCreateMetrics(trip);
+        
+        // Calculate final metrics based on actual trip data
+        if (trip.getActualDistanceKm() != null) {
+            metrics.setTotalDistanceKm(trip.getActualDistanceKm());
+        }
+        
+        if (trip.getActualDurationHours() != null) {
+            metrics.setTotalDurationHours(trip.getActualDurationHours());
+        }
+        
+        // Recalculate derived metrics
+        String vehicleType = trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null
+                ? trip.getVehicle().getVehicleType().name()
+                : null;
+        
+        if (metrics.getTotalDistanceKm() != null) {
+            applyFuelAndCost(metrics, metrics.getTotalDistanceKm(), vehicleType);
+        }
+        
+        applyDerivedMetrics(metrics);
+        
+        // Calculate variances
+        if (trip.getPlannedDistanceKm() != null && metrics.getTotalDistanceKm() != null) {
+            metrics.setPlannedVsActualDistanceVarianceKm(
+                    metrics.getTotalDistanceKm().subtract(trip.getPlannedDistanceKm())
+            );
+        }
+        
+        if (trip.getPlannedDurationHours() != null && metrics.getTotalDurationHours() != null) {
+            metrics.setPlannedVsActualDurationVarianceHours(
+                    metrics.getTotalDurationHours().subtract(trip.getPlannedDurationHours())
+            );
+        }
+        
+        metrics.setFinalized(true);
+        tripMetricsRepository.save(metrics);
+        
+        log.info("Finalized metrics for trip {}", tripId);
+    }
+
+    @Transactional
     public void lockFinalMetrics(Long tripId) {
         TripMetrics metrics = tripMetricsRepository.findByTripId(tripId)
-                .orElseThrow(() -> new RuntimeException("Metrics not found"));
+                .orElseThrow(() -> new RuntimeException("Metrics not found for trip: " + tripId));
 
         if (!metrics.isFinalized()) {
+            finalizeMetrics(tripId);
+            metrics = tripMetricsRepository.findByTripId(tripId).orElseThrow();
             metrics.setFinalized(true);
             tripMetricsRepository.save(metrics);
+            log.info("Locked final metrics for trip {}", tripId);
         }
     }
 
     /* =========================================================
-       HELPERS
+       HELPER METHODS
        ========================================================= */
     private Trip getTrip(Long tripId) {
         return tripRepository.findById(tripId)
-                .orElseThrow(() -> new RuntimeException("Trip not found: " + tripId));
+                .orElseThrow(() -> new TripNotFoundException("Trip not found: " + tripId));
     }
 
     private TripMetrics getOrCreateMetrics(Trip trip) {
@@ -235,6 +291,8 @@ public class TripMetricsService {
                 .orElseGet(() -> {
                     TripMetrics m = new TripMetrics();
                     m.setTrip(trip);
+                    m.setIncidentCount(0);
+                    m.setTasksCompleted(0);
                     return m;
                 });
     }
@@ -246,23 +304,30 @@ public class TripMetricsService {
     }
 
     private BigDecimal estimateFuel(BigDecimal distance, String vehicleType) {
-        if (distance == null || vehicleType == null) return BigDecimal.ZERO;
-
-        BigDecimal ratePer100km = switch (vehicleType.toUpperCase()) {
-            case "VAN" -> new BigDecimal("12");
-            case "CAR" -> new BigDecimal("8");
-            case "TRAILER" -> new BigDecimal("40");
-            default -> new BigDecimal("35"); // TRUCK fallback
-        };
+        if (distance == null) return BigDecimal.ZERO;
+        
+        BigDecimal ratePer100km = DEFAULT_FUEL_RATE;
+        
+        if (vehicleType != null) {
+            ratePer100km = switch (vehicleType.toUpperCase()) {
+                case "VAN" -> new BigDecimal("12");
+                case "CAR", "SUV" -> new BigDecimal("8");
+                case "TRAILER", "SEMI" -> new BigDecimal("40");
+                case "TRUCK" -> new BigDecimal("35");
+                default -> DEFAULT_FUEL_RATE;
+            };
+        }
 
         return distance.multiply(ratePer100km)
                 .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
     }
 
     private void applyDerivedMetrics(TripMetrics metrics) {
+        // Calculate average speed
         if (metrics.getTotalDurationHours() != null &&
                 metrics.getTotalDurationHours().compareTo(BigDecimal.ZERO) > 0 &&
-                metrics.getTotalDistanceKm() != null) {
+                metrics.getTotalDistanceKm() != null &&
+                metrics.getTotalDistanceKm().compareTo(BigDecimal.ZERO) > 0) {
 
             metrics.setAverageSpeedKmh(
                     metrics.getTotalDistanceKm()
@@ -270,6 +335,15 @@ public class TripMetricsService {
             );
         } else {
             metrics.setAverageSpeedKmh(BigDecimal.ZERO);
+        }
+        
+        // Calculate fuel efficiency if applicable
+        if (metrics.getFuelUsedLiters() != null && 
+            metrics.getFuelUsedLiters().compareTo(BigDecimal.ZERO) > 0 &&
+            metrics.getTotalDistanceKm() != null &&
+            metrics.getTotalDistanceKm().compareTo(BigDecimal.ZERO) > 0) {
+            
+            // This would be km per liter - add to TripMetrics entity if needed
         }
     }
 }

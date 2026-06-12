@@ -6,7 +6,7 @@ import com.pgsa.trailers.dto.TripMetricsUpdateRequest;
 import com.pgsa.trailers.entity.ops.Trip;
 import com.pgsa.trailers.entity.ops.TripMetrics;
 import com.pgsa.trailers.enums.TripStatus;
-import com.pgsa.trailers.exception.ResourceNotFoundException;
+import com.pgsa.trailers.entity.ResourceNotFoundException;
 import com.pgsa.trailers.repository.TripMetricsRepository;
 import com.pgsa.trailers.repository.TripRepository;
 import lombok.RequiredArgsConstructor;

@@ -6,7 +6,7 @@ import com.pgsa.trailers.dto.TripMetricsUpdateRequest;
 import com.pgsa.trailers.entity.ops.Trip;
 import com.pgsa.trailers.entity.ops.TripMetrics;
 import com.pgsa.trailers.enums.TripStatus;
-import com.pgsa.trailers.entity.suppliers.TripNotFoundException;
+import com.pgsa.trailers.exception.ResourceNotFoundException;
 import com.pgsa.trailers.repository.TripMetricsRepository;
 import com.pgsa.trailers.repository.TripRepository;
 import lombok.RequiredArgsConstructor;
@@ -206,7 +206,7 @@ public class TripMetricsService {
         }
         
         Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new TripNotFoundException("Trip not found with ID: " + tripId));
+                .orElseThrow(() -> new ResourceNotFoundException("Trip", "id", tripId));
         
         TripMetrics metrics = new TripMetrics();
         metrics.setTrip(trip);
@@ -267,7 +267,7 @@ public class TripMetricsService {
     @Transactional
     public void lockFinalMetrics(Long tripId) {
         TripMetrics metrics = tripMetricsRepository.findByTripId(tripId)
-                .orElseThrow(() -> new RuntimeException("Metrics not found for trip: " + tripId));
+                .orElseThrow(() -> new ResourceNotFoundException("TripMetrics", "tripId", tripId));
 
         if (!metrics.isFinalized()) {
             finalizeMetrics(tripId);
@@ -283,7 +283,7 @@ public class TripMetricsService {
        ========================================================= */
     private Trip getTrip(Long tripId) {
         return tripRepository.findById(tripId)
-                .orElseThrow(() -> new TripNotFoundException("Trip not found: " + tripId));
+                .orElseThrow(() -> new ResourceNotFoundException("Trip", "id", tripId));
     }
 
     private TripMetrics getOrCreateMetrics(Trip trip) {

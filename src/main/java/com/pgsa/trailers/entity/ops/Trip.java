@@ -30,7 +30,7 @@ public class Trip {
     private Long id;
 
     /* ========================
-       Identity & classification
+       Identity
        ======================== */
 
     @Column(name = "trip_number", nullable = false, unique = true, length = 50)
@@ -55,8 +55,28 @@ public class Trip {
     @JoinColumn(name = "load_id")
     private Load load;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supervisor_id")
+    private Driver supervisor;
+
     /* ========================
-       Locations (Original fields kept for backward compatibility)
+       Planning
+       ======================== */
+
+    @Column(name = "planned_start_date")
+    private LocalDateTime plannedStartDate;
+
+    @Column(name = "planned_end_date")
+    private LocalDateTime plannedEndDate;
+
+    @Column(name = "planned_distance_km", precision = 10, scale = 2)
+    private BigDecimal plannedDistanceKm;
+
+    @Column(name = "planned_duration_hours", precision = 10, scale = 2)
+    private BigDecimal plannedDurationHours;
+
+    /* ========================
+       Locations
        ======================== */
 
     @Column(name = "origin_location", nullable = false)
@@ -66,7 +86,7 @@ public class Trip {
     private String destinationLocation;
 
     /* ========================
-       New: Detailed origin address fields
+       Origin Details
        ======================== */
 
     @Column(name = "origin_street_address", length = 255)
@@ -75,10 +95,10 @@ public class Trip {
     @Column(name = "origin_city", length = 100)
     private String originCity;
 
-    @Column(name = "origin_zip_code", length = 10)
+    @Column(name = "origin_zip_code", length = 20)
     private String originZipCode;
 
-    @Column(name = "origin_province", length = 50)
+    @Column(name = "origin_province", length = 100)
     private String originProvince;
 
     @Column(name = "origin_latitude")
@@ -88,7 +108,7 @@ public class Trip {
     private Double originLongitude;
 
     /* ========================
-       New: Detailed destination address fields
+       Destination Details
        ======================== */
 
     @Column(name = "destination_street_address", length = 255)
@@ -97,10 +117,10 @@ public class Trip {
     @Column(name = "destination_city", length = 100)
     private String destinationCity;
 
-    @Column(name = "destination_zip_code", length = 10)
+    @Column(name = "destination_zip_code", length = 20)
     private String destinationZipCode;
 
-    @Column(name = "destination_province", length = 50)
+    @Column(name = "destination_province", length = 100)
     private String destinationProvince;
 
     @Column(name = "destination_latitude")
@@ -110,14 +130,8 @@ public class Trip {
     private Double destinationLongitude;
 
     /* ========================
-       Planning vs actuals
+       Execution
        ======================== */
-
-    @Column(name = "planned_start_date")
-    private LocalDateTime plannedStartDate;
-
-    @Column(name = "planned_end_date")
-    private LocalDateTime plannedEndDate;
 
     @Column(name = "actual_start_date")
     private LocalDateTime actualStartDate;
@@ -125,40 +139,77 @@ public class Trip {
     @Column(name = "actual_end_date")
     private LocalDateTime actualEndDate;
 
-
-    @Column(name = "actual_start_odometer")
+    @Column(name = "actual_start_odometer", precision = 12, scale = 2)
     private BigDecimal actualStartOdometer;
 
-    @Column(name = "actual_end_odometer")
+    @Column(name = "actual_end_odometer", precision = 12, scale = 2)
     private BigDecimal actualEndOdometer;
 
-    @Column(name = "actual_distance_km")
+    @Column(name = "actual_distance_km", precision = 10, scale = 2)
     private BigDecimal actualDistanceKm;
 
-
-    // Planned route (estimated from routing service)
-    @Column(name = "planned_distance_km", precision = 10, scale = 2)
-    private BigDecimal plannedDistanceKm;
-
-    @Column(name = "planned_duration_hours", precision = 10, scale = 2)
-    private BigDecimal plannedDurationHours;
-
+    @Column(name = "actual_duration_hours", precision = 10, scale = 2)
+    private BigDecimal actualDurationHours;
 
     /* ========================
-       Workflow & approval
+       Operational Metrics
        ======================== */
 
-    @Column(name = "status")
-    @Enumerated(EnumType.STRING)
-    private TripStatus status;
+    @Column(name = "distance_km", precision = 10, scale = 2)
+    private BigDecimal distanceKm;
 
+    @Column(name = "estimated_duration_hours", precision = 10, scale = 2)
+    private BigDecimal estimatedDurationHours;
+
+    @Column(name = "fuel_consumed_liters", precision = 10, scale = 2)
+    private BigDecimal fuelConsumedLiters;
+
+    /* ========================
+       Costs
+       ======================== */
+
+    @Column(name = "toll_cost", precision = 15, scale = 2)
+    private BigDecimal tollCost;
+
+    @Column(name = "other_expenses", precision = 15, scale = 2)
+    private BigDecimal otherExpenses;
+
+    /* ========================
+       Route Information
+       ======================== */
+
+    @Column(name = "gps_start_location", length = 255)
+    private String gpsStartLocation;
+
+    @Column(name = "gps_end_location", length = 255)
+    private String gpsEndLocation;
+
+    @Column(name = "route_details", columnDefinition = "TEXT")
+    private String routeDetails;
+
+    @Column(name = "checkpoints", columnDefinition = "TEXT")
+    private String checkpoints;
+
+    /* ========================
+       Notes & Incidents
+       ======================== */
+
+    @Column(name = "incidents_logged")
+    private Integer incidentsLogged = 0;
+
+    @Column(name = "driver_notes", columnDefinition = "TEXT")
+    private String driverNotes;
+
+    /* ========================
+       Workflow
+       ======================== */
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 50)
+    private TripStatus status;
 
     @Column(name = "approval_status", length = 30)
     private String approvalStatus;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "supervisor_id")
-    private Driver supervisor;
 
     @Column(name = "approved_at")
     private LocalDateTime approvedAt;
@@ -180,11 +231,11 @@ public class Trip {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "created_by", updatable = false)
-    private Long createdBy;
-
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Column(name = "created_by", updatable = false)
+    private Long createdBy;
 
     @Column(name = "updated_by")
     private Long updatedBy;
@@ -192,111 +243,76 @@ public class Trip {
     @Column(name = "last_status_update")
     private LocalDateTime lastStatusUpdate;
 
+    @Column(name = "audit_trail", columnDefinition = "TEXT")
+    private String auditTrail;
+
     /* ========================
-       Metrics (read-only relation)
+       Metrics
        ======================== */
 
     @OneToOne(
-    mappedBy = "trip",
-    cascade = CascadeType.ALL,
-    orphanRemoval = true,
-    fetch = FetchType.LAZY
-)
-private TripMetrics metrics;
+            mappedBy = "trip",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.LAZY
+    )
+    private TripMetrics metrics;
 
     /* ========================
-       Helper methods
+       Convenience Methods
        ======================== */
 
-    /**
-     * Builds the complete origin address string from components
-     */
     public String buildOriginAddress() {
         StringBuilder address = new StringBuilder();
-        
-        if (originStreetAddress != null && !originStreetAddress.trim().isEmpty()) {
+
+        if (originStreetAddress != null && !originStreetAddress.isBlank()) {
             address.append(originStreetAddress);
         }
-        
-        if (originCity != null && !originCity.trim().isEmpty()) {
-            if (address.length() > 0) address.append(", ");
+
+        if (originCity != null && !originCity.isBlank()) {
+            if (!address.isEmpty()) address.append(", ");
             address.append(originCity);
         }
-        
-        if (originZipCode != null && !originZipCode.trim().isEmpty()) {
-            if (address.length() > 0) address.append(" ");
-            address.append(originZipCode);
+
+        if (originZipCode != null && !originZipCode.isBlank()) {
+            address.append(" ").append(originZipCode);
         }
-        
-        if (originProvince != null && !originProvince.trim().isEmpty()) {
-            if (address.length() > 0) address.append(", ");
-            address.append(originProvince);
+
+        if (originProvince != null && !originProvince.isBlank()) {
+            address.append(", ").append(originProvince);
         }
-        
-        address.append(", South Africa");
-        
+
         return address.toString();
     }
 
-    /**
-     * Builds the complete destination address string from components
-     */
     public String buildDestinationAddress() {
         StringBuilder address = new StringBuilder();
-        
-        if (destinationStreetAddress != null && !destinationStreetAddress.trim().isEmpty()) {
+
+        if (destinationStreetAddress != null && !destinationStreetAddress.isBlank()) {
             address.append(destinationStreetAddress);
         }
-        
-        if (destinationCity != null && !destinationCity.trim().isEmpty()) {
-            if (address.length() > 0) address.append(", ");
+
+        if (destinationCity != null && !destinationCity.isBlank()) {
+            if (!address.isEmpty()) address.append(", ");
             address.append(destinationCity);
         }
-        
-        if (destinationZipCode != null && !destinationZipCode.trim().isEmpty()) {
-            if (address.length() > 0) address.append(" ");
-            address.append(destinationZipCode);
+
+        if (destinationZipCode != null && !destinationZipCode.isBlank()) {
+            address.append(" ").append(destinationZipCode);
         }
-        
-        if (destinationProvince != null && !destinationProvince.trim().isEmpty()) {
-            if (address.length() > 0) address.append(", ");
-            address.append(destinationProvince);
+
+        if (destinationProvince != null && !destinationProvince.isBlank()) {
+            address.append(", ").append(destinationProvince);
         }
-        
-        address.append(", South Africa");
-        
+
         return address.toString();
     }
 
-    /**
-     * Updates the legacy origin_location field from components
-     */
     public void updateOriginLocationFromComponents() {
         this.originLocation = buildOriginAddress();
     }
 
-    /**
-     * Updates the legacy destination_location field from components
-     */
     public void updateDestinationLocationFromComponents() {
         this.destinationLocation = buildDestinationAddress();
-    }
-
-    /**
-     * Populates all origin address fields from a single string (for backward compatibility)
-     */
-    public void setOriginFromAddressString(String fullAddress) {
-        this.originLocation = fullAddress;
-        // Note: This doesn't parse the string into components.
-        // Components would need to be set separately or use a geocoding service.
-    }
-
-    /**
-     * Populates all destination address fields from a single string (for backward compatibility)
-     */
-    public void setDestinationFromAddressString(String fullAddress) {
-        this.destinationLocation = fullAddress;
-        // Note: This doesn't parse the string into components.
-        // Components would need to be set separately or use a geocoding service.
     }
 }

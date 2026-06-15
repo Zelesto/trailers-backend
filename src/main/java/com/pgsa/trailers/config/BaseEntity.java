@@ -47,38 +47,38 @@ public abstract class BaseEntity {
     @Column(name = "updated_by")
     private String updatedBy;
 
-    //@Version
-   // @Column(name = "version")
-   // private Integer version;
+@Version
+    @Column(name = "version")
+    private Integer version;
 
-   // @Column(name = "is_active", nullable = false)
-    //private Boolean isActive = true;
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
 
     /**
      * Soft delete the entity
      */
-    //public void softDelete() {
-      //  this.isActive = false;
-   // }
+    public void softDelete() {
+        this.isActive = false;
+    }
 
     /**
      * Restore a soft-deleted entity
      */
-    //public void restore() {
-    //    this.isActive = true;
-    //}
+    public void restore() {
+        this.isActive = true;
+    }
 
     /**
      * Check if entity is active
      */
-    //public boolean isActive() {
-    //    return isActive != null && isActive;
-    //}
+    public boolean isActive() {
+        return isActive != null && isActive;
+    }
 
     /**
      * Check if entity is soft-deleted
      */
-    //public boolean isDeleted() {
-     //   return isActive != null && !isActive;
-    //}
+    public boolean isDeleted() {
+        return isActive != null && !isActive;
+    }
 }

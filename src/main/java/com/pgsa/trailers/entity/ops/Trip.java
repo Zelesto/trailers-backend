@@ -280,9 +280,9 @@ private String purchaseOrderNumber;
     @Column(name = "audit_trail", columnDefinition = "TEXT")
     private String auditTrail;
 
-    @Version
-    @Column(name = "version")
-    private Integer version;
+    //@Version
+    //@Column(name = "version")
+    //private Integer version;
 
     /* ========================
        Metrics

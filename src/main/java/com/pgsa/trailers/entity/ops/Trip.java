@@ -53,6 +53,11 @@ private String specialInstructions;
 // Reference fields
 private String referenceNumber;
 private String purchaseOrderNumber;
+
+
+private Double plannedStartOdometer; // or appropriate type
+
+
         
     /* ========================
        Identity

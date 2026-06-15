@@ -16,6 +16,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import com.pgsa.trailers.enums.VehicleStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -193,7 +194,7 @@ public class FuelSlipService {
                 auditMap.put("createdAt", LocalDateTime.now().toString());
                 manualVehicle.setAuditTrail(auditMap);
 
-                manualVehicle.setStatus("ACTIVE");
+                manualVehicle.setStatus(VehicleStatus.ACTIVE);
                 manualVehicle.setCreatedAt(LocalDateTime.now());
                 manualVehicle.setUpdatedAt(LocalDateTime.now());
 

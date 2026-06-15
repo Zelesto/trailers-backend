@@ -2,6 +2,7 @@ package com.pgsa.trailers.controller;
 
 import com.pgsa.trailers.dto.*;
 import com.pgsa.trailers.entity.security.AppUser;
+import com.pgsa.trailers.enums.TripStatus;  // Add this import
 import com.pgsa.trailers.repository.AppUserRepository;
 import com.pgsa.trailers.service.TripService;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +15,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import com.pgsa.trailers.dto.UpdateTripRequest;
-
 
 import jakarta.validation.Valid;
 
@@ -61,51 +61,54 @@ public class TripController {
     }
 
     /* ========================
-       UPDATE STATUS
+       UPDATE STATUS - FIXED
        ======================== */
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER')")
     public ResponseEntity<TripResponse> updateTripStatus(
             @PathVariable Long id,
-            @RequestParam String status
+            @RequestParam String status,
+            Authentication authentication  // Added this parameter
     ) {
         log.debug("Updating status for trip {} to {}", id, status);
-        return ResponseEntity.ok(tripService.updateTripStatus(id, status));
+        
+        // Get authenticated user
+        AppUser user = getAuthenticatedUser(authentication);
+        
+        // Convert String to Enum
+        TripStatus newStatus;
+        try {
+            newStatus = TripStatus.valueOf(status.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid status value: " + status);
+        }
+        
+        // Call service with all three parameters
+        TripResponse response = tripService.updateTripStatus(id, newStatus, user.getId());
+        return ResponseEntity.ok(response);
     }
-
-   /* ========================
-   UPDATE STATUS
-   ======================== */
-@PatchMapping("/{id}/status")
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER')")
-public ResponseEntity<TripResponse> updateTripStatus(
-        @PathVariable Long id,
-        @RequestParam String status,
-        Authentication authentication  // Add this parameter
-) {
-    log.debug("Updating status for trip {} to {}", id, status);
-    
-    // Get the authenticated user
-    AppUser user = getAuthenticatedUser(authentication);
-    
-    // Convert String status to TripStatus enum
-    com.pgsa.trailers.enums.TripStatus newStatus;
-    try {
-        newStatus = com.pgsa.trailers.enums.TripStatus.valueOf(status.toUpperCase());
-    } catch (IllegalArgumentException e) {
-        throw new IllegalArgumentException("Invalid status value: " + status + 
-            ". Valid values: DRAFT, PLANNED, ASSIGNED, IN_PROGRESS, ACTIVE, ON_HOLD, " +
-            "PENDING, COMPLETED, FINALIZED, CLOSED, CANCELLED");
-    }
-    
-    // Call service with all three parameters
-    TripResponse response = tripService.updateTripStatus(id, newStatus, user.getId());
-    return ResponseEntity.ok(response);
-}
 
     /* ========================
-   START TRIP (ODO START)
-   ======================== */
+       UPDATE
+       ======================== */
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER')")
+    public ResponseEntity<TripResponse> updateTrip(
+            @PathVariable Long id,
+            @RequestBody @Valid UpdateTripRequest request,
+            Authentication authentication
+    ) {
+        String email = authentication.getName();
+        AppUser user = appUserRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new IllegalStateException("Authenticated user not found"));
+
+        TripResponse updated = tripService.updateTrip(id, request, user.getId());
+        return ResponseEntity.ok(updated);
+    }
+
+    /* ========================
+       START TRIP (ODO START)
+       ======================== */
     @PostMapping("/{id}/start")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'DRIVER')")
     public ResponseEntity<TripResponse> startTrip(
@@ -127,8 +130,8 @@ public ResponseEntity<TripResponse> updateTripStatus(
     }
 
     /* ========================
-   END TRIP (ODO END)
-   ======================== */
+       END TRIP (ODO END)
+       ======================== */
     @PostMapping("/{id}/end")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'DRIVER')")
     public ResponseEntity<TripResponse> endTrip(
@@ -150,20 +153,16 @@ public ResponseEntity<TripResponse> updateTripStatus(
     }
 
     /* ========================
-   DELETE
-   ======================== */
-@DeleteMapping("/{id}")
-@PreAuthorize("hasRole('SUPER_ADMIN')")
-@ResponseStatus(HttpStatus.NO_CONTENT)
-public void deleteTrip(@PathVariable Long id) {
-    log.debug("Deleting trip id: {}", id);
-
-    // Call service to delete trip and associated metrics
-    tripService.deleteTrip(id);
-
-    log.debug("Trip and associated metrics deleted for id: {}", id);
-}
-
+       DELETE
+       ======================== */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteTrip(@PathVariable Long id) {
+        log.debug("Deleting trip id: {}", id);
+        tripService.deleteTrip(id);
+        log.debug("Trip and associated metrics deleted for id: {}", id);
+    }
 
     /* ========================
        HELPER METHODS

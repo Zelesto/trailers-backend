@@ -327,6 +327,6 @@ public class TripService {
        ======================== */
     private Trip findTripOrThrow(Long id) {
     return tripRepository.findById(id)
-            .orElseThrow(() -> new TripNotFoundException("Trip not found with ID: " + id));
+            .orElseThrow(() -> new TripValidationException("Trip not found with ID: " + id));
 }
 }

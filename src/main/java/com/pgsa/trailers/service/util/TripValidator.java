@@ -77,43 +77,48 @@ public class TripValidator {
     /**
      * Validates if a trip can be started
      */
-    public void validateCanStart(Trip trip, BigDecimal actualStartOdometer) {
-        if (trip == null) {
-            throw new TripValidationException("Trip cannot be null");
-        }
+    /**
+ * Validates if a trip can be started
+ */
+public void validateCanStart(Trip trip, BigDecimal actualStartOdometer) {
+    if (trip == null) {
+        throw new TripValidationException("Trip cannot be null");
+    }
 
-        if (trip.getStatus() != TripStatus.PLANNED && trip.getStatus() != TripStatus.DRAFT) {
-            throw new TripValidationException(
-                String.format("Cannot start trip with status: %s. Trip must be PLANNED or DRAFT", trip.getStatus())
-            );
-        }
+    if (trip.getStatus() != TripStatus.PLANNED && trip.getStatus() != TripStatus.DRAFT) {
+        throw new TripValidationException(
+            String.format("Cannot start trip with status: %s. Trip must be PLANNED or DRAFT", trip.getStatus())
+        );
+    }
 
-        if (trip.getActualStartOdometer() != null) {
-            throw new TripValidationException("Trip has already been started");
-        }
+    if (trip.getActualStartOdometer() != null) {
+        throw new TripValidationException("Trip has already been started");
+    }
 
-        if (actualStartOdometer == null) {
-            throw new TripValidationException("Actual start odometer is required");
-        }
+    if (actualStartOdometer == null) {
+        throw new TripValidationException("Actual start odometer is required");
+    }
 
-        if (actualStartOdometer.compareTo(BigDecimal.ZERO) < 0) {
-            throw new TripValidationException("Actual start odometer cannot be negative");
-        }
+    if (actualStartOdometer.compareTo(BigDecimal.ZERO) < 0) {
+        throw new TripValidationException("Actual start odometer cannot be negative");
+    }
 
-        // Compare with planned if available
-        if (trip.getPlannedStartOdometer() != null && 
-            actualStartOdometer.compareTo(trip.getPlannedStartOdometer()) < 0) {
+    // FIXED: Compare with planned if available - Convert Double to BigDecimal
+    if (trip.getPlannedStartOdometer() != null) {
+        BigDecimal plannedStartOdometer = BigDecimal.valueOf(trip.getPlannedStartOdometer());
+        if (actualStartOdometer.compareTo(plannedStartOdometer) < 0) {
             throw new TripValidationException(
                 String.format("Actual start odometer (%.2f) cannot be less than planned (%.2f)", 
-                    actualStartOdometer, trip.getPlannedStartOdometer())
+                    actualStartOdometer, plannedStartOdometer)
             );
         }
-
-        // Check if vehicle is available
-        if (trip.getVehicle() == null) {
-            throw new TripValidationException("Trip has no assigned vehicle");
-        }
     }
+
+    // Check if vehicle is available
+    if (trip.getVehicle() == null) {
+        throw new TripValidationException("Trip has no assigned vehicle");
+    }
+}
 
     /**
      * Validates if a trip can be ended

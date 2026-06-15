@@ -102,18 +102,7 @@ public void validateCanStart(Trip trip, BigDecimal actualStartOdometer) {
     if (actualStartOdometer.compareTo(BigDecimal.ZERO) < 0) {
         throw new TripValidationException("Actual start odometer cannot be negative");
     }
-
-    // FIXED: Compare with planned if available - Convert Double to BigDecimal
-    if (trip.getPlannedStartOdometer() != null) {
-        BigDecimal plannedStartOdometer = BigDecimal.valueOf(trip.getPlannedStartOdometer());
-        if (actualStartOdometer.compareTo(plannedStartOdometer) < 0) {
-            throw new TripValidationException(
-                String.format("Actual start odometer (%.2f) cannot be less than planned (%.2f)", 
-                    actualStartOdometer, plannedStartOdometer)
-            );
-        }
-    }
-
+    
     // Check if vehicle is available
     if (trip.getVehicle() == null) {
         throw new TripValidationException("Trip has no assigned vehicle");

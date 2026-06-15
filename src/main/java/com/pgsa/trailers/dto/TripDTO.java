@@ -36,8 +36,8 @@ public class TripDTO {
     private Double destinationLongitude;
     
     private String status;
-    private String cargoDescription;
-    private String priority;
+    //private String cargoDescription;
+    //private String priority;
 
     // Add metrics if you want to include them
     private TripMetricsDTO metrics;

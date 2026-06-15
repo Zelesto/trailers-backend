@@ -70,7 +70,7 @@ public class TripController {
             @RequestParam String status
     ) {
         log.debug("Updating status for trip {} to {}", id, status);
-        return ResponseEntity.ok(tripService.updateStatus(id, status));
+        return ResponseEntity.ok(tripService.updateTripStatus(id, status));
     }
 
     /* ========================

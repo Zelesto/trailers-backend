@@ -11,7 +11,6 @@ import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
 public interface TripAnalyticsRepository extends Repository<Trip, Long> {
@@ -91,30 +90,28 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
 
     /**
      * Get trip profitability data with all details (for compatibility with existing code)
+     * FIXED: Changed parameters from LocalDate to String to match service layer
      */
-    @Query("""
+    @Query(value = """
         SELECT 
             t.id,
-            t.tripNumber, 
-            v.registrationNumber,
-            v.vehicleType,
-            t.plannedStartDate,
-            m.totalDistanceKm,
-            m.revenueAmount,
-            m.costAmount,
-            (m.revenueAmount - m.costAmount),
-            m.fuelUsedLiters,
-            m.totalDurationHours,
-            t.status 
-        FROM Trip t
-        JOIN t.vehicle v
-        JOIN t.metrics m
-        WHERE t.plannedStartDate BETWEEN :startDate AND :endDate
-        ORDER BY t.plannedStartDate DESC
-    """)
+            t.trip_number,
+            t.status,
+            t.planned_start_date,
+            COALESCE(tm.total_distance_km, 0) as total_distance_km,
+            COALESCE(t.revenue_amount, 0) as revenue_amount,
+            COALESCE(t.cost_amount, 0) as cost_amount,
+            COALESCE(t.revenue_amount - t.cost_amount, 0) as profit,
+            COALESCE(t.fuel_consumed_liters, 0) as fuel_used
+        FROM trip t
+        LEFT JOIN trip_metrics tm ON tm.trip_id = t.id
+        WHERE t.actual_end_date BETWEEN CAST(:startDate AS timestamp) AND CAST(:endDate AS timestamp)
+           OR t.planned_start_date BETWEEN CAST(:startDate AS timestamp) AND CAST(:endDate AS timestamp)
+        ORDER BY t.planned_start_date DESC
+        """, nativeQuery = true)
     List<Object[]> findTripProfitabilityRaw(
-            @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate
     );
 
     /**

@@ -7,7 +7,7 @@ public record TripKpiDTO(
         Long tripId,
         String tripNumber,
         String status,
-        LocalDateTime plannedStartDate,
+        LocalDate plannedStartDate,
         BigDecimal totalDistanceKm,
         BigDecimal fuelUsed,
         BigDecimal revenueAmount,

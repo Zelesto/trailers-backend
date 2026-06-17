@@ -39,7 +39,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         LEFT JOIN t.vehicle v
         LEFT JOIN t.driver d
         WHERE (:status IS NULL OR t.status = :status)
-        AND t.isActive = true
+        AND t.is_active = true
     """)
     List<TripSummaryDTO> findTripSummariesByStatus(@Param("status") TripStatus status);
 

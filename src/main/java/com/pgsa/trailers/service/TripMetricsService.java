@@ -333,22 +333,23 @@ public TripMetricsDTO getTripMetrics(Long tripId) {
     if (distance == null ||
         distance.compareTo(BigDecimal.ZERO) <= 0) {
         return BigDecimal.ZERO;
-        
-        BigDecimal ratePer100km = DEFAULT_FUEL_RATE;
-        
-        if (vehicleType != null) {
-            ratePer100km = switch (vehicleType.toUpperCase()) {
-                case "VAN" -> new BigDecimal("12");
-                case "CAR", "SUV" -> new BigDecimal("8");
-                case "TRAILER", "SEMI" -> new BigDecimal("40");
-                case "TRUCK" -> new BigDecimal("35");
-                default -> DEFAULT_FUEL_RATE;
-            };
-        }
-
-        return distance.multiply(ratePer100km)
-                .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
     }
+
+    BigDecimal ratePer100km = DEFAULT_FUEL_RATE;
+
+    if (vehicleType != null) {
+        ratePer100km = switch (vehicleType.toUpperCase()) {
+            case "VAN" -> new BigDecimal("12");
+            case "CAR", "SUV" -> new BigDecimal("8");
+            case "TRAILER", "SEMI" -> new BigDecimal("40");
+            case "TRUCK" -> new BigDecimal("35");
+            default -> DEFAULT_FUEL_RATE;
+        };
+    }
+
+    return distance.multiply(ratePer100km)
+            .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+}
 
     private void applyDerivedMetrics(TripMetrics metrics) {
         // Calculate average speed

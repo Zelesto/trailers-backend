@@ -11,6 +11,9 @@ import java.util.List;
 @Repository
 public interface DriverAnalyticsRepository extends JpaRepository<Driver, Long> {
 
+    /**
+     * Get driver performance KPIs for a date range
+     */
     @Query(value = """
         SELECT 
             d.first_name || ' ' || COALESCE(d.last_name, '') as driver_name,
@@ -43,6 +46,9 @@ public interface DriverAnalyticsRepository extends JpaRepository<Driver, Long> {
             @Param("to") String to
     );
 
+    /**
+     * Get top drivers by profit
+     */
     @Query(value = """
         SELECT 
             d.first_name || ' ' || COALESCE(d.last_name, '') as driver_name,
@@ -51,11 +57,11 @@ public interface DriverAnalyticsRepository extends JpaRepository<Driver, Long> {
             COALESCE(SUM(t.revenue_amount), 0) as revenue,
             COALESCE(SUM(t.cost_amount), 0) as cost,
             COALESCE(SUM(t.revenue_amount - t.cost_amount), 0) as profit,
-            COALESCE(AVG(CASE 
-                WHEN COALESCE(fs.quantity, 0) > 0 
-                THEN t.actual_distance_km / fs.quantity 
+            CASE 
+                WHEN COALESCE(SUM(fs.quantity), 0) > 0 
+                THEN COALESCE(SUM(t.actual_distance_km), 0) / NULLIF(SUM(fs.quantity), 0)
                 ELSE 0 
-            END), 0) as efficiency
+            END as efficiency
         FROM drivers d
         LEFT JOIN trips t ON t.driver_id = d.id 
             AND t.status IN ('COMPLETED', 'CLOSED', 'FINALIZED')
@@ -66,6 +72,7 @@ public interface DriverAnalyticsRepository extends JpaRepository<Driver, Long> {
             AND DATE(fs.transaction_date) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
         WHERE d.is_active = true AND d.status = 'ACTIVE'
         GROUP BY d.id, d.first_name, d.last_name
+        HAVING COALESCE(COUNT(DISTINCT t.id), 0) > 0
         ORDER BY profit DESC
         LIMIT :limit
         """, nativeQuery = true)

@@ -58,21 +58,20 @@ public class AnalyticsService {
             BigDecimal fuelCost = toBigDecimal(row[3]);
             BigDecimal kmPerLiter = toBigDecimal(row[4]);
             BigDecimal costPerKm = toBigDecimal(row[5]);
-            Integer tripCount = extractInteger(row[6]);
             
+            // Use the 6-parameter constructor (record has 6 fields)
             return new VehicleKpiDTO(
                 registration,
                 totalKm,
                 fuelLiters,
                 fuelCost,
                 kmPerLiter,
-                costPerKm,
-                tripCount
+                costPerKm
             );
         } catch (Exception e) {
             log.error("Error mapping vehicle KPI row: {}", e.getMessage());
             return new VehicleKpiDTO("Unknown", BigDecimal.ZERO, BigDecimal.ZERO, 
-                                    BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 0);
+                                    BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
         }
     }
 

@@ -4,35 +4,40 @@ import com.pgsa.trailers.entity.assets.Vehicle;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
-import java.time.LocalDate;
 import java.util.List;
 
+@Repository
 public interface VehicleAnalyticsRepository extends JpaRepository<Vehicle, Long> {
 
     @Query(value = """
         SELECT 
             v.registration_number as registration,
-            COALESCE(SUM(tm.total_distance_km), 0) as totalKm,
+            COALESCE(SUM(t.distance), 0) as totalKm,
             COALESCE(SUM(fs.quantity), 0) as fuelLiters,
             COALESCE(SUM(fs.total_amount), 0) as fuelCost,
             CASE WHEN COALESCE(SUM(fs.quantity), 0) > 0 
-                 THEN COALESCE(SUM(tm.total_distance_km), 0) / SUM(fs.quantity) 
+                 THEN COALESCE(SUM(t.distance), 0) / NULLIF(SUM(fs.quantity), 0)
                  ELSE 0 END as kmPerLiter,
-            CASE WHEN COALESCE(SUM(tm.total_distance_km), 0) > 0 
-                 THEN COALESCE(SUM(fs.total_amount), 0) / SUM(tm.total_distance_km) 
-                 ELSE 0 END as costPerKm
-        FROM vehicle v
-        LEFT JOIN trip t ON t.vehicle_id = v.id 
+            CASE WHEN COALESCE(SUM(t.distance), 0) > 0 
+                 THEN COALESCE(SUM(fs.total_amount), 0) / NULLIF(SUM(t.distance), 0)
+                 ELSE 0 END as costPerKm,
+            COUNT(DISTINCT t.id) as tripCount
+        FROM vehicles v
+        LEFT JOIN trips t ON t.vehicle_id = v.id 
             AND t.status IN ('COMPLETED', 'CLOSED', 'FINALIZED')
-            AND DATE(t.actual_end_date) BETWEEN :from AND :to
-        LEFT JOIN trip_metrics tm ON tm.trip_id = t.id
+            AND t.is_active = true
+            AND DATE(t.end_date) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
         LEFT JOIN fuel_slip fs ON fs.vehicle_id = v.id 
-            AND DATE(fs.transaction_date) BETWEEN :from AND :to
+            AND fs.is_active = true
+            AND DATE(fs.transaction_date) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
+        WHERE v.is_active = true
         GROUP BY v.registration_number
+        ORDER BY kmPerLiter DESC
         """, nativeQuery = true)
     List<Object[]> vehicleEfficiencyRaw(
-            @Param("from") String from,  // ✅ Change to String
-            @Param("to") String to       // ✅ Change to String
+            @Param("from") String from,
+            @Param("to") String to
     );
 }

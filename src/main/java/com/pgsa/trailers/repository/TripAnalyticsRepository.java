@@ -23,7 +23,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         SELECT new com.pgsa.trailers.dto.TripSummaryDTO(
             t.id,
             t.tripNumber,
-            CAST(t.status AS string),
+            t.status,
             v.registrationNumber,
             CONCAT(COALESCE(d.firstName, ''), ' ', COALESCE(d.lastName, '')),
             t.plannedStartDate,
@@ -50,7 +50,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         SELECT new com.pgsa.trailers.dto.TripSummaryDTO(
             t.id,
             t.tripNumber,
-            CAST(t.status AS string),
+            t.status,
             v.registrationNumber,
             CONCAT(COALESCE(d.firstName, ''), ' ', COALESCE(d.lastName, '')),
             t.plannedStartDate,
@@ -85,7 +85,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         SELECT new com.pgsa.trailers.dto.TripKpiDTO(
             t.id,
             t.tripNumber,
-            CAST(t.status AS string),
+            t.status,
             t.plannedStartDate,
             COALESCE(t.actualDistanceKm, 0),
             COALESCE(t.fuelConsumedLiters, 0),

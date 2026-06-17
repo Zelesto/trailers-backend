@@ -89,13 +89,13 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
             t.plannedStartDate,
             COALESCE(t.actualDistanceKm, 0),
             COALESCE(t.fuelConsumedLiters, 0),
-            COALESCE(t.revenueAmount, 0),
-            COALESCE(t.costAmount, 0),
-            COALESCE(t.revenueAmount, 0) - COALESCE(t.costAmount, 0),
+            COALESCE(t.revenue_amount, 0),
+            COALESCE(t.cost_amount, 0),
+            COALESCE(t.revenue_amount, 0) - COALESCE(t.cost_amount, 0),
             CASE
-                WHEN COALESCE(t.revenueAmount, 0) > 0 THEN
-                    ((COALESCE(t.revenueAmount, 0) - COALESCE(t.costAmount, 0)) * 100)
-                    / COALESCE(t.revenueAmount, 0)
+                WHEN COALESCE(t.revenue_amount, 0) > 0 THEN
+                    ((COALESCE(t.revenue_amount, 0) - COALESCE(t.cost_amount, 0)) * 100)
+                    / COALESCE(t.revenue_amount, 0)
                 ELSE 0
             END
         )
@@ -143,10 +143,10 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         SELECT 
             COUNT(t.id),
             COALESCE(SUM(t.actualDistanceKm), 0),
-            COALESCE(SUM(t.revenueAmount), 0),
-            COALESCE(SUM(t.costAmount), 0),
-            COALESCE(SUM(t.revenueAmount - t.costAmount), 0),
-            COALESCE(AVG(t.revenueAmount - t.costAmount), 0)
+            COALESCE(SUM(t.revenue_amount), 0),
+            COALESCE(SUM(t.cost_amount), 0),
+            COALESCE(SUM(t.revenue_amount - t.cost_amount), 0),
+            COALESCE(AVG(t.revenue_amount - t.cost_amount), 0)
         FROM Trip t
         WHERE t.actualEndDate BETWEEN :startDate AND :endDate
         AND t.status = 'COMPLETED'

@@ -10,13 +10,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
 public interface TripAnalyticsRepository extends Repository<Trip, Long> {
 
     /**
-     * Get trip summaries by status - FIXED: Removed isActive filter
+     * Get trip summaries by status
      */
     @Query("SELECT new com.pgsa.trailers.dto.TripSummaryDTO(" +
            "t.id, " +
@@ -37,11 +38,12 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
            "FROM Trip t " +
            "LEFT JOIN t.vehicle v " +
            "LEFT JOIN t.driver d " +
-           "WHERE (:status IS NULL OR t.status = :status)")
+           "WHERE (:status IS NULL OR t.status = :status) " +
+           "AND t.isActive = true")
     List<TripSummaryDTO> findTripSummariesByStatus(@Param("status") TripStatus status);
 
     /**
-     * Get trip summaries with pagination and filters - FIXED: Removed isActive
+     * Get trip summaries with pagination and filters
      */
     @Query("SELECT new com.pgsa.trailers.dto.TripSummaryDTO(" +
            "t.id, " +
@@ -66,7 +68,8 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
            "OR LOWER(t.originCity) LIKE LOWER(CONCAT('%', :search, '%')) " +
            "OR LOWER(t.destinationCity) LIKE LOWER(CONCAT('%', :search, '%'))) " +
            "AND (:status IS NULL OR t.status = :status) " +
-           "AND (:city IS NULL OR LOWER(t.originCity) = LOWER(:city) OR LOWER(t.destinationCity) = LOWER(:city))")
+           "AND (:city IS NULL OR LOWER(t.originCity) = LOWER(:city) OR LOWER(t.destinationCity) = LOWER(:city)) " +
+           "AND t.isActive = true")
     Page<TripSummaryDTO> findTripSummariesWithFilters(
             @Param("search") String search,
             @Param("status") TripStatus status,
@@ -74,7 +77,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
             Pageable pageable);
 
     /**
-     * Get trip KPIs using DTO projection - FIXED: Removed isActive
+     * Get trip KPIs using DTO projection
      */
     @Query("""
         SELECT new com.pgsa.trailers.dto.TripKpiDTO(
@@ -94,6 +97,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         JOIN t.vehicle v
         WHERE t.actualEndDate BETWEEN :startDate AND :endDate
           AND t.status = 'COMPLETED'
+          AND t.isActive = true
         ORDER BY t.actualEndDate DESC
     """)
     List<TripKpiDTO> findTripKpis(
@@ -102,7 +106,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
     );
 
     /**
-     * Get trip profitability data - FIXED: Using correct column names
+     * Get trip profitability data - Native query
      */
     @Query(value = """
         SELECT 
@@ -116,7 +120,8 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
             COALESCE(t.revenue_amount - t.cost_amount, 0) as profit,
             COALESCE(t.fuel_consumed_liters, 0) as fuel_used
         FROM trips t
-        WHERE t.status IN ('COMPLETED', 'CLOSED', 'FINALIZED')
+        WHERE t.is_active = true
+            AND t.status IN ('COMPLETED', 'CLOSED', 'FINALIZED')
             AND DATE(t.actual_end_date) BETWEEN CAST(:startDate AS DATE) AND CAST(:endDate AS DATE)
         ORDER BY t.actual_end_date DESC
         """, nativeQuery = true)
@@ -126,7 +131,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
     );
 
     /**
-     * Get summary statistics for dashboard - FIXED: Removed isActive
+     * Get summary statistics for dashboard
      */
     @Query("""
         SELECT 
@@ -139,6 +144,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         FROM Trip t
         WHERE t.actualEndDate BETWEEN :startDate AND :endDate
           AND t.status = 'COMPLETED'
+          AND t.isActive = true
     """)
     Object[] findTripSummary(
             @Param("startDate") LocalDate startDate,
@@ -146,7 +152,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
     );
 
     /**
-     * Get trips by status for a date range - FIXED: Removed isActive
+     * Get trips by status for a date range
      */
     @Query("""
         SELECT 
@@ -155,6 +161,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
             COALESCE(SUM(t.actualDistanceKm), 0) as totalDistance
         FROM Trip t
         WHERE t.actualEndDate BETWEEN :startDate AND :endDate
+          AND t.isActive = true
         GROUP BY t.status
     """)
     List<Object[]> findTripsByStatus(
@@ -163,7 +170,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
     );
 
     /**
-     * Get top performing vehicles by profit - FIXED: Removed isActive
+     * Get top performing vehicles by profit
      */
     @Query("""
         SELECT 
@@ -176,6 +183,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         JOIN t.vehicle v
         WHERE t.actualEndDate BETWEEN :startDate AND :endDate
           AND t.status = 'COMPLETED'
+          AND t.isActive = true
         GROUP BY v.registrationNumber, v.vehicleType
         HAVING COUNT(t.id) > 0
         ORDER BY totalProfit DESC
@@ -186,7 +194,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
     );
 
     /**
-     * Get trip profitability by city - FIXED: Removed isActive
+     * Get trip profitability by city
      */
     @Query("""
         SELECT 
@@ -199,6 +207,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         FROM Trip t
         WHERE t.actualEndDate BETWEEN :startDate AND :endDate
           AND t.status = 'COMPLETED'
+          AND t.isActive = true
           AND t.originCity IS NOT NULL
         GROUP BY t.originCity
         ORDER BY totalProfit DESC
@@ -209,7 +218,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
     );
 
     /**
-     * Get monthly trip statistics - FIXED for PostgreSQL
+     * Get monthly trip statistics
      */
     @Query(value = """
         SELECT 
@@ -220,7 +229,8 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
             COALESCE(SUM(t.cost_amount), 0) as totalCost,
             COALESCE(SUM(t.revenue_amount - t.cost_amount), 0) as totalProfit
         FROM trips t
-        WHERE t.status = 'COMPLETED'
+        WHERE t.is_active = true
+            AND t.status = 'COMPLETED'
             AND DATE(t.actual_end_date) BETWEEN CAST(:startDate AS DATE) AND CAST(:endDate AS DATE)
         GROUP BY TO_CHAR(t.actual_end_date, 'YYYY-MM')
         ORDER BY month DESC

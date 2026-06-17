@@ -28,8 +28,8 @@ public interface DriverAnalyticsRepository extends JpaRepository<Driver, Long> {
             COALESCE(SUM(t.revenue_amount), 0) as total_revenue,
             COALESCE(SUM(t.cost_amount), 0) as total_cost,
             COALESCE(SUM(t.revenue_amount - t.cost_amount), 0) as profit
-        FROM drivers d
-        LEFT JOIN trips t ON t.driver_id = d.id 
+        FROM driver d
+        LEFT JOIN trip t ON t.driver_id = d.id 
             AND t.status IN ('COMPLETED', 'CLOSED', 'FINALIZED')
             AND t.is_active = true
             AND DATE(t.actual_end_date) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
@@ -62,8 +62,8 @@ public interface DriverAnalyticsRepository extends JpaRepository<Driver, Long> {
                 THEN COALESCE(SUM(t.actual_distance_km), 0) / NULLIF(SUM(fs.quantity), 0)
                 ELSE 0 
             END as efficiency
-        FROM drivers d
-        LEFT JOIN trips t ON t.driver_id = d.id 
+        FROM driver d
+        LEFT JOIN trip t ON t.driver_id = d.id 
             AND t.status IN ('COMPLETED', 'CLOSED', 'FINALIZED')
             AND t.is_active = true
             AND DATE(t.actual_end_date) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)

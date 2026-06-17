@@ -89,27 +89,33 @@ List<TripSummaryDTO> findTripSummariesByStatus(@Param("status") TripStatus statu
     @Query("""
     SELECT new com.pgsa.trailers.dto.TripKpiDTO(
         t.id,
-        v.registrationNumber,
+        t.tripNumber,
+        CAST(t.status AS string),
+        t.plannedStartDate,
         COALESCE(t.actualDistanceKm, 0),
+        COALESCE(t.fuelConsumedLiters, 0),
         COALESCE(t.revenueAmount, 0),
         COALESCE(t.costAmount, 0),
         COALESCE(t.revenueAmount, 0) - COALESCE(t.costAmount, 0),
         CASE
-            WHEN t.actualDistanceKm > 0
-            THEN t.costAmount / t.actualDistanceKm
-            ELSE 0.0
+            WHEN COALESCE(t.revenueAmount, 0) > 0
+            THEN (
+                (COALESCE(t.revenueAmount, 0) - COALESCE(t.costAmount, 0))
+                * 100
+            ) / COALESCE(t.revenueAmount, 0)
+            ELSE 0
         END
     )
     FROM Trip t
-    JOIN t.vehicle v
     WHERE t.actualEndDate BETWEEN :startDate AND :endDate
-      AND t.status = com.pgsa.trailers.enums.TripStatus.COMPLETED
+      AND t.status = :status
       AND t.isActive = true
     ORDER BY t.actualEndDate DESC
 """)
 List<TripKpiDTO> findTripKpis(
         @Param("startDate") LocalDateTime startDate,
-        @Param("endDate") LocalDateTime endDate
+        @Param("endDate") LocalDateTime endDate,
+        @Param("status") TripStatus status
 );
 
     /**

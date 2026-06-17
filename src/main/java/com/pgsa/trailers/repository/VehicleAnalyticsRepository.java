@@ -24,8 +24,8 @@ public interface VehicleAnalyticsRepository extends JpaRepository<Vehicle, Long>
                  THEN COALESCE(SUM(fs.total_amount), 0) / NULLIF(SUM(t.actual_distance_km), 0)
                  ELSE 0 END as costPerKm,
             COUNT(DISTINCT t.id) as tripCount
-        FROM vehicles v
-        LEFT JOIN trips t ON t.vehicle_id = v.id 
+        FROM vehicle v
+        LEFT JOIN trip t ON t.vehicle_id = v.id 
             AND t.status IN ('COMPLETED', 'CLOSED', 'FINALIZED')
             AND t.is_active = true
             AND DATE(t.actual_end_date) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
@@ -52,8 +52,8 @@ public interface VehicleAnalyticsRepository extends JpaRepository<Vehicle, Long>
             COALESCE(SUM(t.cost_amount), 0) as total_cost,
             COALESCE(SUM(t.revenue_amount - t.cost_amount), 0) as total_profit,
             COUNT(DISTINCT t.id) as trip_count
-        FROM vehicles v
-        LEFT JOIN trips t ON t.vehicle_id = v.id 
+        FROM vehicle v
+        LEFT JOIN trip t ON t.vehicle_id = v.id 
             AND t.status IN ('COMPLETED', 'CLOSED', 'FINALIZED')
             AND t.is_active = true
             AND DATE(t.actual_end_date) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)

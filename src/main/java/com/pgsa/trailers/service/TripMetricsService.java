@@ -119,38 +119,63 @@ public class TripMetricsService {
     }
 
     @Transactional
-    public void updateTripMetricsFromActualOdometer(Long tripId, BigDecimal startOdo, BigDecimal endOdo) {
-        Trip trip = getTrip(tripId);
-        TripMetrics metrics = getOrCreateMetrics(trip);
+public void updateTripMetricsFromActualOdometer(
+        Long tripId,
+        BigDecimal startOdo,
+        BigDecimal endOdo
+) {
+    Trip trip = getTrip(tripId);
+    TripMetrics metrics = getOrCreateMetrics(trip);
 
-        if (startOdo != null && endOdo != null) {
-            BigDecimal distance = endOdo.subtract(startOdo);
-            metrics.setTotalDistanceKm(distance);
-            
-            trip.setActualDistanceKm(distance);
-            tripRepository.save(trip);
+    if (startOdo != null && endOdo != null) {
 
-            // Recalculate fuel and derived metrics
-            String vehicleType = trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null
-                    ? trip.getVehicle().getVehicleType().name()
-                    : null;
-            applyFuelAndCost(metrics, distance, vehicleType);
-            applyDerivedMetrics(metrics);
+        if (endOdo.compareTo(startOdo) < 0) {
+            throw new IllegalArgumentException(
+                    "End odometer cannot be less than start odometer"
+            );
         }
 
-        tripMetricsRepository.save(metrics);
-        log.debug("Updated metrics from odometer for trip {}", tripId);
+        BigDecimal distance = endOdo.subtract(startOdo);
+
+        metrics.setTotalDistanceKm(distance);
+
+        trip.setActualDistanceKm(distance);
+        tripRepository.save(trip);
+
+        String vehicleType =
+                trip.getVehicle() != null &&
+                trip.getVehicle().getVehicleType() != null
+                        ? trip.getVehicle().getVehicleType().name()
+                        : null;
+
+        applyFuelAndCost(metrics, distance, vehicleType);
+        applyDerivedMetrics(metrics);
     }
+
+    tripMetricsRepository.save(metrics);
+    log.debug("Updated metrics from odometer for trip {}", tripId);
+}
 
     /* =========================================================
        READ
        ========================================================= */
     @Transactional(readOnly = true)
-    public TripMetricsDTO getTripMetrics(Long tripId) {
-        return tripMetricsRepository.findByTripId(tripId)
-                .map(TripMetricsDTO::fromEntity)
-                .orElse(null);
-    }
+public TripMetricsDTO getTripMetrics(Long tripId) {
+
+    Trip trip = getTrip(tripId);
+
+    TripMetrics metrics = tripMetricsRepository
+            .findByTripId(tripId)
+            .orElseGet(() -> {
+                TripMetrics m = new TripMetrics();
+                m.setTrip(trip);
+                m.setIncidentCount(0);
+                m.setTasksCompleted(0);
+                return m;
+            });
+
+    return TripMetricsDTO.fromEntity(metrics);
+}
 
     /* =========================================================
        PREVIEW ONLY (NO SAVE)
@@ -304,7 +329,10 @@ public class TripMetricsService {
     }
 
     private BigDecimal estimateFuel(BigDecimal distance, String vehicleType) {
-        if (distance == null) return BigDecimal.ZERO;
+
+    if (distance == null ||
+        distance.compareTo(BigDecimal.ZERO) <= 0) {
+        return BigDecimal.ZERO;
         
         BigDecimal ratePer100km = DEFAULT_FUEL_RATE;
         

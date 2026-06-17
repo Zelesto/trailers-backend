@@ -39,7 +39,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         LEFT JOIN t.vehicle v
         LEFT JOIN t.driver d
         WHERE (:status IS NULL OR t.status = :status)
-        AND t.isActive = true
+        AND t.is_active = true
     """)
     List<TripSummaryDTO> findTripSummariesByStatus(@Param("status") TripStatus status);
 
@@ -69,7 +69,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         AND (:status IS NULL OR t.status = :status)
         AND (:city IS NULL OR LOWER(t.originCity) = LOWER(:city)
                           OR LOWER(t.destinationCity) = LOWER(:city))
-        AND t.isActive = true
+        AND t.is_active = true
     """)
     Page<TripSummaryDTO> findTripSummariesWithFilters(
             @Param("search") String search,
@@ -102,7 +102,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         FROM Trip t
         WHERE t.actualEndDate BETWEEN :startDate AND :endDate
         AND t.status = :status
-        AND t.isActive = true
+        AND t.is_active = true
         ORDER BY t.actualEndDate DESC
     """)
     List<TripKpiDTO> findTripKpis(
@@ -150,7 +150,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         FROM Trip t
         WHERE t.actualEndDate BETWEEN :startDate AND :endDate
         AND t.status = 'COMPLETED'
-        AND t.isActive = true
+        AND t.is_active = true
     """)
     Object findTripSummary(
             @Param("startDate") LocalDate startDate,

@@ -16,33 +16,7 @@ import java.util.List;
 public interface TripAnalyticsRepository extends Repository<Trip, Long> {
 
     /**
-     * Get trip summaries by status - FIXED with correct field names
-     */
-    @Query("SELECT new com.pgsa.trailers.dto.TripSummaryDTO(" +
-           "t.id, " +
-           "t.tripNumber, " +
-           "t.status, " +
-           "v.registrationNumber, " +
-           "CONCAT(COALESCE(d.firstName, ''), ' ', COALESCE(d.lastName, '')), " +
-           "t.plannedStartDate, " +  // ← Changed from startDate to plannedStartDate
-           "t.actualEndDate, " +      // ← Changed from endDate to actualEndDate
-           "t.originLocation, " +
-           "t.destinationLocation, " +
-           "t.originCity, " +
-           "t.destinationCity, " +
-           "t.originZipCode, " +
-           "t.destinationZipCode, " +
-           "t.totalDistanceKm, " +    // ← Changed from distance to totalDistanceKm
-           "t.plannedDistanceKm) " +  // ← Changed from plannedDistance to plannedDistanceKm
-           "FROM Trip t " +
-           "LEFT JOIN t.vehicle v " +
-           "LEFT JOIN t.driver d " +
-           "WHERE (:status IS NULL OR t.status = :status) " +
-           "AND t.isActive = true")
-    List<TripSummaryDTO> findTripSummariesByStatus(@Param("status") TripStatus status);
-
-    /**
-     * Get trip summaries with pagination and filters - FIXED
+     * Get trip summaries by status - FIXED with correct column names
      */
     @Query("SELECT new com.pgsa.trailers.dto.TripSummaryDTO(" +
            "t.id, " +
@@ -58,7 +32,33 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
            "t.destinationCity, " +
            "t.originZipCode, " +
            "t.destinationZipCode, " +
-           "t.totalDistanceKm, " +
+           "t.actualDistanceKm, " +      // ← Changed from distance to actualDistanceKm
+           "t.plannedDistanceKm) " +      // ← Changed from plannedDistance to plannedDistanceKm
+           "FROM Trip t " +
+           "LEFT JOIN t.vehicle v " +
+           "LEFT JOIN t.driver d " +
+           "WHERE (:status IS NULL OR t.status = :status) " +
+           "AND t.isActive = true")
+    List<TripSummaryDTO> findTripSummariesByStatus(@Param("status") TripStatus status);
+
+    /**
+     * Get trip summaries with pagination and filters
+     */
+    @Query("SELECT new com.pgsa.trailers.dto.TripSummaryDTO(" +
+           "t.id, " +
+           "t.tripNumber, " +
+           "t.status, " +
+           "v.registrationNumber, " +
+           "CONCAT(COALESCE(d.firstName, ''), ' ', COALESCE(d.lastName, '')), " +
+           "t.plannedStartDate, " +
+           "t.actualEndDate, " +
+           "t.originLocation, " +
+           "t.destinationLocation, " +
+           "t.originCity, " +
+           "t.destinationCity, " +
+           "t.originZipCode, " +
+           "t.destinationZipCode, " +
+           "t.actualDistanceKm, " +
            "t.plannedDistanceKm) " +
            "FROM Trip t " +
            "LEFT JOIN t.vehicle v " +
@@ -76,19 +76,19 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
             Pageable pageable);
 
     /**
-     * Get trip KPIs using DTO projection - FIXED
+     * Get trip KPIs using DTO projection - FIXED with correct column names
      */
     @Query("""
         SELECT new com.pgsa.trailers.dto.TripKpiDTO(
             t.id,
             v.registrationNumber,
-            t.totalDistanceKm,
+            t.actualDistanceKm,
             t.revenueAmount,
             t.costAmount,
             (t.revenueAmount - t.costAmount),
             CASE 
-                WHEN t.totalDistanceKm > 0 
-                THEN t.costAmount / t.totalDistanceKm 
+                WHEN t.actualDistanceKm > 0 
+                THEN t.costAmount / t.actualDistanceKm 
                 ELSE 0 
             END
         )
@@ -105,7 +105,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
     );
 
     /**
-     * Get trip profitability data - FIXED for native query
+     * Get trip profitability data - Native query with correct column names
      */
     @Query(value = """
         SELECT 
@@ -113,7 +113,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
             t.trip_number,
             t.status,
             t.planned_start_date,
-            COALESCE(t.total_distance_km, 0) as total_distance_km,
+            COALESCE(t.actual_distance_km, 0) as total_distance_km,
             COALESCE(t.revenue_amount, 0) as revenue_amount,
             COALESCE(t.cost_amount, 0) as cost_amount,
             COALESCE(t.revenue_amount - t.cost_amount, 0) as profit,
@@ -135,7 +135,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
     @Query("""
         SELECT 
             COUNT(t.id) as totalTrips,
-            COALESCE(SUM(t.totalDistanceKm), 0) as totalDistance,
+            COALESCE(SUM(t.actualDistanceKm), 0) as totalDistance,
             COALESCE(SUM(t.revenueAmount), 0) as totalRevenue,
             COALESCE(SUM(t.costAmount), 0) as totalCost,
             COALESCE(SUM(t.revenueAmount - t.costAmount), 0) as totalProfit,
@@ -157,7 +157,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         SELECT 
             t.status,
             COUNT(t.id) as tripCount,
-            COALESCE(SUM(t.totalDistanceKm), 0) as totalDistance
+            COALESCE(SUM(t.actualDistanceKm), 0) as totalDistance
         FROM Trip t
         WHERE t.actualEndDate BETWEEN :startDate AND :endDate
           AND t.isActive = true
@@ -199,7 +199,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         SELECT 
             t.originCity,
             COUNT(t.id) as tripCount,
-            COALESCE(SUM(t.totalDistanceKm), 0) as totalDistance,
+            COALESCE(SUM(t.actualDistanceKm), 0) as totalDistance,
             COALESCE(SUM(t.revenueAmount), 0) as totalRevenue,
             COALESCE(SUM(t.costAmount), 0) as totalCost,
             COALESCE(SUM(t.revenueAmount - t.costAmount), 0) as totalProfit
@@ -223,7 +223,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         SELECT 
             TO_CHAR(t.actual_end_date, 'YYYY-MM') as month,
             COUNT(t.id) as tripCount,
-            COALESCE(SUM(t.total_distance_km), 0) as totalDistance,
+            COALESCE(SUM(t.actual_distance_km), 0) as totalDistance,
             COALESCE(SUM(t.revenue_amount), 0) as totalRevenue,
             COALESCE(SUM(t.cost_amount), 0) as totalCost,
             COALESCE(SUM(t.revenue_amount - t.cost_amount), 0) as totalProfit

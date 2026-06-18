@@ -49,7 +49,7 @@ public class TripService {
     private final ApplicationEventPublisher eventPublisher;
     private final TripValidator tripValidator;
 
-   /* ========================
+  /* ========================
    CREATE
    ======================== */
 @Transactional
@@ -103,10 +103,10 @@ public TripResponse createTrip(CreateTripRequest request, Long userId) {
     // Create initial metrics record
     tripMetricsService.initializeMetrics(saved.getId());
 
-    // ============ REMOVE THIS - CAUSING DUPLICATE METRICS CALCULATION ============
+    // ============ REMOVE THIS - Causes duplicate metrics calculation ============
     // eventPublisher.publishEvent(new TripMetricsCalculationEvent(saved.getId()));
 
-    // Existing workflow event - this now triggers async metrics calculation
+    // ============ KEEP THIS - Triggers async metrics calculation ============
     if (saved.getStatus() == TripStatus.PLANNED) {
         eventPublisher.publishEvent(
                 new TripPlannedEvent(saved.getId())

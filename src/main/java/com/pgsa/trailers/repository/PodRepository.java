@@ -35,5 +35,11 @@ public interface PodRepository extends JpaRepository<Pod, Long> {
     List<Pod> findPodsByDateRange(@Param("startDate") LocalDate startDate, 
                                    @Param("endDate") LocalDate endDate);
 
-    long countByStatus(String status);
+        long countByStatus(String status);
+    
+    long countByTripId(Long tripId);  // <-- This is the missing method
+    
+    boolean existsByTripId(Long tripId);
+    
+    void deleteByTripId(Long tripId);
 }

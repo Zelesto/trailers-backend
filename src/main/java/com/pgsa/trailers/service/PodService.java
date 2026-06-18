@@ -3,6 +3,7 @@ package com.pgsa.trailers.service;
 
 import com.pgsa.trailers.dto.PodRequestDTO;
 import com.pgsa.trailers.dto.PodResponseDTO;
+import com.pgsa.trailers.dto.PodStatistics;  // <-- ADD THIS IMPORT
 import com.pgsa.trailers.entity.ops.Pod;
 import com.pgsa.trailers.repository.PodRepository;
 import lombok.RequiredArgsConstructor;

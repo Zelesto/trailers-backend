@@ -242,6 +242,61 @@ public TripMetricsDTO getTripMetrics(Long tripId) {
         log.info("Initialized metrics for trip {}", tripId);
     }
 
+
+    /* =========================================================
+   CALCULATE FROM SAVED TRIP (SAFE)
+   ========================================================= */
+@Transactional
+public void calculateMetricsForTrip(Long tripId) {
+
+    Trip trip = getTrip(tripId);
+
+    if (trip.getOriginLocation() == null ||
+        trip.getOriginLocation().isBlank() ||
+        trip.getDestinationLocation() == null ||
+        trip.getDestinationLocation().isBlank()) {
+
+        log.warn(
+                "Skipping metrics calculation for trip {} because locations are missing",
+                tripId
+        );
+        return;
+    }
+
+    try {
+
+        RouteCalculationRequestDTO request =
+                new RouteCalculationRequestDTO();
+
+        request.setOriginLocation(trip.getOriginLocation());
+        request.setDestinationLocation(trip.getDestinationLocation());
+
+        if (trip.getVehicle() != null &&
+            trip.getVehicle().getVehicleType() != null) {
+
+            request.setVehicleType(
+                    trip.getVehicle()
+                            .getVehicleType()
+                            .name()
+            );
+        }
+
+        calculateAndSaveMetrics(tripId, request);
+
+        log.info(
+                "Successfully calculated metrics for trip {}",
+                tripId
+        );
+
+    } catch (Exception e) {
+
+        log.warn(
+                "Route calculation failed for trip {}. Trip remains valid.",
+                tripId,
+                e
+        );
+    }
+}
     /* =========================================================
        FINALIZATION
        ========================================================= */

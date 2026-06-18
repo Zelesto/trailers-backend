@@ -26,6 +26,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.pgsa.trailers.dto.RouteCalculationRequestDTO;
+import com.pgsa.trailers.entity.ops.auto.TripMetricsCalculationEvent;
+import com.pgsa.trailers.entity.ops.auto.TripPlannedEvent;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -50,6 +52,7 @@ public class TripService {
     /* ========================
        CREATE
        ======================== */
+@Transactional
 public TripResponse createTrip(CreateTripRequest request, Long userId) {
 
     log.debug("Creating trip for vehicle: {}, user: {}", request.getVehicleId(), userId);
@@ -97,48 +100,15 @@ public TripResponse createTrip(CreateTripRequest request, Long userId) {
             saved.getTripNumber()
     );
 
-    // Create metrics record
+    // Create initial metrics record
     tripMetricsService.initializeMetrics(saved.getId());
 
-    // Calculate planned route metrics
-    try {
+    // Calculate planned route metrics asynchronously
+    eventPublisher.publishEvent(
+            new TripMetricsCalculationEvent(saved.getId())
+    );
 
-        RouteCalculationRequestDTO routeRequest =
-                new RouteCalculationRequestDTO();
-
-        routeRequest.setOriginLocation(saved.getOriginLocation());
-        routeRequest.setDestinationLocation(saved.getDestinationLocation());
-
-        if (saved.getVehicle() != null &&
-            saved.getVehicle().getVehicleType() != null) {
-
-            routeRequest.setVehicleType(
-                    saved.getVehicle()
-                            .getVehicleType()
-                            .name()
-            );
-        }
-
-        tripMetricsService.calculateAndSaveMetrics(
-                saved.getId(),
-                routeRequest
-        );
-
-        // Reload trip so planned distance/duration are included in response
-        saved = tripRepository.findById(saved.getId())
-                .orElseThrow(() -> new TripValidationException(
-                        "Trip not found after metric calculation"
-                ));
-
-    } catch (Exception e) {
-
-        log.warn(
-                "Unable to calculate route metrics for trip {}. Trip was created successfully.",
-                saved.getId(),
-                e
-        );
-    }
-
+    // Existing workflow event
     if (saved.getStatus() == TripStatus.PLANNED) {
         eventPublisher.publishEvent(
                 new TripPlannedEvent(saved.getId())
@@ -147,7 +117,6 @@ public TripResponse createTrip(CreateTripRequest request, Long userId) {
 
     return tripResponseMapper.toResponse(saved);
 }
-
     /* ========================
        START TRIP
        ======================== */

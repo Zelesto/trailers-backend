@@ -224,23 +224,26 @@ public TripMetricsDTO getTripMetrics(Long tripId) {
        INITIALIZE
        ========================================================= */
     @Transactional
-    public void initializeMetrics(Long tripId) {
-        if (tripMetricsRepository.existsByTripId(tripId)) {
-            log.debug("Metrics already exist for trip {}", tripId);
-            return;
-        }
-        
-        Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new ResourceNotFoundException("Trip", "id", tripId));
-        
-        TripMetrics metrics = new TripMetrics();
-        metrics.setTrip(trip);
-        metrics.setIncidentCount(0);
-        metrics.setTasksCompleted(0);
-        
-        tripMetricsRepository.save(metrics);
-        log.info("Initialized metrics for trip {}", tripId);
+public TripMetrics initializeMetrics(Long tripId) {  // Change void to TripMetrics
+    if (tripMetricsRepository.existsByTripId(tripId)) {
+        log.debug("Metrics already exist for trip {}", tripId);
+        return tripMetricsRepository.findByTripId(tripId).orElse(null);
     }
+    
+    Trip trip = tripRepository.findById(tripId)
+            .orElseThrow(() -> new ResourceNotFoundException("Trip", "id", tripId));
+    
+    TripMetrics metrics = new TripMetrics();
+    metrics.setTrip(trip);
+    metrics.setIncidentCount(0);
+    metrics.setTasksCompleted(0);
+    metrics.setFinalized(false);
+    
+    TripMetrics saved = tripMetricsRepository.save(metrics);
+    log.info("Initialized metrics for trip {}", tripId);
+    
+    return saved;  // Return the saved metrics
+}
 
 
     /* =========================================================

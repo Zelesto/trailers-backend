@@ -22,12 +22,12 @@ public class TripNumberGenerator {
         String prefix = "TRP-" + year + "-";
         
         try {
-            // Atomically get and increment the sequence
+            // PostgreSQL version - use ON CONFLICT instead of ON DUPLICATE KEY
             Long nextNumber = jdbcTemplate.queryForObject(
                 "INSERT INTO trip_number_sequence (year, next_number) VALUES (?, 1) " +
-                "ON DUPLICATE KEY UPDATE next_number = next_number + 1 " +
-                "SELECT next_number - 1 FROM trip_number_sequence WHERE year = ?",
-                new Object[]{year, year},
+                "ON CONFLICT (year) DO UPDATE SET next_number = trip_number_sequence.next_number + 1 " +
+                "RETURNING next_number - 1",
+                new Object[]{String.valueOf(year)},
                 Long.class
             );
             

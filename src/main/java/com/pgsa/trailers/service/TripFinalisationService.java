@@ -25,101 +25,128 @@ public class TripFinalisationService {
 
     @Transactional
     public void finalizeTrip(Long tripId) {
-        log.info("🔍 Starting finalization for trip ID: {}", tripId);
+        log.info("🔍 STARTING finalization for trip ID: {}", tripId);
 
-        // 1. Find the trip
-        Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new TripValidationException("Trip not found with ID: " + tripId));
-        log.debug("✅ Found trip: {} with status: {}", trip.getTripNumber(), trip.getStatus());
-
-        // 2. Check if already finalized
-        if (TripStatus.FINALIZED.equals(trip.getStatus())) {
-            throw new TripValidationException("Trip already FINALIZED");
-        }
-
-        // 3. Check if trip is COMPLETED
-        if (!TripStatus.COMPLETED.equals(trip.getStatus())) {
-            throw new TripValidationException(
-                String.format("Cannot finalize trip with status: %s. Trip must be COMPLETED first.", trip.getStatus())
-            );
-        }
-
-        // 4. Handle missing location data
-        if (trip.getOriginLocation() == null || trip.getOriginLocation().isEmpty()) {
-            log.warn("⚠️ Trip {} has no origin location, using placeholder", tripId);
-            trip.setOriginLocation("Unknown Origin");
-        }
-        if (trip.getDestinationLocation() == null || trip.getDestinationLocation().isEmpty()) {
-            log.warn("⚠️ Trip {} has no destination location, using placeholder", tripId);
-            trip.setDestinationLocation("Unknown Destination");
-        }
-
-        // 5. Handle metrics
-        TripMetrics metrics = trip.getMetrics();
-        if (metrics == null) {
-            log.warn("⚠️ Trip metrics missing for trip {}, creating new metrics", tripId);
-            metrics = tripMetricsService.initializeMetrics(tripId);
-            // Re-fetch trip to get updated metrics
-            trip = tripRepository.findById(tripId).orElseThrow();
-            metrics = trip.getMetrics();
-            log.info("✅ Metrics created for trip {}", tripId);
-        }
-
-        // 6. Check PODs
-        long podCount = 0;
         try {
-            podCount = podRepository.countByTripId(tripId);
-            log.debug("📦 Trip {} has {} PODs", tripId, podCount);
+            // 1. Find the trip
+            log.debug("Step 1: Finding trip...");
+            Trip trip = tripRepository.findById(tripId)
+                    .orElseThrow(() -> new TripValidationException("Trip not found with ID: " + tripId));
+            log.info("✅ Found trip: ID={}, Number={}, Status={}", trip.getId(), trip.getTripNumber(), trip.getStatus());
+
+            // 2. Check if already finalized
+            log.debug("Step 2: Checking if already finalized...");
+            if (TripStatus.FINALIZED.equals(trip.getStatus())) {
+                throw new TripValidationException("Trip already FINALIZED");
+            }
+
+            // 3. Check if trip is COMPLETED
+            log.debug("Step 3: Checking if trip is COMPLETED...");
+            if (!TripStatus.COMPLETED.equals(trip.getStatus())) {
+                throw new TripValidationException(
+                    String.format("Cannot finalize trip with status: %s. Trip must be COMPLETED first.", trip.getStatus())
+                );
+            }
+            log.info("✅ Trip status is COMPLETED");
+
+            // 4. Handle missing location data
+            log.debug("Step 4: Checking location data...");
+            if (trip.getOriginLocation() == null || trip.getOriginLocation().isEmpty()) {
+                log.warn("⚠️ Trip {} has no origin location, using placeholder", tripId);
+                trip.setOriginLocation("Unknown Origin");
+            }
+            if (trip.getDestinationLocation() == null || trip.getDestinationLocation().isEmpty()) {
+                log.warn("⚠️ Trip {} has no destination location, using placeholder", tripId);
+                trip.setDestinationLocation("Unknown Destination");
+            }
+
+            // 5. Handle metrics
+            log.debug("Step 5: Checking metrics...");
+            TripMetrics metrics = trip.getMetrics();
+            if (metrics == null) {
+                log.warn("⚠️ Trip metrics missing for trip {}, creating new metrics", tripId);
+                try {
+                    metrics = tripMetricsService.initializeMetrics(tripId);
+                    log.info("✅ Metrics created for trip {}", tripId);
+                } catch (Exception e) {
+                    log.error("❌ Failed to create metrics for trip {}: {}", tripId, e.getMessage(), e);
+                    throw new TripValidationException("Failed to create metrics: " + e.getMessage());
+                }
+            } else {
+                log.info("✅ Metrics found for trip {}", tripId);
+            }
+
+            // 6. Check PODs
+            log.debug("Step 6: Checking PODs...");
+            long podCount = 0;
+            try {
+                podCount = podRepository.countByTripId(tripId);
+                log.info("📦 Trip {} has {} PODs", tripId, podCount);
+            } catch (Exception e) {
+                log.error("❌ Error counting PODs for trip {}: {}", tripId, e.getMessage(), e);
+                // Continue with finalization - don't block
+                log.warn("⚠️ Proceeding with finalization despite POD count error");
+            }
+
+            // 7. POD validation - optional
+            if (podCount == 0) {
+                log.warn("⚠️ Trip {} has no PODs. Proceeding with finalization (POD check is optional)", tripId);
+            }
+
+            // 8. Calculate final metrics
+            log.debug("Step 7: Calculating final metrics...");
+            boolean isFinalized = metrics.isFinalized();
+            log.info("Metrics finalized status: {}", isFinalized);
+
+            if (trip.getActualDistanceKm() != null && !isFinalized) {
+                metrics.setTotalDistanceKm(trip.getActualDistanceKm());
+                log.info("✅ Set total distance: {} km", trip.getActualDistanceKm());
+            } else if (trip.getActualDistanceKm() == null) {
+                log.warn("⚠️ Trip has no actual distance, skipping");
+            }
+
+            if (trip.getActualDurationHours() != null && !isFinalized) {
+                metrics.setTotalDurationHours(trip.getActualDurationHours());
+                log.info("✅ Set total duration: {} hours", trip.getActualDurationHours());
+            } else if (trip.getActualDurationHours() == null) {
+                log.warn("⚠️ Trip has no actual duration, skipping");
+            }
+
+            // 9. Calculate variances
+            log.debug("Step 8: Calculating variances...");
+            if (trip.getPlannedDistanceKm() != null && metrics.getTotalDistanceKm() != null) {
+                BigDecimal variance = metrics.getTotalDistanceKm().subtract(trip.getPlannedDistanceKm());
+                metrics.setPlannedVsActualDistanceVarianceKm(variance);
+                log.info("✅ Distance variance: {} km", variance);
+            }
+
+            if (trip.getPlannedDurationHours() != null && metrics.getTotalDurationHours() != null) {
+                BigDecimal variance = metrics.getTotalDurationHours().subtract(trip.getPlannedDurationHours());
+                metrics.setPlannedVsActualDurationVarianceHours(variance);
+                log.info("✅ Duration variance: {} hours", variance);
+            }
+
+            // 10. Mark as finalized
+            log.debug("Step 9: Marking as finalized...");
+            metrics.setFinalized(true);
+            metrics.setFinalizedAt(LocalDateTime.now());
+
+            trip.setStatus(TripStatus.FINALIZED);
+            trip.setLastStatusUpdate(LocalDateTime.now());
+
+            // 11. Save
+            log.debug("Step 10: Saving trip...");
+            tripRepository.save(trip);
+            
+            log.info("✅ SUCCESSFULLY finalized trip ID: {} - {}", tripId, trip.getTripNumber());
+            
+        } catch (TripValidationException e) {
+            log.error("❌ Validation error finalizing trip {}: {}", tripId, e.getMessage());
+            throw e;
         } catch (Exception e) {
-            log.error("❌ Error counting PODs for trip {}: {}", tripId, e.getMessage());
-            // Continue with finalization - don't block
+            log.error("❌ Unexpected error finalizing trip {}: {}", tripId, e.getMessage(), e);
+            throw new TripValidationException("Failed to finalize trip: " + e.getMessage());
         }
-
-        // 7. POD validation - now optional (warns but doesn't block)
-        if (podCount == 0) {
-            log.warn("⚠️ Trip {} has no PODs. Proceeding with finalization (POD check is optional)", tripId);
-            // Uncomment the line below if you want to enforce POD requirement
-            // throw new TripValidationException("Cannot finalize trip without PODs (Proof of Delivery documents)");
-        }
-
-        // 8. Calculate final metrics
-        boolean isFinalized = metrics.isFinalized();
-        log.debug("Metrics finalized status: {}", isFinalized);
-
-        if (trip.getActualDistanceKm() != null && !isFinalized) {
-            metrics.setTotalDistanceKm(trip.getActualDistanceKm());
-            log.debug("✅ Set total distance: {} km", trip.getActualDistanceKm());
-        }
-
-        if (trip.getActualDurationHours() != null && !isFinalized) {
-            metrics.setTotalDurationHours(trip.getActualDurationHours());
-            log.debug("✅ Set total duration: {} hours", trip.getActualDurationHours());
-        }
-
-        // 9. Calculate variances
-        if (trip.getPlannedDistanceKm() != null && metrics.getTotalDistanceKm() != null) {
-            BigDecimal variance = metrics.getTotalDistanceKm().subtract(trip.getPlannedDistanceKm());
-            metrics.setPlannedVsActualDistanceVarianceKm(variance);
-            log.debug("✅ Distance variance: {} km", variance);
-        }
-
-        if (trip.getPlannedDurationHours() != null && metrics.getTotalDurationHours() != null) {
-            BigDecimal variance = metrics.getTotalDurationHours().subtract(trip.getPlannedDurationHours());
-            metrics.setPlannedVsActualDurationVarianceHours(variance);
-            log.debug("✅ Duration variance: {} hours", variance);
-        }
-
-        // 10. Mark as finalized
-        metrics.setFinalized(true);
-        metrics.setFinalizedAt(LocalDateTime.now());
-
-        trip.setStatus(TripStatus.FINALIZED);
-        trip.setLastStatusUpdate(LocalDateTime.now());
-
-        // 11. Save
-        tripRepository.save(trip);
-        
-        log.info("✅ Successfully finalized trip ID: {} - {}", tripId, trip.getTripNumber());
     }
 
     @Transactional
@@ -128,13 +155,11 @@ public class TripFinalisationService {
             Trip trip = tripRepository.findById(tripId)
                     .orElseThrow(() -> new TripValidationException("Trip not found"));
             
-            // Check if trip is COMPLETED
             if (!TripStatus.COMPLETED.equals(trip.getStatus())) {
                 log.debug("Trip {} cannot be finalized - status is {}", tripId, trip.getStatus());
                 return false;
             }
             
-            // Check for PODs (optional)
             long podCount = podRepository.countByTripId(tripId);
             boolean hasPods = podCount > 0;
             
@@ -142,7 +167,6 @@ public class TripFinalisationService {
                 log.debug("Trip {} has no PODs", tripId);
             }
             
-            // Allow finalization even without PODs (for now)
             return true;
             
         } catch (Exception e) {

@@ -1,5 +1,5 @@
 // src/main/java/com/pgsa/trailers/service/inventory/InventoryLocationService.java
-package com.pgsa.trailers.service.inventory;
+package com.pgsa.trailers.service;
 
 import com.pgsa.trailers.dto.InventoryLocationRequestDTO;
 import com.pgsa.trailers.dto.InventoryLocationResponseDTO;

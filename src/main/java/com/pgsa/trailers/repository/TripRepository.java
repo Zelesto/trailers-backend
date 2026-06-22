@@ -43,6 +43,10 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     // ======================== FIND BY TRIP NUMBER ========================
     
     Optional<Trip> findByTripNumber(String tripNumber);
+
+    // Method to find trip number by ID
+    @Query("SELECT t.tripNumber FROM Trip t WHERE t.id = :tripId")
+    Optional<String> findTripNumberById(@Param("tripId") Long tripId);
     
     boolean existsByTripNumber(String tripNumber);
     

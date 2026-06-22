@@ -5,9 +5,8 @@ import com.pgsa.trailers.dto.PodRequestDTO;
 import com.pgsa.trailers.dto.PodResponseDTO;
 import com.pgsa.trailers.dto.PodStatistics;
 import com.pgsa.trailers.entity.ops.Pod;
-import com.pgsa.trailers.entity.ops.Trip;  // Add this import
 import com.pgsa.trailers.repository.PodRepository;
-import com.pgsa.trailers.repository.TripRepository;  // Add this import
+import com.pgsa.trailers.repository.TripRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -26,7 +25,7 @@ import java.util.stream.Collectors;
 public class PodService {
 
     private final PodRepository podRepository;
-    private final TripRepository tripRepository;  // Inject TripRepository
+    private final TripRepository tripRepository;
 
     public PodResponseDTO createPod(PodRequestDTO request) {
         Pod pod = Pod.builder()
@@ -180,9 +179,11 @@ public class PodService {
             return null;
         }
         try {
-            return tripRepository.findTripNumberById(tripId);
+            // Use the repository method with Optional
+            return tripRepository.findTripNumberById(tripId)
+                    .orElse(null);
         } catch (Exception e) {
-            log.warn("Could not find trip number for trip ID: {}", tripId);
+            log.warn("Could not find trip number for trip ID: {}", tripId, e);
             return null;
         }
     }
@@ -195,7 +196,7 @@ public class PodService {
                 .id(pod.getId())
                 .podNumber(pod.getPodNumber())
                 .tripId(pod.getTripId())
-                .tripNumber(tripNumber)  // Add trip number
+                .tripNumber(tripNumber)  // Now the builder has this method
                 .customerName(pod.getCustomerName())
                 .deliveryDate(pod.getDeliveryDate())
                 .status(pod.getStatus())

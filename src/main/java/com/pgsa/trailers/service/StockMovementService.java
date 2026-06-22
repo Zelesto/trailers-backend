@@ -1,5 +1,5 @@
 // src/main/java/com/pgsa/trailers/service/inventory/StockMovementService.java
-package com.pgsa.trailers.service.inventory;
+package com.pgsa.trailers.service;
 
 import com.pgsa.trailers.dto.StockMovementRequestDTO;
 import com.pgsa.trailers.dto.StockMovementResponseDTO;

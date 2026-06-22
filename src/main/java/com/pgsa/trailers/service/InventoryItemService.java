@@ -1,13 +1,13 @@
 // src/main/java/com/pgsa/trailers/service/inventory/InventoryItemService.java
 package com.pgsa.trailers.service;
 
-import com.pgsa.trailers.dto.inventory.InventoryItemRequestDTO;
-import com.pgsa.trailers.dto.inventory.InventoryItemResponseDTO;
-import com.pgsa.trailers.dto.inventory.InventoryStatisticsDTO;
+import com.pgsa.trailers.dto.InventoryItemRequestDTO;
+import com.pgsa.trailers.dto.InventoryItemResponseDTO;
+import com.pgsa.trailers.dto.InventoryStatisticsDTO;
 import com.pgsa.trailers.entity.inventory.InventoryItem;
 import com.pgsa.trailers.entity.inventory.InventoryLocation;
-import com.pgsa.trailers.repository.inventory.InventoryItemRepository;
-import com.pgsa.trailers.repository.inventory.InventoryLocationRepository;
+import com.pgsa.trailers.repository.InventoryItemRepository;
+import com.pgsa.trailers.repository.InventoryLocationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;

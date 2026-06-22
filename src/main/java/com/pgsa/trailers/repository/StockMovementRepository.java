@@ -1,5 +1,5 @@
 // src/main/java/com/pgsa/trailers/repository/inventory/StockMovementRepository.java
-package com.pgsa.trailers.repository;
+package com.pgsa.trailers.repository.inventory;
 
 import com.pgsa.trailers.entity.inventory.StockMovement;
 import org.springframework.data.domain.Page;
@@ -30,6 +30,15 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, Lo
     // Find by movement type
     List<StockMovement> findByMovementType(String movementType);
 
+    // Find by approval status
+    List<StockMovement> findByApprovalStatus(String approvalStatus);
+
+    // Count by approval status
+    long countByApprovalStatus(String approvalStatus);
+
+    // Count by movement type
+    long countByMovementType(String movementType);
+
     // Find by date range
     @Query("SELECT sm FROM StockMovement sm WHERE sm.createdAt BETWEEN :startDate AND :endDate")
     List<StockMovement> findByDateRange(@Param("startDate") LocalDateTime startDate,
@@ -45,7 +54,7 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, Lo
     long countByItemId(Long itemId);
 
     // Get total quantity moved by item
-    @Query("SELECT COALESCE(SUM(sm.quantity), 0) FROM StockMovement sm WHERE sm.itemId = :itemId AND sm.movementType = :type")
+    @Query("SELECT COALESCE(SUM(sm.quantity), 0) FROM StockMovement sm WHERE sm.itemId = :itemId AND sm.movementType = :type AND sm.approvalStatus = 'APPROVED'")
     Integer sumQuantityByItemIdAndMovementType(@Param("itemId") Long itemId,
                                                @Param("type") String type);
 }

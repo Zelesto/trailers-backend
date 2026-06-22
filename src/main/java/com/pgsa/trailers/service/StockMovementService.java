@@ -111,23 +111,36 @@ public class StockMovementService {
     }
 
     private StockMovementResponseDTO mapToResponseDTO(StockMovement movement) {
-        String itemName = null;
-        inventoryItemRepository.findById(movement.getItemId())
-                .ifPresent(item -> itemName = item.getName());
-
-        return StockMovementResponseDTO.builder()
-                .id(movement.getId())
-                .itemId(movement.getItemId())
-                .itemName(itemName)
-                .quantity(movement.getQuantity())
-                .movementType(movement.getMovementType())
-                .reason(movement.getReason())
-                .notes(movement.getNotes())
-                .referenceNumber(movement.getReferenceNumber())
-                .performedBy(movement.getPerformedBy())
-                .createdAt(movement.getCreatedAt())
-                .tripId(movement.getTripId())
-                .fuelSlipId(movement.getFuelSlipId())
-                .build();
+    // Create a separate variable for the item name
+    String itemName = null;
+    Long itemId = movement.getItemId(); // Store in a local variable first
+    
+    inventoryItemRepository.findById(itemId)
+            .ifPresent(item -> {
+                // Now item is effectively final
+                String name = item.getName();
+                // Use the name
+            });
+    
+    // Better approach - use Optional directly
+    java.util.Optional<InventoryItem> optionalItem = inventoryItemRepository.findById(movement.getItemId());
+    if (optionalItem.isPresent()) {
+        itemName = optionalItem.get().getName();
     }
+
+    return StockMovementResponseDTO.builder()
+            .id(movement.getId())
+            .itemId(movement.getItemId())
+            .itemName(itemName)
+            .quantity(movement.getQuantity())
+            .movementType(movement.getMovementType())
+            .reason(movement.getReason())
+            .notes(movement.getNotes())
+            .referenceNumber(movement.getReferenceNumber())
+            .performedBy(movement.getPerformedBy())
+            .createdAt(movement.getCreatedAt())
+            .tripId(movement.getTripId())
+            .fuelSlipId(movement.getFuelSlipId())
+            .build();
+}
 }

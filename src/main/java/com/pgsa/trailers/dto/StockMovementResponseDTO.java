@@ -21,8 +21,19 @@ public class StockMovementResponseDTO {
     private String reason;
     private String notes;
     private String referenceNumber;
+    private String referenceType;
     private String performedBy;
     private LocalDateTime createdAt;
     private Long tripId;
     private Long fuelSlipId;
+    
+    // Approval fields
+    private Boolean requiresApproval;
+    private String approvalStatus; // PENDING, APPROVED, REJECTED
+    private String approvedBy;
+    private LocalDateTime approvedAt;
+    private String approvalNotes;
+    private String rejectedBy;
+    private LocalDateTime rejectedAt;
+    private String rejectionReason;
 }

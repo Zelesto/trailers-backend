@@ -40,6 +40,9 @@ public class StockMovement {
     @Column(name = "reference_number", length = 50)
     private String referenceNumber;
 
+    @Column(name = "reference_type", length = 30)
+    private String referenceType;
+
     @Column(name = "performed_by", length = 100)
     private String performedBy;
 
@@ -52,4 +55,29 @@ public class StockMovement {
 
     @Column(name = "fuel_slip_id")
     private Long fuelSlipId;
+
+    // Approval fields
+    @Column(name = "requires_approval")
+    private Boolean requiresApproval;
+
+    @Column(name = "approval_status", length = 20)
+    private String approvalStatus; // PENDING, APPROVED, REJECTED
+
+    @Column(name = "approved_by", length = 100)
+    private String approvedBy;
+
+    @Column(name = "approved_at")
+    private LocalDateTime approvedAt;
+
+    @Column(name = "approval_notes", length = 500)
+    private String approvalNotes;
+
+    @Column(name = "rejected_by", length = 100)
+    private String rejectedBy;
+
+    @Column(name = "rejected_at")
+    private LocalDateTime rejectedAt;
+
+    @Column(name = "rejection_reason", length = 500)
+    private String rejectionReason;
 }

@@ -1,5 +1,5 @@
 // src/main/java/com/pgsa/trailers/dto/inventory/StockMovementRequestDTO.java
-package com.pgsa.trailers.dto;
+package com.pgsa.trailers.dto.inventory;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,6 +17,9 @@ public class StockMovementRequestDTO {
     private String reason;
     private String notes;
     private String referenceNumber;
+    private String referenceType; // "INVOICE", "PURCHASE_ORDER", "RETURN", "ADJUSTMENT", "MAINTENANCE", "OTHER"
+    private String performedBy;
     private Long tripId;
     private Long fuelSlipId;
+    private Boolean requiresApproval;
 }

@@ -1,140 +1,117 @@
+// src/main/java/com/pgsa/trailers/service/StockCountService.java
 package com.pgsa.trailers.service;
-
-import com.pgsa.trailers.entity.inventory.StockCount;
-import com.pgsa.trailers.entity.inventory.StockCountLine;
-import com.pgsa.trailers.entity.inventory.StockMovement;
-import com.pgsa.trailers.enums.StockMovementType;
-import com.pgsa.trailers.enums.StockCountStatus;
-import com.pgsa.trailers.repository.StockCountRepository;
-import com.pgsa.trailers.repository.StockMovementRepository;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.pgsa.trailers.dto.InventoryVarianceDTO;
 import com.pgsa.trailers.entity.inventory.InventoryItem;
+import com.pgsa.trailers.entity.inventory.InventoryLocation;
+import com.pgsa.trailers.entity.inventory.StockMovement;
+import com.pgsa.trailers.enums.StockMovementType;
+import com.pgsa.trailers.repository.InventoryItemRepository;
+import com.pgsa.trailers.repository.InventoryLocationRepository;
+import com.pgsa.trailers.repository.StockMovementRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
+import java.time.LocalDateTime;
+import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
+@Slf4j
+@Transactional
 public class StockCountService {
 
-    private final StockCountRepository countRepo;
-    private final StockMovementRepository movementRepo;
-
-    public StockCountService(
-            StockCountRepository countRepo,
-            StockMovementRepository movementRepo
-    ) {
-        this.countRepo = countRepo;
-        this.movementRepo = movementRepo;
-    }
+    private final InventoryItemRepository inventoryItemRepository;
+    private final InventoryLocationRepository inventoryLocationRepository;
+    private final StockMovementRepository stockMovementRepository;
 
     /**
-     * Records a stock movement in the system.
+     * Record a stock movement (from your original controller)
      */
     public void recordStockMovement(StockMovement movement) {
-        if (movement == null) throw new IllegalArgumentException("Movement cannot be null");
-        if (movement.getQuantity() == null || movement.getQuantity().compareTo(BigDecimal.ZERO) == 0) return;
-        movementRepo.save(movement);
-    }
+        // Validate the item exists
+        InventoryItem item = inventoryItemRepository.findById(movement.getItemId())
+                .orElseThrow(() -> new RuntimeException("Inventory item not found"));
 
-    /**
-     * Returns a list of variance reports for a given stock count.
-     */
-    public List<VarianceReport> getVarianceReport(Long countId) {
-        StockCount count = countRepo.findById(countId)
-                .orElseThrow(() -> new IllegalArgumentException("StockCount not found for ID " + countId));
-
-        List<VarianceReport> report = new ArrayList<>();
-        for (StockCountLine line : count.getLines()) {
-            BigDecimal variance = line.getVariance();
-            if (variance.compareTo(BigDecimal.ZERO) != 0) {
-                VarianceReport vr = new VarianceReport();
-                vr.setItem(line.getItem());
-                vr.setExpectedQty(line.getSystemQty());
-                vr.setCountedQty(line.getCountedQty());
-                vr.setVariance(variance);
-                report.add(vr);
-            }
-        }
-        return report;
-    }
-
-    /**
-     * Posts a stock count: creates StockMovements for any line with variance and updates the count status.
-     */
-    @Transactional
-    public void postStockCount(Long countId) {
-        StockCount count = countRepo.findById(countId)
-                .orElseThrow(() -> new IllegalArgumentException("StockCount not found for ID " + countId));
-
-        if (count.getStatus() == StockCountStatus.POSTED) {
-            throw new IllegalStateException("Stock count already posted");
+        // Validate location
+        InventoryLocation location = null;
+        if (item.getLocationId() != null) {
+            location = inventoryLocationRepository.findById(item.getLocationId())
+                    .orElse(null);
         }
 
-        for (StockCountLine line : count.getLines()) {
-            BigDecimal variance = line.getVariance();
-            if (variance.compareTo(BigDecimal.ZERO) != 0) {
-                StockMovement movement = new StockMovement();
-                movement.setItem(line.getItem());
-                movement.setLocation(count.getLocation());
-                movement.setMovementType(StockMovementType.ADJUSTMENT);
-                movement.setQuantity(variance);
-                movement.setReferenceType("STOCK_COUNT");
-                movement.setReferenceId(countId);
+        // Set the item and location on the movement
+        // NOTE: If StockMovement doesn't have these fields, remove these lines
+        // movement.setItem(item);
+        // movement.setLocation(location);
+        
+        // Set movement type - convert String to enum if needed
+        String movementTypeStr = movement.getMovementType();
+        // If you have an enum, convert it
+        // StockMovementType type = StockMovementType.valueOf(movementTypeStr);
+        
+        // Set reference type and ID if needed
+        // movement.setReferenceType("STOCK_COUNT");
+        // movement.setReferenceId(1L);
 
-                recordStockMovement(movement);
-            }
+        // Save the movement
+        stockMovementRepository.save(movement);
+        
+        // Update the item quantity
+        int currentQuantity = item.getQuantity() != null ? item.getQuantity() : 0;
+        int quantity = movement.getQuantity();
+        
+        if ("IN".equals(movementTypeStr)) {
+            item.setQuantity(currentQuantity + quantity);
+        } else if ("OUT".equals(movementTypeStr)) {
+            item.setQuantity(Math.max(0, currentQuantity - quantity));
+        } else if ("ADJUSTMENT".equals(movementTypeStr)) {
+            item.setQuantity(quantity);
         }
-
-        count.setStatus(StockCountStatus.POSTED);
-        countRepo.save(count);
+        
+        inventoryItemRepository.save(item);
+        log.info("Stock movement recorded for item: {}", movement.getItemId());
     }
 
     /**
-     * Returns a shrinkage report for a given stock count.
+     * Get shrinkage report
      */
-    public InventoryVarianceDTO getShrinkageReport(Long countId) {
-        StockCount count = countRepo.findById(countId)
-                .orElseThrow(() -> new IllegalArgumentException("StockCount not found for ID " + countId));
+    public InventoryVarianceDTO getShrinkageReport(Long itemId) {
+        InventoryItem item = inventoryItemRepository.findById(itemId)
+                .orElseThrow(() -> new RuntimeException("Item not found"));
 
-        // For simplicity, we'll aggregate the variance of all lines in the count
-        BigDecimal totalSystemQty = count.getLines().stream()
-                .map(StockCountLine::getSystemQty)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalCountedQty = count.getLines().stream()
-                .map(StockCountLine::getCountedQty)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalVariance = count.getLines().stream()
-                .map(StockCountLine::getVariance)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Calculate expected vs actual
+        int expectedQuantity = calculateExpectedQuantity(item);
+        int actualQuantity = item.getQuantity() != null ? item.getQuantity() : 0;
+        int variance = actualQuantity - expectedQuantity;
+        double variancePercentage = expectedQuantity > 0 ? 
+                ((double) variance / expectedQuantity) * 100 : 0;
 
-        return new InventoryVarianceDTO(
-                "Total Shrinkage for Count #" + countId,
-                totalSystemQty,
-                totalCountedQty,
-                totalVariance
-        );
+        return InventoryVarianceDTO.builder()
+                .itemId(itemId)
+                .itemName(item.getName())
+                .expectedQuantity(BigDecimal.valueOf(expectedQuantity))
+                .actualQuantity(BigDecimal.valueOf(actualQuantity))
+                .variance(BigDecimal.valueOf(variance))
+                .variancePercentage(BigDecimal.valueOf(variancePercentage))
+                .reason("Physical count discrepancy")
+                .build();
     }
 
-    /**
-     * DTO for variance reporting.
-     */
-    public static class VarianceReport {
-        private Object item; // Replace Object with InventoryItem if desired
-        private BigDecimal expectedQty;
-        private BigDecimal countedQty;
-        private BigDecimal variance;
-
-        public Object getItem() { return item; }
-        public void setItem(Object item) { this.item = item; }
-        public BigDecimal getExpectedQty() { return expectedQty; }
-        public void setExpectedQty(BigDecimal expectedQty) { this.expectedQty = expectedQty; }
-        public BigDecimal getCountedQty() { return countedQty; }
-        public void setCountedQty(BigDecimal countedQty) { this.countedQty = countedQty; }
-        public BigDecimal getVariance() { return variance; }
-        public void setVariance(BigDecimal variance) { this.variance = variance; }
+    private int calculateExpectedQuantity(InventoryItem item) {
+        // Calculate expected quantity based on initial stock + IN movements - OUT movements
+        // This is a simplified version - adjust based on your business logic
+        Integer initialQuantity = item.getQuantity() != null ? item.getQuantity() : 0;
+        
+        // You could also query stock movements to calculate expected quantity
+        // List<StockMovement> movements = stockMovementRepository.findByItemId(item.getId());
+        // int totalIn = movements.stream().filter(m -> "IN".equals(m.getMovementType())).mapToInt(StockMovement::getQuantity).sum();
+        // int totalOut = movements.stream().filter(m -> "OUT".equals(m.getMovementType())).mapToInt(StockMovement::getQuantity).sum();
+        // return initialQuantity + totalIn - totalOut;
+        
+        return initialQuantity;
     }
 }

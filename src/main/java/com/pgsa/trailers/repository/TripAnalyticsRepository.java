@@ -1,3 +1,4 @@
+// src/main/java/com/pgsa/trailers/repository/TripAnalyticsRepository.java
 package com.pgsa.trailers.repository;
 
 import com.pgsa.trailers.dto.TripKpiDTO;
@@ -39,7 +40,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         LEFT JOIN t.vehicle v
         LEFT JOIN t.driver d
         WHERE (:status IS NULL OR t.status = :status)
-        AND t.is_active = true
+        AND t.isActive = true
     """)
     List<TripSummaryDTO> findTripSummariesByStatus(@Param("status") TripStatus status);
 
@@ -69,7 +70,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         AND (:status IS NULL OR t.status = :status)
         AND (:city IS NULL OR LOWER(t.originCity) = LOWER(:city)
                           OR LOWER(t.destinationCity) = LOWER(:city))
-        AND t.is_active = true
+        AND t.isActive = true
     """)
     Page<TripSummaryDTO> findTripSummariesWithFilters(
             @Param("search") String search,
@@ -89,20 +90,20 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
             t.plannedStartDate,
             COALESCE(t.actualDistanceKm, 0),
             COALESCE(t.fuelConsumedLiters, 0),
-            COALESCE(t.revenue_amount, 0),
-            COALESCE(t.cost_amount, 0),
-            COALESCE(t.revenue_amount, 0) - COALESCE(t.cost_amount, 0),
+            COALESCE(t.revenueAmount, 0),
+            COALESCE(t.costAmount, 0),
+            COALESCE(t.revenueAmount, 0) - COALESCE(t.costAmount, 0),
             CASE
-                WHEN COALESCE(t.revenue_amount, 0) > 0 THEN
-                    ((COALESCE(t.revenue_amount, 0) - COALESCE(t.cost_amount, 0)) * 100)
-                    / COALESCE(t.revenue_amount, 0)
+                WHEN COALESCE(t.revenueAmount, 0) > 0 THEN
+                    ((COALESCE(t.revenueAmount, 0) - COALESCE(t.costAmount, 0)) * 100)
+                    / COALESCE(t.revenueAmount, 0)
                 ELSE 0
             END
         )
         FROM Trip t
         WHERE t.actualEndDate BETWEEN :startDate AND :endDate
         AND t.status = :status
-        AND t.is_active = true
+        AND t.isActive = true
         ORDER BY t.actualEndDate DESC
     """)
     List<TripKpiDTO> findTripKpis(
@@ -143,14 +144,14 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         SELECT 
             COUNT(t.id),
             COALESCE(SUM(t.actualDistanceKm), 0),
-            COALESCE(SUM(t.revenue_amount), 0),
-            COALESCE(SUM(t.cost_amount), 0),
-            COALESCE(SUM(t.revenue_amount - t.cost_amount), 0),
-            COALESCE(AVG(t.revenue_amount - t.cost_amount), 0)
+            COALESCE(SUM(t.revenueAmount), 0),
+            COALESCE(SUM(t.costAmount), 0),
+            COALESCE(SUM(t.revenueAmount - t.costAmount), 0),
+            COALESCE(AVG(t.revenueAmount - t.costAmount), 0)
         FROM Trip t
         WHERE t.actualEndDate BETWEEN :startDate AND :endDate
         AND t.status = 'COMPLETED'
-        AND t.is_active = true
+        AND t.isActive = true
     """)
     Object findTripSummary(
             @Param("startDate") LocalDate startDate,

@@ -127,6 +127,33 @@ String findMaxTripNumberForYear(@Param("year") int year);
     
     @Query("SELECT SUM(t.actualDistanceKm) FROM Trip t WHERE t.status = 'COMPLETED' AND t.driver.id = :driverId")
     Optional<BigDecimal> getTotalDistanceForDriver(@Param("driverId") Long driverId);
+
+      // ======================== LOAD QUERIES ========================
+
+    @Query("SELECT t FROM Trip t WHERE t.customerId = :customerId " +
+       "AND t.plannedStartDate BETWEEN :startDate AND :endDate " +
+       "AND t.loadId IS NULL")
+List<Trip> findByCustomerIdAndPlannedStartDateBetweenAndLoadIsNull(
+    @Param("customerId") Long customerId,
+    @Param("startDate") LocalDateTime startDate,
+    @Param("endDate") LocalDateTime endDate
+);
+
+/**
+ * Find trips by customer ID with pagination
+ */
+Page<Trip> findByCustomerId(Long customerId, Pageable pageable);
+
+/**
+ * Find trips by load ID
+ */
+List<Trip> findByLoadId(String loadId);
+
+/**
+ * Count trips by customer
+ */
+Long countByCustomerId(Long customerId);
+
     
     // ======================== EXISTS QUERIES ========================
     

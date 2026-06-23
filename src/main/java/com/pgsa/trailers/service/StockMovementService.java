@@ -1,13 +1,13 @@
 // src/main/java/com/pgsa/trailers/service/inventory/StockMovementService.java
 package com.pgsa.trailers.service.inventory;
 
-import com.pgsa.trailers.dto.inventory.StockMovementRequestDTO;
-import com.pgsa.trailers.dto.inventory.StockMovementResponseDTO;
+import com.pgsa.trailers.dto.StockMovementRequestDTO;
+import com.pgsa.trailers.dto.StockMovementResponseDTO;
 import com.pgsa.trailers.entity.inventory.InventoryItem;
 import com.pgsa.trailers.entity.inventory.StockMovement;
-import com.pgsa.trailers.exception.InsufficientStockException;
-import com.pgsa.trailers.repository.inventory.InventoryItemRepository;
-import com.pgsa.trailers.repository.inventory.StockMovementRepository;
+import com.pgsa.trailers.entity.InsufficientStockException;
+import com.pgsa.trailers.repository.InventoryItemRepository;
+import com.pgsa.trailers.repository.StockMovementRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;

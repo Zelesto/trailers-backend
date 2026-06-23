@@ -1,3 +1,4 @@
+// src/main/java/com/pgsa/trailers/dto/TripResponse.java
 package com.pgsa.trailers.dto;
 
 import com.pgsa.trailers.enums.TripStatus;
@@ -19,30 +20,41 @@ public class TripResponse {
     private String tripNumber;
     private String tripType;
 
-    // Relationships
+    // ======================== CUSTOMER ========================
+    private Long customerId;
+    private String customerName;
+    private String customerCode;
+
+    // ======================== LOAD ========================
+    private String loadId;
+    private String loadNumber;
+    private String loadType;
+    private String loadDescription;
+    private String loadStatus;
+
+    // ======================== VEHICLE ========================
     private Long vehicleId;
     private String vehicleRegistration;
     private String vehicleMake;
     private String vehicleModel;
 
+    // ======================== DRIVER ========================
     private Long driverId;
     private String driverName;
     private String driverLicenseNumber;
 
+    // ======================== SUPERVISOR ========================
     private Long supervisorId;
     private String supervisorName;
 
-    private Long loadId;
-    private String loadReference;
-
-    // Planning
+    // ======================== PLANNING ========================
     private LocalDateTime plannedStartDate;
     private LocalDateTime plannedEndDate;
     private BigDecimal plannedDistanceKm;
     private BigDecimal plannedDurationHours;
     private BigDecimal estimatedDurationHours;
 
-    // Origin
+    // ======================== ORIGIN ========================
     private String originLocation;
     private String originStreetAddress;
     private String originCity;
@@ -51,7 +63,7 @@ public class TripResponse {
     private Double originLatitude;
     private Double originLongitude;
 
-    // Destination
+    // ======================== DESTINATION ========================
     private String destinationLocation;
     private String destinationStreetAddress;
     private String destinationCity;
@@ -60,7 +72,7 @@ public class TripResponse {
     private Double destinationLatitude;
     private Double destinationLongitude;
 
-    // Execution
+    // ======================== EXECUTION ========================
     private LocalDateTime actualStartDate;
     private LocalDateTime actualEndDate;
     private BigDecimal actualStartOdometer;
@@ -68,17 +80,19 @@ public class TripResponse {
     private BigDecimal actualDistanceKm;
     private BigDecimal actualDurationHours;
 
-    // Operational Metrics
+    // ======================== OPERATIONAL METRICS ========================
     private BigDecimal distanceKm;
     private BigDecimal fuelConsumedLiters;
     private BigDecimal fuelEfficiency;
 
-    // Costs
+    // ======================== COSTS ========================
     private BigDecimal tollCost;
     private BigDecimal otherExpenses;
     private BigDecimal totalCost;
+    private BigDecimal revenueAmount;
+    private BigDecimal costAmount;
 
-    // Cargo
+    // ======================== CARGO ========================
     private String commodityType;
     private String cargoDescription;
     private BigDecimal cargoWeight;
@@ -86,41 +100,41 @@ public class TripResponse {
     private Integer palletCount;
     private String containerNumber;
 
-    // Workflow
+    // ======================== WORKFLOW ========================
     private TripStatus status;
     private String approvalStatus;
     private String priority;
     private LocalDateTime approvedAt;
 
-    // Cancellation
+    // ======================== CANCELLATION ========================
     private LocalDateTime cancelledAt;
     private String cancellationReason;
 
-    // Route
+    // ======================== ROUTE ========================
     private String gpsStartLocation;
     private String gpsEndLocation;
     private String routeDetails;
     private String checkpoints;
 
-    // Notes
+    // ======================== NOTES ========================
     private String driverNotes;
     private String specialInstructions;
     private String notes;
 
-    // References
+    // ======================== REFERENCES ========================
     private String referenceNumber;
     private String purchaseOrderNumber;
 
-    // Incidents
+    // ======================== INCIDENTS ========================
     private Integer incidentsLogged;
 
-    // Audit
+    // ======================== AUDIT ========================
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Long createdBy;
     private Long updatedBy;
     private LocalDateTime lastStatusUpdate;
 
-    // Metrics
+    // ======================== METRICS ========================
     private TripMetricsResponse metrics;
 }

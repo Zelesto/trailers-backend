@@ -3,7 +3,6 @@ package com.pgsa.trailers.controller;
 
 import com.pgsa.trailers.dto.*;
 import com.pgsa.trailers.dto.InventoryVarianceDTO;
-import com.pgsa.trailers.dto.*;
 import com.pgsa.trailers.entity.inventory.StockMovement;
 import com.pgsa.trailers.repository.InventoryItemRepository;
 import com.pgsa.trailers.service.StockCountService;

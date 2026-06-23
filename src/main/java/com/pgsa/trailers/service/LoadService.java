@@ -389,10 +389,22 @@ public class LoadService {
                             .id(trip.getId())
                             .tripNumber(trip.getTripNumber())
                             .status(trip.getStatus())
-                            .origin(trip.getOriginCity() != null ? trip.getOriginCity() : trip.getOriginLocation())
-                            .destination(trip.getDestinationCity() != null ? trip.getDestinationCity() : trip.getDestinationLocation())
+                            .originLocation(trip.getOriginLocation())
+                            .destinationLocation(trip.getDestinationLocation())
+                            .originCity(trip.getOriginCity())
+                            .destinationCity(trip.getDestinationCity())
+                            .originZipCode(trip.getOriginZipCode())
+                            .destinationZipCode(trip.getDestinationZipCode())
+                            .vehicleRegistration(trip.getVehicle() != null ? 
+                                    trip.getVehicle().getRegistrationNumber() : null)
+                            .driverName(trip.getDriver() != null ? 
+                                    trip.getDriver().getFirstName() + " " + trip.getDriver().getLastName() : null)
                             .plannedStartDate(trip.getPlannedStartDate())
                             .plannedEndDate(trip.getPlannedEndDate())
+                            .commodityType(trip.getCommodityType())
+                            .cargoWeight(trip.getCargoWeight())
+                            .palletCount(trip.getPalletCount())
+                            .containerNumber(trip.getContainerNumber())
                             .build())
                     .collect(Collectors.toList());
         }

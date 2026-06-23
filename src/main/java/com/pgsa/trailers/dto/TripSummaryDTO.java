@@ -7,7 +7,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
@@ -36,12 +35,32 @@ public class TripSummaryDTO {
     private String destinationZipCode;
     
     // Additional fields for load management
-    private String origin;
-    private String destination;
     private String commodityType;
     private BigDecimal cargoWeight;
     private Integer palletCount;
     private String containerNumber;
+
+    // Constructor matching the query in TripAnalyticsRepository
+    public TripSummaryDTO(Long id, String tripNumber, TripStatus status, 
+                          String vehicleRegistration, String driverName,
+                          LocalDateTime plannedStartDate, LocalDateTime plannedEndDate,
+                          String originLocation, String destinationLocation,
+                          String originCity, String destinationCity,
+                          String originZipCode, String destinationZipCode) {
+        this.id = id;
+        this.tripNumber = tripNumber;
+        this.status = status;
+        this.vehicleRegistration = vehicleRegistration;
+        this.driverName = driverName;
+        this.plannedStartDate = plannedStartDate;
+        this.plannedEndDate = plannedEndDate;
+        this.originLocation = originLocation;
+        this.destinationLocation = destinationLocation;
+        this.originCity = originCity;
+        this.destinationCity = destinationCity;
+        this.originZipCode = originZipCode;
+        this.destinationZipCode = destinationZipCode;
+    }
     
     // Helper method to get display origin
     public String getOrigin() {

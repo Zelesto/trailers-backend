@@ -46,3 +46,44 @@ public class LoadController {
         log.info("Fetching load with ID: {}", id);
         return ResponseEntity.ok(loadService.getLoadById(id));
     }
+
+    @GetMapping("/number/{loadNumber}")
+    public ResponseEntity<LoadResponseDTO> getLoadByNumber(@PathVariable String loadNumber) {
+        log.info("Fetching load with number: {}", loadNumber);
+        return ResponseEntity.ok(loadService.getLoadByNumber(loadNumber));
+    }
+
+    @GetMapping
+    public ResponseEntity<Page<LoadResponseDTO>> getAllLoads(
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        log.info("Fetching all loads");
+        return ResponseEntity.ok(loadService.getAllLoads(pageable));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<Page<LoadResponseDTO>> searchLoads(
+            @RequestParam(required = false) String search,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        log.info("Searching loads with term: {}", search);
+        return ResponseEntity.ok(loadService.searchLoads(search, pageable));
+    }
+
+    @GetMapping("/customer/{customerId}")
+    public ResponseEntity<List<LoadResponseDTO>> getLoadsByCustomer(@PathVariable Long customerId) {
+        log.info("Fetching loads for customer ID: {}", customerId);
+        return ResponseEntity.ok(loadService.getLoadsByCustomer(customerId));
+    }
+
+    @GetMapping("/status/{status}")
+    public ResponseEntity<List<LoadResponseDTO>> getLoadsByStatus(@PathVariable String status) {
+        log.info("Fetching loads with status: {}", status);
+        return ResponseEntity.ok(loadService.getLoadsByStatus(status));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteLoad(@PathVariable Long id) {
+        log.info("Deleting load with ID: {}", id);
+        loadService.deleteLoad(id);
+        return ResponseEntity.noContent().build();
+    }
+}

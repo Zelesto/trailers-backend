@@ -96,6 +96,60 @@ public class LoadService {
         return mapToResponseDTO(saved);
     }
 
+
+    // src/main/java/com/pgsa/trailers/service/LoadService.java
+// Add these missing methods and fix existing ones
+
+@Transactional(readOnly = true)
+public LoadResponseDTO getLoadById(Long id) {
+    Load load = loadRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Load not found with ID: " + id));
+    return mapToResponseDTO(load);
+}
+
+@Transactional(readOnly = true)
+public LoadResponseDTO getLoadByNumber(String loadNumber) {
+    Load load = loadRepository.findByLoadNumber(loadNumber)
+            .orElseThrow(() -> new RuntimeException("Load not found with number: " + loadNumber));
+    return mapToResponseDTO(load);
+}
+
+@Transactional(readOnly = true)
+public Page<LoadResponseDTO> getAllLoads(Pageable pageable) {
+    return loadRepository.findAll(pageable)
+            .map(this::mapToResponseDTO);
+}
+
+@Transactional(readOnly = true)
+public Page<LoadResponseDTO> searchLoads(String search, Pageable pageable) {
+    return loadRepository.searchLoads(search, pageable)
+            .map(this::mapToResponseDTO);
+}
+
+@Transactional(readOnly = true)
+public List<LoadResponseDTO> getLoadsByCustomer(Long customerId) {
+    return loadRepository.findByCustomerId(customerId)
+            .stream()
+            .map(this::mapToResponseDTO)
+            .collect(Collectors.toList());
+}
+
+@Transactional(readOnly = true)
+public List<LoadResponseDTO> getLoadsByStatus(String status) {
+    return loadRepository.findByStatus(status)
+            .stream()
+            .map(this::mapToResponseDTO)
+            .collect(Collectors.toList());
+}
+
+public void deleteLoad(Long id) {
+    if (!loadRepository.existsById(id)) {
+        throw new RuntimeException("Load not found with ID: " + id);
+    }
+    loadRepository.deleteById(id);
+    log.info("Deleted load with ID: {}", id);
+}
+    
     // Add these methods to LoadService.java if they don't exist
 
 @Transactional(readOnly = true)

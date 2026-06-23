@@ -85,9 +85,9 @@ public class LoadService {
                 .estimatedValue(request.getEstimatedValue())
                 .actualValue(request.getActualValue())
                 .priority(request.getPriority() != null ? request.getPriority() : "NORMAL")
-                //.createdBy(String.valueOf(userId))
                 .build();
 
+        // Set createdBy separately
         load.setCreatedBy(String.valueOf(userId));
 
         Load saved = loadRepository.save(load);
@@ -105,41 +105,6 @@ public class LoadService {
     // READ
     // =============================================
 
-
-    // src/main/java/com/pgsa/trailers/service/LoadService.java
-// Fix the findMergeableTrips method
-
-/**
- * Suggest merging trips that could be combined into one load
- */
-@Transactional(readOnly = true)
-public List<Trip> findMergeableTrips(Long customerId, LocalDateTime plannedDate) {
-    LocalDate date = plannedDate.toLocalDate();
-    LocalDateTime startOfDay = date.atStartOfDay();
-    LocalDateTime endOfDay = date.atTime(23, 59, 59);
-
-    // Create final variables for use in lambda
-    final Long finalCustomerId = customerId;
-    final LocalDateTime finalStartOfDay = startOfDay;
-    final LocalDateTime finalEndOfDay = endOfDay;
-
-    // If the repository method exists, use it
-    try {
-        return tripRepository.findByCustomerIdAndPlannedStartDateBetweenAndLoadIsNull(
-            finalCustomerId, finalStartOfDay, finalEndOfDay);
-    } catch (Exception e) {
-        log.warn("Repository method not found, using fallback");
-        // Fallback: get all trips for customer and filter manually
-        return tripRepository.findByCustomerId(finalCustomerId)
-                .stream()
-                .filter(t -> t.getLoadId() == null || t.getLoadId().isEmpty())
-                .filter(t -> t.getPlannedStartDate() != null)
-                .filter(t -> !t.getPlannedStartDate().isBefore(finalStartOfDay) && 
-                           !t.getPlannedStartDate().isAfter(finalEndOfDay))
-                .collect(Collectors.toList());
-    }
-}
-    
     @Transactional(readOnly = true)
     public LoadResponseDTO getLoadById(Long id) {
         Load load = loadRepository.findById(id)
@@ -161,14 +126,14 @@ public List<Trip> findMergeableTrips(Long customerId, LocalDateTime plannedDate)
     }
 
     @Transactional(readOnly = true)
-public Page<LoadResponseDTO> searchLoads(String search, Pageable pageable) {
-    log.info("Searching loads with term: {}", search);
-    if (search == null || search.trim().isEmpty()) {
-        return getAllLoads(pageable);
+    public Page<LoadResponseDTO> searchLoads(String search, Pageable pageable) {
+        log.info("Searching loads with term: {}", search);
+        if (search == null || search.trim().isEmpty()) {
+            return getAllLoads(pageable);
+        }
+        return loadRepository.searchLoads(search.trim(), pageable)
+                .map(this::mapToResponseDTO);
     }
-    return loadRepository.searchLoads(search.trim(), pageable)
-            .map(this::mapToResponseDTO);
-}
 
     @Transactional(readOnly = true)
     public List<LoadResponseDTO> getLoadsByCustomer(Long customerId) {
@@ -291,6 +256,31 @@ public Page<LoadResponseDTO> searchLoads(String search, Pageable pageable) {
                 .orElse(null);
     }
 
+    /**
+     * Suggest merging trips that could be combined into one load
+     */
+    @Transactional(readOnly = true)
+    public List<Trip> findMergeableTrips(Long customerId, LocalDateTime plannedDate) {
+        LocalDate date = plannedDate.toLocalDate();
+        LocalDateTime startOfDay = date.atStartOfDay();
+        LocalDateTime endOfDay = date.atTime(23, 59, 59);
+
+        // Try to use the repository method if it exists
+        try {
+            return tripRepository.findByCustomerIdAndPlannedStartDateBetweenAndLoadIsNull(
+                customerId, startOfDay, endOfDay);
+        } catch (Exception e) {
+            log.warn("Repository method not found, using fallback");
+            // Fallback: get all trips for customer and filter manually
+            return tripRepository.findByCustomerId(customerId)
+                    .stream()
+                    .filter(t -> t.getLoadId() == null || t.getLoadId().isEmpty())
+                    .filter(t -> t.getPlannedStartDate() != null)
+                    .filter(t -> !t.getPlannedStartDate().isBefore(startOfDay) && 
+                               !t.getPlannedStartDate().isAfter(endOfDay))
+                    .collect(Collectors.toList());
+        }
+    }
 
     /**
      * Smart merge: Automatically merge trips for the same customer on the same day

@@ -1,13 +1,13 @@
 // src/main/java/com/pgsa/trailers/controller/InventoryController.java
 package com.pgsa.trailers.controller;
 
-import com.pgsa.trailers.dto.inventory.*;
+import com.pgsa.trailers.dto.*;
 import com.pgsa.trailers.dto.InventoryVarianceDTO;
 import com.pgsa.trailers.entity.inventory.StockMovement;
 import com.pgsa.trailers.service.StockCountService;
-import com.pgsa.trailers.service.inventory.InventoryItemService;
-import com.pgsa.trailers.service.inventory.InventoryLocationService;
-import com.pgsa.trailers.service.inventory.StockMovementService;
+import com.pgsa.trailers.service.InventoryItemService;
+import com.pgsa.trailers.service.InventoryLocationService;
+import com.pgsa.trailers.service.StockMovementService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -101,25 +101,26 @@ public class TripService {
             trip.setCustomerId(customer.getId());
         }
 
-        // Generate load ID if not provided
+        // Handle load ID - loadId is a String, not Long
         String loadId = request.getLoadId();
-        if (loadId == null || loadId.isEmpty()) {
-            loadId = generateLoadId();
-            trip.setLoadId(loadId);
-            trip.setLoadNumber(loadId);
-        } else {
+        if (loadId != null && !loadId.isEmpty()) {
             // Validate load exists if provided
-            if (!loadRepository.existsById(loadId)) {
-                throw new TripValidationException("Load not found with ID: " + loadId);
+            if (!loadRepository.existsByLoadNumber(loadId)) {
+                throw new TripValidationException("Load not found with number: " + loadId);
             }
             trip.setLoadId(loadId);
             // Get load details if load exists
-            loadRepository.findById(loadId).ifPresent(load -> {
+            loadRepository.findByLoadNumber(loadId).ifPresent(load -> {
                 trip.setLoadNumber(load.getLoadNumber());
-                trip.setLoadType(load.getLoadType());
+                trip.setLoadType(load.getCommodityType());
                 trip.setLoadDescription(load.getDescription());
                 trip.setLoadStatus(load.getStatus());
             });
+        } else {
+            // Generate load ID if not provided
+            String newLoadId = generateLoadId();
+            trip.setLoadId(newLoadId);
+            trip.setLoadNumber(newLoadId);
         }
 
         trip.setTripNumber(tripNumberGenerator.generate());
@@ -235,7 +236,8 @@ public class TripService {
         if (!customerRepository.existsById(customerId)) {
             throw new TripValidationException("Customer not found with ID: " + customerId);
         }
-        return tripRepository.findByCustomerId(customerId)
+        return tripRepository.findByCustomerId(customerId, Pageable.unpaged())
+                .getContent()
                 .stream()
                 .map(tripResponseMapper::toResponse)
                 .collect(Collectors.toList());
@@ -340,15 +342,15 @@ public class TripService {
         Trip trip = findTripOrThrow(tripId);
         
         if (loadId != null && !loadId.isEmpty()) {
-            // Validate load exists
-            if (!loadRepository.existsById(loadId)) {
-                throw new TripValidationException("Load not found with ID: " + loadId);
+            // Validate load exists - use existsByLoadNumber since loadId is the load number
+            if (!loadRepository.existsByLoadNumber(loadId)) {
+                throw new TripValidationException("Load not found with number: " + loadId);
             }
             trip.setLoadId(loadId);
             // Get load details
-            loadRepository.findById(loadId).ifPresent(load -> {
+            loadRepository.findByLoadNumber(loadId).ifPresent(load -> {
                 trip.setLoadNumber(load.getLoadNumber());
-                trip.setLoadType(load.getLoadType());
+                trip.setLoadType(load.getCommodityType());
                 trip.setLoadDescription(load.getDescription());
                 trip.setLoadStatus(load.getStatus());
             });
@@ -373,9 +375,7 @@ public class TripService {
      * Generate a new load ID
      */
     public String generateLoadId() {
-        String prefix = "LD";
-        String timestamp = String.valueOf(System.currentTimeMillis());
-        return prefix + "-" + timestamp;
+        return "LD-" + System.currentTimeMillis();
     }
 
     /**
@@ -398,13 +398,13 @@ public class TripService {
         
         // Update load
         if (loadId != null && !loadId.isEmpty()) {
-            if (!loadRepository.existsById(loadId)) {
-                throw new TripValidationException("Load not found with ID: " + loadId);
+            if (!loadRepository.existsByLoadNumber(loadId)) {
+                throw new TripValidationException("Load not found with number: " + loadId);
             }
             trip.setLoadId(loadId);
-            loadRepository.findById(loadId).ifPresent(load -> {
+            loadRepository.findByLoadNumber(loadId).ifPresent(load -> {
                 trip.setLoadNumber(load.getLoadNumber());
-                trip.setLoadType(load.getLoadType());
+                trip.setLoadType(load.getCommodityType());
                 trip.setLoadDescription(load.getDescription());
                 trip.setLoadStatus(load.getStatus());
             });
@@ -485,22 +485,22 @@ public class TripService {
         }
 
         // Update customer if provided
-        if (request.getCustomerId() != null) {
+        if (request.getCustomerId() != null && request.getCustomerId() > 0) {
             Customer customer = customerRepository.findById(request.getCustomerId())
                     .orElseThrow(() -> new TripValidationException("Customer not found with ID: " + request.getCustomerId()));
             trip.setCustomerId(customer.getId());
         }
 
-        // Update load if provided
+        // Update load if provided - loadId is a String
         if (request.getLoadId() != null) {
-            if (!request.getLoadId().isEmpty() && !loadRepository.existsById(request.getLoadId())) {
-                throw new TripValidationException("Load not found with ID: " + request.getLoadId());
+            if (!request.getLoadId().isEmpty() && !loadRepository.existsByLoadNumber(request.getLoadId())) {
+                throw new TripValidationException("Load not found with number: " + request.getLoadId());
             }
             trip.setLoadId(request.getLoadId());
             if (!request.getLoadId().isEmpty()) {
-                loadRepository.findById(request.getLoadId()).ifPresent(load -> {
+                loadRepository.findByLoadNumber(request.getLoadId()).ifPresent(load -> {
                     trip.setLoadNumber(load.getLoadNumber());
-                    trip.setLoadType(load.getLoadType());
+                    trip.setLoadType(load.getCommodityType());
                     trip.setLoadDescription(load.getDescription());
                     trip.setLoadStatus(load.getStatus());
                 });

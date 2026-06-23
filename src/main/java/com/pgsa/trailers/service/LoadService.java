@@ -259,30 +259,25 @@ public class LoadService {
     /**
      * Suggest merging trips that could be combined into one load
      */
-   @Transactional(readOnly = true)
-public List<Trip> findMergeableTrips(Long customerId, LocalDateTime plannedDate) {
-    LocalDate date = plannedDate.toLocalDate();
-    LocalDateTime startOfDay = date.atStartOfDay();
-    LocalDateTime endOfDay = date.atTime(23, 59, 59);
+    @Transactional(readOnly = true)
+    public List<Trip> findMergeableTrips(Long customerId, LocalDateTime plannedDate) {
+        LocalDate date = plannedDate.toLocalDate();
+        LocalDateTime startOfDay = date.atStartOfDay();
+        LocalDateTime endOfDay = date.atTime(23, 59, 59);
 
-    // Try to use the repository method if it exists
-    try {
-        return tripRepository.findByCustomerIdAndPlannedStartDateBetweenAndLoadIsNull(
-            customerId, startOfDay, endOfDay);
-    } catch (Exception e) {
-        log.warn("Repository method not found, using fallback");
-        // Fallback: get all trips for customer and filter manually
         // Use Pageable.unpaged() to get all results
-        return tripRepository.findByCustomerId(customerId, Pageable.unpaged())
-                .getContent()
-                .stream()
+        List<Trip> allTrips = tripRepository.findByCustomerId(customerId, Pageable.unpaged())
+                .getContent();
+        
+        // Filter for trips without load and within date range
+        return allTrips.stream()
                 .filter(t -> t.getLoadId() == null || t.getLoadId().isEmpty())
                 .filter(t -> t.getPlannedStartDate() != null)
                 .filter(t -> !t.getPlannedStartDate().isBefore(startOfDay) && 
                            !t.getPlannedStartDate().isAfter(endOfDay))
                 .collect(Collectors.toList());
     }
-}
+
     /**
      * Smart merge: Automatically merge trips for the same customer on the same day
      */
@@ -393,6 +388,33 @@ public List<Trip> findMergeableTrips(Long customerId, LocalDateTime plannedDate)
     }
 
     /**
+     * Helper method to create TripSummaryDTO from a Trip
+     */
+    private TripSummaryDTO createTripSummaryDTO(Trip trip) {
+        return TripSummaryDTO.builder()
+                .id(trip.getId())
+                .tripNumber(trip.getTripNumber())
+                .status(trip.getStatus())
+                .originLocation(trip.getOriginLocation())
+                .destinationLocation(trip.getDestinationLocation())
+                .originCity(trip.getOriginCity())
+                .destinationCity(trip.getDestinationCity())
+                .originZipCode(trip.getOriginZipCode())
+                .destinationZipCode(trip.getDestinationZipCode())
+                .vehicleRegistration(trip.getVehicle() != null ? 
+                        trip.getVehicle().getRegistrationNumber() : null)
+                .driverName(trip.getDriver() != null ? 
+                        trip.getDriver().getFirstName() + " " + trip.getDriver().getLastName() : null)
+                .plannedStartDate(trip.getPlannedStartDate())
+                .plannedEndDate(trip.getPlannedEndDate())
+                .commodityType(trip.getCommodityType())
+                .cargoWeight(trip.getCargoWeight())
+                .palletCount(trip.getPalletCount())
+                .containerNumber(trip.getContainerNumber())
+                .build();
+    }
+
+    /**
      * Map Load entity to LoadResponseDTO
      */
     private LoadResponseDTO mapToResponseDTO(Load load) {
@@ -403,30 +425,11 @@ public List<Trip> findMergeableTrips(Long customerId, LocalDateTime plannedDate)
         }
 
         List<TripSummaryDTO> tripSummaries = new ArrayList<>();
-        if (load.getTrips() != null) {
-            tripSummaries = load.getTrips().stream()
-                    .map(trip -> TripSummaryDTO.builder()
-                            .id(trip.getId())
-                            .tripNumber(trip.getTripNumber())
-                            .status(trip.getStatus())
-                            .originLocation(trip.getOriginLocation())
-                            .destinationLocation(trip.getDestinationLocation())
-                            .originCity(trip.getOriginCity())
-                            .destinationCity(trip.getDestinationCity())
-                            .originZipCode(trip.getOriginZipCode())
-                            .destinationZipCode(trip.getDestinationZipCode())
-                            .vehicleRegistration(trip.getVehicle() != null ? 
-                                    trip.getVehicle().getRegistrationNumber() : null)
-                            .driverName(trip.getDriver() != null ? 
-                                    trip.getDriver().getFirstName() + " " + trip.getDriver().getLastName() : null)
-                            .plannedStartDate(trip.getPlannedStartDate())
-                            .plannedEndDate(trip.getPlannedEndDate())
-                            .commodityType(trip.getCommodityType())
-                            .cargoWeight(trip.getCargoWeight())
-                            .palletCount(trip.getPalletCount())
-                            .containerNumber(trip.getContainerNumber())
-                            .build())
-                    .collect(Collectors.toList());
+        if (load.getTrips() != null && !load.getTrips().isEmpty()) {
+            // Use the helper method to avoid lambda issues
+            for (Trip trip : load.getTrips()) {
+                tripSummaries.add(createTripSummaryDTO(trip));
+            }
         }
 
         return LoadResponseDTO.builder()

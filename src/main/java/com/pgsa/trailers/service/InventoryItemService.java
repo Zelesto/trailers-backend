@@ -84,7 +84,35 @@ public class InventoryItemService {
                 .map(this::mapToResponseDTO)
                 .collect(Collectors.toList());
     }
+public InventoryItemResponseDTO updateQuantity(Long id, Integer quantity, String operation) {
+    InventoryItem item = inventoryItemRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Inventory item not found with ID: " + id));
 
+    int currentQuantity = item.getQuantity() != null ? item.getQuantity() : 0;
+    int newQuantity;
+
+    if ("SET".equalsIgnoreCase(operation)) {
+        newQuantity = quantity;
+    } else if ("ADD".equalsIgnoreCase(operation)) {
+        newQuantity = currentQuantity + quantity;
+    } else if ("SUBTRACT".equalsIgnoreCase(operation)) {
+        if (currentQuantity < quantity) {
+            throw new RuntimeException("Insufficient stock. Available: " + currentQuantity + ", Requested: " + quantity);
+        }
+        newQuantity = currentQuantity - quantity;
+    } else {
+        throw new RuntimeException("Invalid operation. Use SET, ADD, or SUBTRACT");
+    }
+
+    if (newQuantity < 0) {
+        throw new RuntimeException("Quantity cannot be negative");
+    }
+
+    item.setQuantity(newQuantity);
+    InventoryItem updated = inventoryItemRepository.save(item);
+    log.info("Updated quantity for item ID: {} from {} to {}", id, currentQuantity, newQuantity);
+    return mapToResponseDTO(updated);
+}
     public InventoryItemResponseDTO createItem(InventoryItemRequestDTO request) {
         InventoryItem item = InventoryItem.builder()
                 .name(request.getName())

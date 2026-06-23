@@ -85,8 +85,10 @@ public class LoadService {
                 .estimatedValue(request.getEstimatedValue())
                 .actualValue(request.getActualValue())
                 .priority(request.getPriority() != null ? request.getPriority() : "NORMAL")
-                .createdBy(String.valueOf(userId))
+                //.createdBy(String.valueOf(userId))
                 .build();
+
+        load.setCreatedBy(String.valueOf(userId));
 
         Load saved = loadRepository.save(load);
         log.info("Created load with ID: {}, Number: {}", saved.getId(), saved.getLoadNumber());

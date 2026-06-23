@@ -22,4 +22,9 @@ public class StockMovementRequestDTO {
     private Long tripId;
     private Long fuelSlipId;
     private Boolean requiresApproval;
+    
+    // Add these fields for immediate approval
+    private String approvalStatus; // "PENDING", "APPROVED", "REJECTED"
+    private String approvedBy;
+    private String approvalNotes;
 }

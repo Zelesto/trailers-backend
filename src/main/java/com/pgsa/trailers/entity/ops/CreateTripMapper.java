@@ -1,9 +1,11 @@
+// src/main/java/com/pgsa/trailers/entity/ops/CreateTripMapper.java
 package com.pgsa.trailers.entity.ops;
 
 import com.pgsa.trailers.dto.CreateTripRequest;
 import com.pgsa.trailers.entity.assets.Driver;
 import com.pgsa.trailers.entity.assets.Vehicle;
 import com.pgsa.trailers.enums.TripStatus;
+import com.pgsa.trailers.repository.CustomerRepository;
 import com.pgsa.trailers.repository.DriverRepository;
 import com.pgsa.trailers.repository.LoadRepository;
 import com.pgsa.trailers.repository.VehicleRepository;
@@ -21,6 +23,7 @@ public class CreateTripMapper {
     private final VehicleRepository vehicleRepository;
     private final DriverRepository driverRepository;
     private final LoadRepository loadRepository;
+    private final CustomerRepository customerRepository;
 
     public Trip toEntity(CreateTripRequest request) {
         if (request == null) {
@@ -50,10 +53,28 @@ public class CreateTripMapper {
             trip.setSupervisor(supervisor);
         }
 
-        if (request.getLoadId() != null) {
-            Load load = loadRepository.findById(request.getLoadId())
-                    .orElseThrow(() -> new IllegalArgumentException("Load not found with ID: " + request.getLoadId()));
+        /* ========================
+           CUSTOMER RELATIONSHIP
+           ======================== */
+        if (request.getCustomerId() != null && request.getCustomerId() > 0) {
+            Customer customer = customerRepository.findById(request.getCustomerId())
+                    .orElseThrow(() -> new IllegalArgumentException("Customer not found with ID: " + request.getCustomerId()));
+            trip.setCustomerId(customer.getId());
+        }
+
+        /* ========================
+           LOAD RELATIONSHIP
+           ======================== */
+        if (request.getLoadId() != null && !request.getLoadId().isEmpty()) {
+            // Load ID is a String (loadNumber), not a Long
+            Load load = loadRepository.findByLoadNumber(request.getLoadId())
+                    .orElseThrow(() -> new IllegalArgumentException("Load not found with number: " + request.getLoadId()));
             trip.setLoad(load);
+            trip.setLoadId(load.getLoadNumber());
+            trip.setLoadNumber(load.getLoadNumber());
+            trip.setLoadType(load.getCommodityType());
+            trip.setLoadDescription(load.getDescription());
+            trip.setLoadStatus(load.getStatus());
         }
 
         /* ========================
@@ -66,6 +87,7 @@ public class CreateTripMapper {
            ======================== */
         trip.setStatus(request.getStatus() != null ? request.getStatus() : TripStatus.DRAFT);
         trip.setApprovalStatus(request.getApprovalStatus());
+        trip.setPriority(request.getPriority());
 
         /* ========================
            PLANNING
@@ -153,6 +175,7 @@ public class CreateTripMapper {
            DEFAULT VALUES
            ======================== */
         trip.setLastStatusUpdate(LocalDateTime.now());
+        trip.setIsActive(true);
         
         // Build location strings from components if needed
         if (request.getOriginLocation() == null && trip.buildOriginAddress() != null && !trip.buildOriginAddress().isEmpty()) {

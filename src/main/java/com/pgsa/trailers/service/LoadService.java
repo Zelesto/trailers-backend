@@ -96,6 +96,53 @@ public class LoadService {
         return mapToResponseDTO(saved);
     }
 
+    // Add these methods to LoadService.java if they don't exist
+
+@Transactional(readOnly = true)
+public Page<LoadResponseDTO> searchLoads(String search, Pageable pageable) {
+    log.info("Searching loads with term: {}", search);
+    return loadRepository.searchLoads(search, pageable)
+            .map(this::mapToResponseDTO);
+}
+
+@Transactional
+public LoadResponseDTO updateLoad(Long id, LoadRequestDTO request, Long userId) {
+    log.info("Updating load with ID: {}", id);
+    
+    Load load = loadRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Load not found with ID: " + id));
+    
+    load.setDescription(request.getDescription());
+    load.setCustomerId(request.getCustomerId());
+    load.setWeightKg(request.getWeightKg());
+    load.setVolumeCubicM(request.getVolumeCubicM());
+    load.setLoadingDate(request.getLoadingDate());
+    load.setUnloadingDate(request.getUnloadingDate());
+    load.setCommodityType(request.getCommodityType());
+    load.setPalletCount(request.getPalletCount());
+    load.setContainerNumber(request.getContainerNumber());
+    load.setHazardousMaterial(request.getHazardousMaterial());
+    load.setSpecialHandling(request.getSpecialHandling());
+    load.setEstimatedValue(request.getEstimatedValue());
+    load.setActualValue(request.getActualValue());
+    load.setPriority(request.getPriority());
+    load.setUpdatedAt(LocalDateTime.now());
+    load.setUpdatedBy(String.valueOf(userId));
+    
+    Load updated = loadRepository.save(load);
+    log.info("Updated load with ID: {}", updated.getId());
+    return mapToResponseDTO(updated);
+}
+
+@Transactional(readOnly = true)
+public List<LoadResponseDTO> getLoadsByStatus(String status) {
+    log.info("Fetching loads with status: {}", status);
+    return loadRepository.findByStatus(status)
+            .stream()
+            .map(this::mapToResponseDTO)
+            .collect(Collectors.toList());
+}
+    
     /**
      * Add trips to an existing load
      */

@@ -55,8 +55,12 @@ private String referenceNumber;
 private String purchaseOrderNumber;
 
 
-
-
+    /* ========================
+       Customer
+       ======================== */
+@ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "customer_id", insertable = false, updatable = false)
+    private Customer customer;
 
         
     /* ========================

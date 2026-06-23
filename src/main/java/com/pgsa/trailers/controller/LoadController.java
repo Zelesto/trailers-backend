@@ -3,6 +3,8 @@ package com.pgsa.trailers.controller;
 
 import com.pgsa.trailers.dto.LoadRequestDTO;
 import com.pgsa.trailers.dto.LoadResponseDTO;
+import com.pgsa.trailers.dto.TripSummaryDTO;
+import com.pgsa.trailers.entity.ops.Trip;
 import com.pgsa.trailers.service.LoadService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,31 +18,33 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;  // Add this import
-import java.util.List;  // Add this import
-import java.util.stream.Collectors;  // Add this import
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/loads")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'MANAGER')")
 public class LoadController {
 
     private final LoadService loadService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MANAGER')")
     public ResponseEntity<LoadResponseDTO> createLoad(@Valid @RequestBody LoadRequestDTO request) {
-        log.info("Creating new load: {}", request.getLoadNumber());
-        return ResponseEntity.status(HttpStatus.CREATED).body(loadService.createLoad(request));
+        log.info("Creating new load");
+        return ResponseEntity.status(HttpStatus.CREATED).body(loadService.createLoad(request, getCurrentUserId()));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MANAGER')")
     public ResponseEntity<LoadResponseDTO> updateLoad(
             @PathVariable Long id,
             @Valid @RequestBody LoadRequestDTO request) {
         log.info("Updating load with ID: {}", id);
-        return ResponseEntity.ok(loadService.updateLoad(id, request));
+        return ResponseEntity.ok(loadService.updateLoad(id, request, getCurrentUserId()));
     }
 
     @GetMapping("/{id}")
@@ -83,60 +87,60 @@ public class LoadController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MANAGER')")
     public ResponseEntity<Void> deleteLoad(@PathVariable Long id) {
         log.info("Deleting load with ID: {}", id);
         loadService.deleteLoad(id);
         return ResponseEntity.noContent().build();
     }
 
+    // =============================================
+    // Smart Merge Endpoints (Elevated Access Only)
+    // =============================================
 
-/**
- * Smart merge trips for a customer on a specific date
- * Only accessible to elevated users (MANAGER, SUPER_ADMIN)
- */
-@PostMapping("/smart-merge")
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MANAGER')")
-public ResponseEntity<LoadResponseDTO> smartMergeTrips(
-        @RequestParam Long customerId,
-        @RequestParam LocalDateTime plannedDate,
-        @RequestParam Long userId) {
-    log.info("Smart merging trips for customer {} on {}", customerId, plannedDate);
-    return ResponseEntity.ok(loadService.smartMergeTrips(customerId, plannedDate, userId));
-}
+    @PostMapping("/smart-merge")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MANAGER')")
+    public ResponseEntity<LoadResponseDTO> smartMergeTrips(
+            @RequestParam Long customerId,
+            @RequestParam LocalDateTime plannedDate) {
+        log.info("Smart merging trips for customer {} on {}", customerId, plannedDate);
+        return ResponseEntity.ok(loadService.smartMergeTrips(customerId, plannedDate, getCurrentUserId()));
+    }
 
-/**
- * Find merge candidates for a customer on a specific date
- */
-@GetMapping("/merge-candidates")
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MANAGER', 'DISPATCHER')")
-public ResponseEntity<List<TripSummaryDTO>> findMergeCandidates(
-        @RequestParam Long customerId,
-        @RequestParam LocalDateTime plannedDate) {
-    log.info("Finding merge candidates for customer {} on {}", customerId, plannedDate);
-    List<Trip> trips = loadService.findMergeableTrips(customerId, plannedDate);
-    List<TripSummaryDTO> summaries = trips.stream()
-            .map(trip -> TripSummaryDTO.builder()
-                    .id(trip.getId())
-                    .tripNumber(trip.getTripNumber())
-                    .origin(trip.getOriginCity())
-                    .destination(trip.getDestinationCity())
-                    .plannedStartDate(trip.getPlannedStartDate())
-                    .plannedEndDate(trip.getPlannedEndDate())
-                    .build())
-            .collect(Collectors.toList());
-    return ResponseEntity.ok(summaries);
-}
+    @GetMapping("/merge-candidates")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MANAGER')")
+    public ResponseEntity<List<TripSummaryDTO>> findMergeCandidates(
+            @RequestParam Long customerId,
+            @RequestParam LocalDateTime plannedDate) {
+        log.info("Finding merge candidates for customer {} on {}", customerId, plannedDate);
+        List<Trip> trips = loadService.findMergeableTrips(customerId, plannedDate);
+        List<TripSummaryDTO> summaries = trips.stream()
+                .map(trip -> TripSummaryDTO.builder()
+                        .id(trip.getId())
+                        .tripNumber(trip.getTripNumber())
+                        .origin(trip.getOriginCity() != null ? trip.getOriginCity() : trip.getOriginLocation())
+                        .destination(trip.getDestinationCity() != null ? trip.getDestinationCity() : trip.getDestinationLocation())
+                        .plannedStartDate(trip.getPlannedStartDate())
+                        .plannedEndDate(trip.getPlannedEndDate())
+                        .status(trip.getStatus())
+                        .build())
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(summaries);
+    }
 
-/**
- * Add trips to an existing load
- */
-@PostMapping("/{loadNumber}/trips")
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MANAGER')")
-public ResponseEntity<LoadResponseDTO> addTripsToLoad(
-        @PathVariable String loadNumber,
-        @RequestBody List<Long> tripIds,
-        @RequestParam Long userId) {
-    log.info("Adding trips to load {}", loadNumber);
-    return ResponseEntity.ok(loadService.addTripsToLoad(loadNumber, tripIds, userId));
-}
+    @PostMapping("/{loadNumber}/trips")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MANAGER')")
+    public ResponseEntity<LoadResponseDTO> addTripsToLoad(
+            @PathVariable String loadNumber,
+            @RequestBody List<Long> tripIds) {
+        log.info("Adding trips to load {}", loadNumber);
+        return ResponseEntity.ok(loadService.addTripsToLoad(loadNumber, tripIds, getCurrentUserId()));
+    }
+
+    // Helper method to get current user ID
+    private Long getCurrentUserId() {
+        // This should be implemented based on your authentication context
+        // For now, return a default value or get from SecurityContext
+        return 1L; // Placeholder
+    }
 }

@@ -1,3 +1,4 @@
+// src/main/java/com/pgsa/trailers/dto/CreateTripRequest.java
 package com.pgsa.trailers.dto;
 
 import com.pgsa.trailers.enums.TripStatus;
@@ -21,7 +22,12 @@ public class CreateTripRequest {
 
     private Long driverId;
     private Long supervisorId;
-    private Long loadId;
+    
+    /* ========================
+       CUSTOMER & LOAD RELATIONSHIPS
+       ======================== */
+    private Long customerId;  // Link to customer for invoicing
+    private String loadId;    // Link to load for consolidation
 
     /* ========================
        IDENTITY

@@ -39,6 +39,13 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, Lo
     // Count by movement type
     long countByMovementType(String movementType);
 
+
+    @Query("SELECT COALESCE(SUM(sm.quantity), 0) FROM StockMovement sm WHERE sm.movementType = :type AND sm.approvalStatus = 'APPROVED'")
+Integer sumQuantityByMovementType(@Param("type") String type);
+
+@Query("SELECT COALESCE(SUM(sm.quantity), 0) FROM StockMovement sm WHERE sm.itemId = :itemId AND sm.movementType = :type AND sm.approvalStatus = 'APPROVED'")
+Integer sumQuantityByItemAndType(@Param("itemId") Long itemId, @Param("type") String type);
+    
     // Find by date range
     @Query("SELECT sm FROM StockMovement sm WHERE sm.createdAt BETWEEN :startDate AND :endDate")
     List<StockMovement> findByDateRange(@Param("startDate") LocalDateTime startDate,

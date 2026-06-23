@@ -124,10 +124,14 @@ public class LoadService {
     }
 
     @Transactional(readOnly = true)
-    public Page<LoadResponseDTO> searchLoads(String search, Pageable pageable) {
-        return loadRepository.searchLoads(search, pageable)
-                .map(this::mapToResponseDTO);
+public Page<LoadResponseDTO> searchLoads(String search, Pageable pageable) {
+    log.info("Searching loads with term: {}", search);
+    if (search == null || search.trim().isEmpty()) {
+        return getAllLoads(pageable);
     }
+    return loadRepository.searchLoads(search.trim(), pageable)
+            .map(this::mapToResponseDTO);
+}
 
     @Transactional(readOnly = true)
     public List<LoadResponseDTO> getLoadsByCustomer(Long customerId) {

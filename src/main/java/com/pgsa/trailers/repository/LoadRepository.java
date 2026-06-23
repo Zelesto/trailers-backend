@@ -1,3 +1,4 @@
+// src/main/java/com/pgsa/trailers/repository/LoadRepository.java
 package com.pgsa.trailers.repository;
 
 import com.pgsa.trailers.entity.ops.Load;
@@ -83,12 +84,20 @@ public interface LoadRepository extends JpaRepository<Load, Long> {
     
     // ======================== SEARCH ========================
     
+    // Simple search with one parameter
+    @Query("SELECT l FROM Load l WHERE " +
+           "LOWER(l.loadNumber) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "LOWER(l.description) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "LOWER(l.commodityType) LIKE LOWER(CONCAT('%', :search, '%'))")
+    Page<Load> searchLoads(@Param("search") String search, Pageable pageable);
+    
+    // Advanced search with multiple parameters
     @Query("SELECT l FROM Load l WHERE " +
            "(:loadNumber IS NULL OR l.loadNumber LIKE CONCAT('%', :loadNumber, '%')) AND " +
            "(:status IS NULL OR l.status = :status) AND " +
            "(:commodityType IS NULL OR l.commodityType = :commodityType)")
-    Page<Load> searchLoads(@Param("loadNumber") String loadNumber,
-                           @Param("status") String status,
-                           @Param("commodityType") String commodityType,
-                           Pageable pageable);
+    Page<Load> searchLoadsAdvanced(@Param("loadNumber") String loadNumber,
+                                   @Param("status") String status,
+                                   @Param("commodityType") String commodityType,
+                                   Pageable pageable);
 }

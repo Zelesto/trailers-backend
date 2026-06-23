@@ -73,7 +73,7 @@ public class TripResponseMapper {
         // ======================== STATUS ========================
         response.setStatus(trip.getStatus());
         response.setApprovalStatus(trip.getApprovalStatus());
-        response.setPriority(trip.getPriority());
+       // response.setPriority(trip.getPriority());
 
         // ======================== AUDIT ========================
         response.setCreatedAt(trip.getCreatedAt());

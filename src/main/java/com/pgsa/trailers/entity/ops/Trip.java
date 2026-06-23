@@ -1,3 +1,4 @@
+// src/main/java/com/pgsa/trailers/entity/ops/Trip.java
 package com.pgsa.trailers.entity.ops;
 
 import com.pgsa.trailers.entity.assets.Driver;
@@ -26,6 +27,7 @@ import java.time.LocalDateTime;
                 @Index(name = "idx_trip_vehicle", columnList = "vehicle_id"),
                 @Index(name = "idx_trip_driver", columnList = "driver_id"),
                 @Index(name = "idx_trip_load", columnList = "load_id"),
+                @Index(name = "idx_trip_customer", columnList = "customer_id"),
                 @Index(name = "idx_trip_origin_city", columnList = "origin_city"),
                 @Index(name = "idx_trip_destination_city", columnList = "destination_city"),
                 @Index(name = "idx_trip_created_at", columnList = "created_at")
@@ -38,35 +40,81 @@ public class Trip {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-        // Cargo fields
-private String commodityType;
-private String cargoDescription;
-private BigDecimal cargoWeight;
-private BigDecimal cargoValue;
-private Integer palletCount;
-private String containerNumber;
-
-// Notes fields
-private String notes;
-private String specialInstructions;
-
-// Reference fields
-private String referenceNumber;
-private String purchaseOrderNumber;
-
-
     /* ========================
-       Customer
+       Customer Relationship
        ======================== */
-@ManyToOne(fetch = FetchType.LAZY)
+    @Column(name = "customer_id")
+    private Long customerId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id", insertable = false, updatable = false)
     private Customer customer;
 
-        
+    /* ========================
+       Load Relationship
+       ======================== */
+    @Column(name = "load_id")
+    private String loadId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "load_id", referencedColumnName = "load_number", insertable = false, updatable = false)
+    private Load load;
+
+    // Load denormalized fields (for quick access without join)
+    @Column(name = "load_number")
+    private String loadNumber;
+
+    @Column(name = "load_type")
+    private String loadType;
+
+    @Column(name = "load_description")
+    private String loadDescription;
+
+    @Column(name = "load_status")
+    private String loadStatus;
+
+    /* ========================
+       Cargo fields
+       ======================== */
+    @Column(name = "commodity_type", length = 100)
+    private String commodityType;
+
+    @Column(name = "cargo_description", columnDefinition = "TEXT")
+    private String cargoDescription;
+
+    @Column(name = "cargo_weight", precision = 10, scale = 2)
+    private BigDecimal cargoWeight;
+
+    @Column(name = "cargo_value", precision = 15, scale = 2)
+    private BigDecimal cargoValue;
+
+    @Column(name = "pallet_count")
+    private Integer palletCount;
+
+    @Column(name = "container_number", length = 50)
+    private String containerNumber;
+
+    /* ========================
+       Notes fields
+       ======================== */
+    @Column(name = "notes", columnDefinition = "TEXT")
+    private String notes;
+
+    @Column(name = "special_instructions", columnDefinition = "TEXT")
+    private String specialInstructions;
+
+    /* ========================
+       Reference fields
+       ======================== */
+    @Column(name = "reference_number", length = 100)
+    private String referenceNumber;
+
+    @Column(name = "purchase_order_number", length = 100)
+    private String purchaseOrderNumber;
+
     /* ========================
        Identity
        ======================== */
-
     @Column(name = "trip_number", nullable = false, unique = true, length = 50)
     private String tripNumber;
 
@@ -76,7 +124,6 @@ private String purchaseOrderNumber;
     /* ========================
        Relationships
        ======================== */
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "vehicle_id", nullable = false)
     private Vehicle vehicle;
@@ -86,17 +133,12 @@ private String purchaseOrderNumber;
     private Driver driver;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "load_id")
-    private Load load;
-
-    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "supervisor_id")
     private Driver supervisor;
 
     /* ========================
        Planning
        ======================== */
-
     @Column(name = "planned_start_date")
     private LocalDateTime plannedStartDate;
 
@@ -112,7 +154,6 @@ private String purchaseOrderNumber;
     /* ========================
        Locations
        ======================== */
-
     @Column(name = "origin_location", nullable = false)
     private String originLocation;
 
@@ -122,7 +163,6 @@ private String purchaseOrderNumber;
     /* ========================
        Origin Details
        ======================== */
-
     @Column(name = "origin_street_address", length = 255)
     private String originStreetAddress;
 
@@ -144,7 +184,6 @@ private String purchaseOrderNumber;
     /* ========================
        Destination Details
        ======================== */
-
     @Column(name = "destination_street_address", length = 255)
     private String destinationStreetAddress;
 
@@ -166,7 +205,6 @@ private String purchaseOrderNumber;
     /* ========================
        Execution
        ======================== */
-
     @Column(name = "actual_start_date")
     private LocalDateTime actualStartDate;
 
@@ -188,7 +226,6 @@ private String purchaseOrderNumber;
     /* ========================
        Operational Metrics
        ======================== */
-
     @Column(name = "distance_km", precision = 10, scale = 2)
     private BigDecimal distanceKm;
 
@@ -201,13 +238,12 @@ private String purchaseOrderNumber;
     /* ========================
        Costs
        ======================== */
+    @Column(name = "revenue_amount", precision = 15, scale = 2)
+    private BigDecimal revenueAmount;
 
-        @Column(name = "revenue_amount", precision = 15, scale = 2)
-    private BigDecimal revenue_amount;
-        @Column(name = "cost_amount", precision = 15, scale = 2)
-    private BigDecimal cost_amount;
-        
-        
+    @Column(name = "cost_amount", precision = 15, scale = 2)
+    private BigDecimal costAmount;
+
     @Column(name = "toll_cost", precision = 15, scale = 2)
     private BigDecimal tollCost;
 
@@ -217,7 +253,6 @@ private String purchaseOrderNumber;
     /* ========================
        Route Information
        ======================== */
-
     @Column(name = "gps_start_location", length = 255)
     private String gpsStartLocation;
 
@@ -233,9 +268,9 @@ private String purchaseOrderNumber;
     /* ========================
        Notes & Incidents
        ======================== */
-@Column(name = "is_active", nullable = false)
-private Boolean is_active = true;
-        
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
+
     @Column(name = "incidents_logged")
     private Integer incidentsLogged = 0;
 
@@ -245,7 +280,6 @@ private Boolean is_active = true;
     /* ========================
        Workflow
        ======================== */
-
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50, nullable = false)
     private TripStatus status;
@@ -259,7 +293,6 @@ private Boolean is_active = true;
     /* ========================
        Cancellation
        ======================== */
-
     @Column(name = "cancelled_at")
     private LocalDateTime cancelledAt;
 
@@ -269,7 +302,6 @@ private Boolean is_active = true;
     /* ========================
        Audit
        ======================== */
-
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -292,14 +324,9 @@ private Boolean is_active = true;
     @Column(name = "audit_trail", columnDefinition = "TEXT")
     private String auditTrail;
 
-    //@Version
-    //@Column(name = "version")
-    //private Integer version;
-
     /* ========================
        Metrics
        ======================== */
-
     @OneToOne(
             mappedBy = "trip",
             cascade = CascadeType.ALL,
@@ -417,6 +444,9 @@ private Boolean is_active = true;
         }
         if (lastStatusUpdate == null) {
             lastStatusUpdate = LocalDateTime.now();
+        }
+        if (isActive == null) {
+            isActive = true;
         }
         updateOriginLocationFromComponents();
         updateDestinationLocationFromComponents();

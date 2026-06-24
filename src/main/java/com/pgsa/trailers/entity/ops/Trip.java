@@ -53,12 +53,12 @@ public class Trip {
     /* ========================
        Load Relationship
        ======================== */
-    @Column(name = "load_id")
-    private String loadId;
+        @Column(name = "load_id")
+        private Long loadId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "load_id", referencedColumnName = "load_number", insertable = false, updatable = false)
-    private Load load;
+        @ManyToOne(fetch = FetchType.LAZY)
+        @JoinColumn(name = "load_id", referencedColumnName = "id", insertable = false, updatable = false)
+        private Load load;
 
     // Load denormalized fields (for quick access without join)
     @Column(name = "load_number")

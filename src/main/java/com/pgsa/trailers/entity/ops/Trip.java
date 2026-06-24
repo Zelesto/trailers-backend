@@ -44,7 +44,7 @@ public class Trip {
        Customer Relationship
        ======================== */
     @Column(name = "customer_id")
-    private String customerId;
+    private Long customerId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id", insertable = false, updatable = false)

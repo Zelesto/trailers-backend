@@ -7,6 +7,7 @@ import com.pgsa.trailers.entity.assets.Driver;
 import com.pgsa.trailers.entity.assets.Vehicle;
 import com.pgsa.trailers.entity.ops.Customer;
 import com.pgsa.trailers.entity.ops.CreateTripMapper;
+import com.pgsa.trailers.entity.ops.Load;  // ADDED IMPORT
 import com.pgsa.trailers.entity.ops.Trip;
 import com.pgsa.trailers.entity.ops.TripResponseMapper;
 import com.pgsa.trailers.entity.ops.auto.TripCompletedEvent;
@@ -100,7 +101,7 @@ public class TripService {
             trip.setCustomerId(customer.getId());
         }
 
-        // Handle load ID if provided - FIXED: loadId is now Long
+        // Handle load ID if provided - loadId is now Long
         if (request.getLoadId() != null && request.getLoadId() > 0) {
             // Fetch the load entity to set on the trip
             Load load = loadRepository.findById(request.getLoadId())
@@ -350,6 +351,13 @@ public class TripService {
         log.info("Load assigned to trip {}: {}", tripId, loadId);
         
         return tripResponseMapper.toResponse(updated);
+    }
+
+    /**
+     * Generate a new load ID
+     */
+    public String generateLoadId() {
+        return "LD-" + System.currentTimeMillis();
     }
 
     /**

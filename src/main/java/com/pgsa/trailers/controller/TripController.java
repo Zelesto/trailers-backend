@@ -1,9 +1,12 @@
 package com.pgsa.trailers.controller;
 
 import com.pgsa.trailers.dto.*;
+import com.pgsa.trailers.entity.ops.Trip;  // ADD THIS IMPORT
+import com.pgsa.trailers.entity.ops.TripResponseMapper;  // ADD THIS IMPORT
 import com.pgsa.trailers.entity.security.AppUser;
 import com.pgsa.trailers.enums.TripStatus;
 import com.pgsa.trailers.repository.AppUserRepository;
+import com.pgsa.trailers.repository.TripRepository;  // ADD THIS IMPORT
 import com.pgsa.trailers.service.TripService;
 import com.pgsa.trailers.service.TripFinalisationService;
 import lombok.RequiredArgsConstructor;
@@ -26,8 +29,10 @@ import jakarta.validation.Valid;
 public class TripController {
 
     private final TripService tripService;
-    private final TripFinalisationService tripFinalisationService;  // ADD THIS
+    private final TripFinalisationService tripFinalisationService;
     private final AppUserRepository appUserRepository;
+    private final TripRepository tripRepository;  // ADD THIS
+    private final TripResponseMapper tripResponseMapper;  // ADD THIS
 
     /* ========================
        CREATE
@@ -62,22 +67,18 @@ public class TripController {
         return ResponseEntity.ok(tripService.listTrips(pageable));
     }
 
-
-
-@GetMapping("/without-load")
-public ResponseEntity<?> getTripsWithoutLoad(Pageable pageable) {
-    log.info("Fetching trips without load assigned");
-    
-    Page<Trip> trips = tripRepository.findByLoadIdIsNull(pageable);
-    // Or if you want to filter for empty string as well:
-    // Page<Trip> trips = tripRepository.findByLoadIdIsNullOrLoadIdEmpty(pageable);
-    
-    Page<TripResponse> responses = trips.map(tripResponseMapper::toResponse);
-    return ResponseEntity.ok(responses);
-}
+    @GetMapping("/without-load")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'MANAGER')")
+    public ResponseEntity<Page<TripResponse>> getTripsWithoutLoad(Pageable pageable) {
+        log.info("Fetching trips without load assigned");
+        
+        Page<Trip> trips = tripRepository.findByLoadIdIsNull(pageable);
+        Page<TripResponse> responses = trips.map(tripResponseMapper::toResponse);
+        return ResponseEntity.ok(responses);
+    }
     
     /* ========================
-       FINALIZE TRIP - ADD THIS
+       FINALIZE TRIP
        ======================== */
     @PostMapping("/{id}/finalize")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'MANAGER')")
@@ -94,7 +95,7 @@ public ResponseEntity<?> getTripsWithoutLoad(Pageable pageable) {
     }
 
     /* ========================
-       CAN FINALIZE CHECK - ADD THIS
+       CAN FINALIZE CHECK
        ======================== */
     @GetMapping("/{id}/can-finalize")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'MANAGER')")

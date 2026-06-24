@@ -52,6 +52,15 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     boolean existsByTripNumber(String tripNumber);
     
     // ======================== ADVANCED QUERIES ========================
+
+
+
+    Page<Trip> findByLoadIdIsNull(Pageable pageable);
+
+// If you want to check for both null and empty string
+@Query("SELECT t FROM Trip t WHERE t.loadId IS NULL OR t.loadId = ''")
+Page<Trip> findByLoadIdIsNullOrEmpty(Pageable pageable);
+
     
     @Query("SELECT t FROM Trip t WHERE " +
             "(:driverId IS NULL OR t.driver.id = :driverId) AND " +

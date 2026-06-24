@@ -62,6 +62,20 @@ public class TripController {
         return ResponseEntity.ok(tripService.listTrips(pageable));
     }
 
+
+
+@GetMapping("/without-load")
+public ResponseEntity<?> getTripsWithoutLoad(Pageable pageable) {
+    log.info("Fetching trips without load assigned");
+    
+    Page<Trip> trips = tripRepository.findByLoadIdIsNull(pageable);
+    // Or if you want to filter for empty string as well:
+    // Page<Trip> trips = tripRepository.findByLoadIdIsNullOrLoadIdEmpty(pageable);
+    
+    Page<TripResponse> responses = trips.map(tripResponseMapper::toResponse);
+    return ResponseEntity.ok(responses);
+}
+    
     /* ========================
        FINALIZE TRIP - ADD THIS
        ======================== */

@@ -1,31 +1,18 @@
 package com.pgsa.trailers.entity.ops;
 
 import com.pgsa.trailers.dto.CreateTripRequest;
-import com.pgsa.trailers.entity.assets.Driver;
-import com.pgsa.trailers.entity.assets.Vehicle;
 import com.pgsa.trailers.enums.TripStatus;
-import com.pgsa.trailers.repository.CustomerRepository;
-import com.pgsa.trailers.repository.DriverRepository;
-import com.pgsa.trailers.repository.LoadRepository;
-import com.pgsa.trailers.repository.VehicleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class CreateTripMapper {
-
-    private final VehicleRepository vehicleRepository;
-    private final DriverRepository driverRepository;
-    private final LoadRepository loadRepository;
-    private final CustomerRepository customerRepository;
 
     public Trip toEntity(CreateTripRequest request) {
         if (request == null) {
@@ -34,97 +21,8 @@ public class CreateTripMapper {
 
         Trip trip = new Trip();
 
-        /* ========================
-           GENERATE TRIP NUMBER (REQUIRED)
-           ======================== */
-        trip.setTripNumber(generateTripNumber());
-
-        /* ========================
-           REQUIRED RELATIONSHIPS
-           ======================== */
-        // Vehicle is REQUIRED (nullable = false)
-        if (request.getVehicleId() == null) {
-            throw new IllegalArgumentException("Vehicle ID is required for trip creation");
-        }
-        Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found with ID: " + request.getVehicleId()));
-        trip.setVehicle(vehicle);
-
-        // Driver is optional
-        if (request.getDriverId() != null) {
-            Driver driver = driverRepository.findById(request.getDriverId())
-                    .orElseThrow(() -> new IllegalArgumentException("Driver not found with ID: " + request.getDriverId()));
-            trip.setDriver(driver);
-        }
-
-        // Supervisor is optional
-        if (request.getSupervisorId() != null) {
-            Driver supervisor = driverRepository.findById(request.getSupervisorId())
-                    .orElseThrow(() -> new IllegalArgumentException("Supervisor not found with ID: " + request.getSupervisorId()));
-            trip.setSupervisor(supervisor);
-        }
-
-        /* ========================
-           CUSTOMER RELATIONSHIP
-           ======================== */
-        if (request.getCustomerId() != null && request.getCustomerId() > 0) {
-            Customer customer = customerRepository.findById(request.getCustomerId())
-                    .orElseThrow(() -> new IllegalArgumentException("Customer not found with ID: " + request.getCustomerId()));
-            trip.setCustomerId(customer.getId());
-        }
-
-        /* ========================
-           LOAD RELATIONSHIP
-           ======================== */
-        if (request.getLoadId() != null && !request.getLoadId().isEmpty()) {
-            try {
-                Load load = loadRepository.findByLoadNumber(request.getLoadId())
-                        .orElse(null);
-                if (load != null) {
-                    trip.setLoad(load);
-                    trip.setLoadId(load.getLoadNumber());
-                    trip.setLoadNumber(load.getLoadNumber());
-                    trip.setLoadType(load.getCommodityType());
-                    trip.setLoadDescription(load.getDescription());
-                    trip.setLoadStatus(load.getStatus());
-                } else {
-                    log.warn("Load not found with number: {}", request.getLoadId());
-                }
-            } catch (Exception e) {
-                log.warn("Error loading load with number: {}", request.getLoadId(), e);
-            }
-        }
-
-        /* ========================
-           REQUIRED LOCATIONS (nullable = false)
-           ======================== */
-        // Set origin location - must not be null
-        if (request.getOriginLocation() != null && !request.getOriginLocation().isEmpty()) {
-            trip.setOriginLocation(request.getOriginLocation());
-        } else {
-            // Build from components or set a default
-            String builtOrigin = buildLocationFromComponents(
-                request.getOriginStreetAddress(),
-                request.getOriginCity(),
-                request.getOriginZipCode(),
-                request.getOriginProvince()
-            );
-            trip.setOriginLocation(builtOrigin.isEmpty() ? "Unknown Origin" : builtOrigin);
-        }
-
-        // Set destination location - must not be null
-        if (request.getDestinationLocation() != null && !request.getDestinationLocation().isEmpty()) {
-            trip.setDestinationLocation(request.getDestinationLocation());
-        } else {
-            // Build from components or set a default
-            String builtDestination = buildLocationFromComponents(
-                request.getDestinationStreetAddress(),
-                request.getDestinationCity(),
-                request.getDestinationZipCode(),
-                request.getDestinationProvince()
-            );
-            trip.setDestinationLocation(builtDestination.isEmpty() ? "Unknown Destination" : builtDestination);
-        }
+        // NOTE: tripNumber is set by the service using TripNumberGenerator
+        // NOTE: vehicle, driver, supervisor, customer, load are set by the service
 
         /* ========================
            IDENTITY
@@ -191,6 +89,42 @@ public class CreateTripMapper {
         }
 
         /* ========================
+           ORIGIN LOCATION (REQUIRED)
+           ======================== */
+        // Origin location is required (nullable = false)
+        if (request.getOriginLocation() != null && !request.getOriginLocation().isEmpty()) {
+            trip.setOriginLocation(request.getOriginLocation());
+        } else {
+            // Build from components
+            String builtOrigin = buildLocationFromComponents(
+                request.getOriginStreetAddress(),
+                request.getOriginCity(),
+                request.getOriginZipCode(),
+                request.getOriginProvince()
+            );
+            // If still empty, set a default to avoid NOT NULL constraint violation
+            trip.setOriginLocation(builtOrigin.isEmpty() ? "Origin not specified" : builtOrigin);
+        }
+
+        /* ========================
+           DESTINATION LOCATION (REQUIRED)
+           ======================== */
+        // Destination location is required (nullable = false)
+        if (request.getDestinationLocation() != null && !request.getDestinationLocation().isEmpty()) {
+            trip.setDestinationLocation(request.getDestinationLocation());
+        } else {
+            // Build from components
+            String builtDestination = buildLocationFromComponents(
+                request.getDestinationStreetAddress(),
+                request.getDestinationCity(),
+                request.getDestinationZipCode(),
+                request.getDestinationProvince()
+            );
+            // If still empty, set a default to avoid NOT NULL constraint violation
+            trip.setDestinationLocation(builtDestination.isEmpty() ? "Destination not specified" : builtDestination);
+        }
+
+        /* ========================
            ORIGIN DETAILS
            ======================== */
         trip.setOriginStreetAddress(request.getOriginStreetAddress());
@@ -248,12 +182,10 @@ public class CreateTripMapper {
         trip.setLastStatusUpdate(LocalDateTime.now());
         trip.setIsActive(true);
 
-        log.debug("Mapped CreateTripRequest to Trip entity with tripNumber: {}", trip.getTripNumber());
+        log.debug("Mapped CreateTripRequest to Trip entity");
         
         return trip;
     }
-
-    
 
     /**
      * Build a location string from components

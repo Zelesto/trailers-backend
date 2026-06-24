@@ -27,7 +27,7 @@ public class CreateTripRequest {
        CUSTOMER & LOAD RELATIONSHIPS
        ======================== */
     private Long customerId;  // Link to customer for invoicing
-    private Long loadId;    // Link to load for consolidation
+    private String loadId;    // Link to load for consolidation
 
     /* ========================
        IDENTITY

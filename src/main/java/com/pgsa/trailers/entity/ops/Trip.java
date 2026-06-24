@@ -44,7 +44,7 @@ public class Trip {
        Customer Relationship
        ======================== */
     @Column(name = "customer_id")
-    private Long customerId;
+    private String customerId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id", insertable = false, updatable = false)
@@ -54,10 +54,10 @@ public class Trip {
        Load Relationship
        ======================== */
         @Column(name = "load_id")
-        private Long loadId;
+        private String loadId;
 
         @ManyToOne(fetch = FetchType.LAZY)
-        @JoinColumn(name = "load_id", referencedColumnName = "id", insertable = false, updatable = false)
+        @JoinColumn(name = "load_id", referencedColumnName = "load_number", insertable = false, updatable = false)
         private Load load;
 
     // Load denormalized fields (for quick access without join)

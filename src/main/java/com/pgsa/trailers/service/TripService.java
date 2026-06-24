@@ -58,32 +58,32 @@ public class TripService {
        CREATE
        ======================== */
     @Transactional
-    public TripResponse createTrip(CreateTripRequest request, Long userId) {
+public TripResponse createTrip(CreateTripRequest request, Long userId) {
 
-        log.debug("Creating trip for vehicle: {}, user: {}", request.getVehicleId(), userId);
+    log.debug("Creating trip for vehicle: {}, user: {}", request.getVehicleId(), userId);
 
-        tripValidator.validateCreateRequest(request);
+    tripValidator.validateCreateRequest(request);
 
-        Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
+    Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
+            .orElseThrow(() -> new TripValidationException(
+                    "Vehicle not found with ID: " + request.getVehicleId()));
+
+    Driver driver = null;
+    if (request.getDriverId() != null) {
+        driver = driverRepository.findById(request.getDriverId())
                 .orElseThrow(() -> new TripValidationException(
-                        "Vehicle not found with ID: " + request.getVehicleId()));
+                        "Driver not found with ID: " + request.getDriverId()));
+    }
 
-        Driver driver = null;
-        if (request.getDriverId() != null) {
-            driver = driverRepository.findById(request.getDriverId())
-                    .orElseThrow(() -> new TripValidationException(
-                            "Driver not found with ID: " + request.getDriverId()));
-        }
+    Driver supervisor = null;
+    if (request.getSupervisorId() != null) {
+        supervisor = driverRepository.findById(request.getSupervisorId())
+                .orElseThrow(() -> new TripValidationException(
+                        "Supervisor not found with ID: " + request.getSupervisorId()));
+    }
 
-        Driver supervisor = null;
-        if (request.getSupervisorId() != null) {
-            supervisor = driverRepository.findById(request.getSupervisorId())
-                    .orElseThrow(() -> new TripValidationException(
-                            "Supervisor not found with ID: " + request.getSupervisorId()));
-        }
-
-        // Validate customer if provided
-        Customer customer = null;
+    // Validate customer if provided
+    Customer customer = null;
     if (request.getCustomerId() != null && request.getCustomerId() > 0) {
         customer = customerRepository.findById(request.getCustomerId())
                 .orElseThrow(() -> new TripValidationException(
@@ -106,10 +106,7 @@ public class TripService {
         trip.setLoadId(request.getLoadId());
     }
 
-    // Set priority if provided
-    if (request.getPriority() != null) {
-        trip.setPriority(request.getPriority());
-    }
+    // REMOVED: trip.setPriority(request.getPriority()); - Entity doesn't have this field
 
     trip.setTripNumber(tripNumberGenerator.generate());
     trip.setStatus(request.getStatus() != null ? request.getStatus() : TripStatus.DRAFT);

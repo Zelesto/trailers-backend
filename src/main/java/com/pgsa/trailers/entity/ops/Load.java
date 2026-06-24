@@ -1,4 +1,3 @@
-// src/main/java/com/pgsa/trailers/entity/ops/Load.java
 package com.pgsa.trailers.entity.ops;
 
 import com.pgsa.trailers.config.BaseEntity;
@@ -10,6 +9,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,9 +17,9 @@ import java.util.List;
 @Getter
 @Setter
 @Entity
-@Builder  // Add this
-@NoArgsConstructor  // Add this
-@AllArgsConstructor  // Add this
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @Table(name = "load", indexes = {
         @Index(name = "idx_load_load_number", columnList = "load_number", unique = true),
         @Index(name = "idx_load_status", columnList = "status"),
@@ -80,10 +80,64 @@ public class Load extends BaseEntity {
     @Column(name = "priority", length = 20)
     private String priority;
 
+    // ======================== NEW FIELDS FROM DATABASE ========================
+    
+    @Column(name = "origin_location", length = 255)
+    private String originLocation;
+
+    @Column(name = "destination_location", length = 255)
+    private String destinationLocation;
+
+    @Column(name = "handling_instructions", columnDefinition = "TEXT")
+    private String handlingInstructions;
+
+    @Column(name = "packaging_type", length = 50)
+    private String packagingType;
+
+    @Column(name = "hazard_class", length = 50)
+    private String hazardClass;
+
+    @Column(name = "temperature_requirements", length = 50)
+    private String temperatureRequirements;
+
+    @Column(name = "trips_count")
+    private Integer tripsCount = 0;
+
+    @Column(name = "total_distance_km")
+    private Integer totalDistanceKm = 0;
+
+    @Column(name = "total_hours_active")
+    private Integer totalHoursActive = 0;
+
+    @Column(name = "incidents_logged")
+    private Integer incidentsLogged = 0;
+
+    @Column(name = "insurance_policy_number", length = 100)
+    private String insurancePolicyNumber;
+
+    @Column(name = "insurance_expiry")
+    private LocalDate insuranceExpiry;
+
+    @Column(name = "customs_clearance_status", length = 50)
+    private String customsClearanceStatus;
+
+    @Column(name = "warehouse_id")
+    private Long warehouseId;
+
+    @Column(name = "supervisor_id")
+    private Long supervisorId;
+
+    @Column(name = "last_status_update")
+    private LocalDateTime lastStatusUpdate;
+
+    @Column(name = "audit_trail", columnDefinition = "json")
+    private String auditTrail;
+
     @OneToMany(mappedBy = "load", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Trip> trips = new ArrayList<>();
 
-    // Helper methods
+    // ======================== HELPER METHODS ========================
+    
     public void addTrip(Trip trip) {
         trips.add(trip);
         trip.setLoad(this);
@@ -91,6 +145,10 @@ public class Load extends BaseEntity {
         trip.setLoadType(this.commodityType);
         trip.setLoadDescription(this.description);
         trip.setLoadStatus(this.status);
+        if (this.tripsCount == null) {
+            this.tripsCount = 0;
+        }
+        this.tripsCount++;
     }
 
     public void removeTrip(Trip trip) {
@@ -100,6 +158,9 @@ public class Load extends BaseEntity {
         trip.setLoadType(null);
         trip.setLoadDescription(null);
         trip.setLoadStatus(null);
+        if (this.tripsCount != null && this.tripsCount > 0) {
+            this.tripsCount--;
+        }
     }
 
     public boolean isEmpty() {
@@ -147,6 +208,21 @@ public class Load extends BaseEntity {
         if (hazardousMaterial == null) {
             hazardousMaterial = false;
         }
+        if (tripsCount == null) {
+            tripsCount = 0;
+        }
+        if (totalDistanceKm == null) {
+            totalDistanceKm = 0;
+        }
+        if (totalHoursActive == null) {
+            totalHoursActive = 0;
+        }
+        if (incidentsLogged == null) {
+            incidentsLogged = 0;
+        }
+        if (lastStatusUpdate == null) {
+            lastStatusUpdate = LocalDateTime.now();
+        }
     }
 
     @PreUpdate
@@ -159,6 +235,8 @@ public class Load extends BaseEntity {
                 trip.setLoadStatus(this.status);
             }
         }
+        lastStatusUpdate = LocalDateTime.now();
+        tripsCount = trips != null ? trips.size() : 0;
     }
 
     public String getType() {

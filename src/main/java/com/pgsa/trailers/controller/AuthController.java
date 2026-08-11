@@ -152,6 +152,7 @@ public class AuthController {
     // ========== AUTH ENDPOINTS ==========
     
     @PostMapping("/login")
+    @Transactional
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
         log.info("Login attempt for email: {}", request.getEmail());
 

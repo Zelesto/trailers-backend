@@ -21,10 +21,6 @@ public class EnumService {
 
     private final EnumMasterRepository enumRepository;
 
-    // ============================================================
-    // READ OPERATIONS
-    // ============================================================
-
     @Cacheable(value = "enums", key = "#moduleName + ':' + #category")
     @Transactional(readOnly = true)
     public List<EnumMaster> getEnums(String moduleName, String category) {
@@ -80,11 +76,9 @@ public class EnumService {
 
     @Transactional
     public EnumMaster createEnum(EnumMaster enumMaster) {
-        // Prevent creation of system enums
         if (enumMaster.getIsSystem() != null && enumMaster.getIsSystem()) {
             throw new RuntimeException("Cannot create system enums manually");
         }
-        
         log.info("Creating custom enum: {} - {}", enumMaster.getModuleName(), enumMaster.getCode());
         return enumRepository.save(enumMaster);
     }
@@ -99,18 +93,14 @@ public class EnumService {
         EnumMaster existing = enumRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Enum not found with ID: " + id));
         
-        // Check if system enum can be modified
         if (existing.getIsSystem() && !enumMaster.getIsEditable()) {
-            // System enums can only update display name, description, color, icon
             existing.setDisplayName(enumMaster.getDisplayName());
             existing.setDescription(enumMaster.getDescription());
             existing.setColorCode(enumMaster.getColorCode());
             existing.setIconName(enumMaster.getIconName());
         } else if (existing.getIsSystem()) {
-            // System enums cannot be made inactive, or have their code changed
             throw new RuntimeException("System enums cannot be modified beyond display properties");
         } else {
-            // Custom enums can be fully updated
             existing.setDisplayName(enumMaster.getDisplayName());
             existing.setDescription(enumMaster.getDescription());
             existing.setSortOrder(enumMaster.getSortOrder());
@@ -135,44 +125,11 @@ public class EnumService {
         EnumMaster enumMaster = enumRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Enum not found with ID: " + id));
         
-        // Check if system enum can be deleted
         if (enumMaster.getIsSystem() && !enumMaster.getIsDeletable()) {
             throw new RuntimeException("System enums cannot be deleted");
         }
         
-        // Check if enum is in use
-        if (isEnumInUse(enumMaster)) {
-            throw new RuntimeException("Enum is currently in use and cannot be deleted");
-        }
-        
         enumRepository.deleteById(id);
         log.info("Deleted enum: {} - {}", enumMaster.getModuleName(), enumMaster.getCode());
-    }
-
-    // ============================================================
-    // VALIDATION HELPERS
-    // ============================================================
-
-    @Transactional(readOnly = true)
-    public boolean isEnumInUse(EnumMaster enumMaster) {
-        // This would check if any records are using this enum value
-        // Implementation depends on your data model
-        return false;
-    }
-
-    @Transactional(readOnly = true)
-    public boolean canModify(EnumMaster enumMaster) {
-        if (enumMaster.getIsSystem()) {
-            return enumMaster.getIsEditable() != null && enumMaster.getIsEditable();
-        }
-        return true;
-    }
-
-    @Transactional(readOnly = true)
-    public boolean canDelete(EnumMaster enumMaster) {
-        if (enumMaster.getIsSystem()) {
-            return enumMaster.getIsDeletable() != null && enumMaster.getIsDeletable();
-        }
-        return true;
     }
 }

@@ -10,8 +10,8 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Map;
+import java.time.LocalDateTime;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -21,19 +21,24 @@ public class EnumService {
 
     private final EnumMasterRepository enumRepository;
 
-    @Cacheable(value = "enums", key = "#moduleName + ':' + #category")
+    // ============================================================
+    // READ OPERATIONS
+    // ============================================================
+
+    @Cacheable(value = "enums", key = "#moduleName + ':' + #category + ':' + (#includeInactive ? 'all' : 'active')")
     @Transactional(readOnly = true)
-    public List<EnumMaster> getEnums(String moduleName, String category) {
-        log.info("Fetching enums for module: {}, category: {}", moduleName, category);
-        return enumRepository.findByModuleNameAndCategoryAndIsActiveTrueOrderBySortOrder(
-            moduleName, category
-        );
+    public List<EnumMaster> getEnums(String moduleName, String category, Boolean includeInactive) {
+        log.info("Fetching enums for module: {}, category: {}, includeInactive: {}", moduleName, category, includeInactive);
+        
+        if (Boolean.TRUE.equals(includeInactive)) {
+            return enumRepository.findByModuleNameAndCategoryOrderBySortOrder(moduleName, category);
+        }
+        return enumRepository.findByModuleNameAndCategoryAndIsActiveTrueOrderBySortOrder(moduleName, category);
     }
 
     @Cacheable(value = "enums", key = "#moduleName + ':' + #category + ':system'")
     @Transactional(readOnly = true)
     public List<EnumMaster> getSystemEnums(String moduleName, String category) {
-        log.info("Fetching system enums for module: {}, category: {}", moduleName, category);
         return enumRepository.findByModuleNameAndCategoryAndIsSystemTrueAndIsActiveTrueOrderBySortOrder(
             moduleName, category
         );
@@ -42,7 +47,6 @@ public class EnumService {
     @Cacheable(value = "enums", key = "#moduleName + ':' + #category + ':custom'")
     @Transactional(readOnly = true)
     public List<EnumMaster> getCustomEnums(String moduleName, String category) {
-        log.info("Fetching custom enums for module: {}, category: {}", moduleName, category);
         return enumRepository.findByModuleNameAndCategoryAndIsSystemFalseAndIsActiveTrueOrderBySortOrder(
             moduleName, category
         );
@@ -51,9 +55,13 @@ public class EnumService {
     @Cacheable(value = "enums", key = "#moduleName + ':ALL'")
     @Transactional(readOnly = true)
     public Map<String, List<EnumMaster>> getEnumsByModule(String moduleName) {
-        return enumRepository.findByModuleNameAndIsActiveTrue(moduleName)
-            .stream()
-            .collect(Collectors.groupingBy(EnumMaster::getCategory));
+        List<EnumMaster> enums = enumRepository.findByModuleNameAndIsActiveTrue(moduleName);
+        return enums.stream().collect(Collectors.groupingBy(EnumMaster::getCategory));
+    }
+
+    @Transactional(readOnly = true)
+    public EnumMaster getEnumById(Long id) {
+        return enumRepository.findById(id).orElse(null);
     }
 
     @Cacheable(value = "enumCodes", key = "#moduleName + ':' + #category + ':' + #code")
@@ -70,16 +78,51 @@ public class EnumService {
             .orElse(null);
     }
 
+    @Transactional(readOnly = true)
+    public List<String> getEnumTypes() {
+        return enumRepository.findDistinctCategories();
+    }
+
+    @Transactional(readOnly = true)
+    public List<String> getModules() {
+        return enumRepository.findDistinctModules();
+    }
+
     // ============================================================
     // CREATE OPERATIONS
     // ============================================================
 
     @Transactional
+    @CacheEvict(value = {"enums", "enumCodes", "enumDefaults"}, allEntries = true)
     public EnumMaster createEnum(EnumMaster enumMaster) {
+        // Validate
         if (enumMaster.getIsSystem() != null && enumMaster.getIsSystem()) {
             throw new RuntimeException("Cannot create system enums manually");
         }
-        log.info("Creating custom enum: {} - {}", enumMaster.getModuleName(), enumMaster.getCode());
+
+        // Check for duplicates
+        Optional<EnumMaster> existing = enumRepository.findByModuleNameAndCategoryAndCode(
+            enumMaster.getModuleName(),
+            enumMaster.getCategory(),
+            enumMaster.getCode()
+        );
+        
+        if (existing.isPresent()) {
+            throw new RuntimeException("Enum already exists: " + enumMaster.getCode());
+        }
+
+        // Set defaults
+        if (enumMaster.getSortOrder() == null) enumMaster.setSortOrder(0);
+        if (enumMaster.getIsDefault() == null) enumMaster.setIsDefault(false);
+        if (enumMaster.getIsActive() == null) enumMaster.setIsActive(true);
+        if (enumMaster.getIsSystem() == null) enumMaster.setIsSystem(false);
+        if (enumMaster.getIsEditable() == null) enumMaster.setIsEditable(true);
+        if (enumMaster.getIsDeletable() == null) enumMaster.setIsDeletable(true);
+
+        enumMaster.setCreatedAt(LocalDateTime.now());
+        enumMaster.setUpdatedAt(LocalDateTime.now());
+
+        log.info("Creating custom enum: {} - {} - {}", enumMaster.getModuleName(), enumMaster.getCategory(), enumMaster.getCode());
         return enumRepository.save(enumMaster);
     }
 
@@ -93,25 +136,38 @@ public class EnumService {
         EnumMaster existing = enumRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Enum not found with ID: " + id));
         
-        if (existing.getIsSystem() && !enumMaster.getIsEditable()) {
+        // Update fields
+        if (enumMaster.getDisplayName() != null) {
             existing.setDisplayName(enumMaster.getDisplayName());
+        }
+        if (enumMaster.getDescription() != null) {
             existing.setDescription(enumMaster.getDescription());
-            existing.setColorCode(enumMaster.getColorCode());
-            existing.setIconName(enumMaster.getIconName());
-        } else if (existing.getIsSystem()) {
-            throw new RuntimeException("System enums cannot be modified beyond display properties");
-        } else {
-            existing.setDisplayName(enumMaster.getDisplayName());
-            existing.setDescription(enumMaster.getDescription());
+        }
+        if (enumMaster.getSortOrder() != null) {
             existing.setSortOrder(enumMaster.getSortOrder());
+        }
+        if (enumMaster.getIsDefault() != null) {
             existing.setIsDefault(enumMaster.getIsDefault());
+        }
+        if (enumMaster.getIsActive() != null) {
             existing.setIsActive(enumMaster.getIsActive());
+        }
+        if (enumMaster.getColorCode() != null) {
             existing.setColorCode(enumMaster.getColorCode());
+        }
+        if (enumMaster.getIconName() != null) {
             existing.setIconName(enumMaster.getIconName());
+        }
+        if (enumMaster.getMetadata() != null) {
             existing.setMetadata(enumMaster.getMetadata());
         }
+        if (enumMaster.getUpdatedBy() != null) {
+            existing.setUpdatedBy(enumMaster.getUpdatedBy());
+        }
         
-        existing.setUpdatedBy(enumMaster.getUpdatedBy());
+        existing.setUpdatedAt(LocalDateTime.now());
+
+        log.info("Updating enum: {} - {}", existing.getModuleName(), existing.getCode());
         return enumRepository.save(existing);
     }
 
@@ -121,7 +177,7 @@ public class EnumService {
 
     @Transactional
     @CacheEvict(value = {"enums", "enumCodes", "enumDefaults"}, allEntries = true)
-    public void deleteEnum(Long id) {
+    public void deleteEnum(Long id, String updatedBy) {
         EnumMaster enumMaster = enumRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Enum not found with ID: " + id));
         
@@ -129,7 +185,32 @@ public class EnumService {
             throw new RuntimeException("System enums cannot be deleted");
         }
         
-        enumRepository.deleteById(id);
-        log.info("Deleted enum: {} - {}", enumMaster.getModuleName(), enumMaster.getCode());
+        // Soft delete - just deactivate
+        enumMaster.setIsActive(false);
+        enumMaster.setUpdatedBy(updatedBy);
+        enumMaster.setUpdatedAt(LocalDateTime.now());
+        
+        enumRepository.save(enumMaster);
+        log.info("Soft deleted enum: {} - {}", enumMaster.getModuleName(), enumMaster.getCode());
+    }
+
+    @Transactional
+    @CacheEvict(value = {"enums", "enumCodes", "enumDefaults"}, allEntries = true)
+    public EnumMaster toggleEnumStatus(Long id, String updatedBy) {
+        EnumMaster enumMaster = enumRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Enum not found with ID: " + id));
+        
+        if (enumMaster.getIsSystem() && !enumMaster.getIsEditable()) {
+            throw new RuntimeException("Cannot modify system enum status");
+        }
+        
+        enumMaster.setIsActive(!enumMaster.getIsActive());
+        enumMaster.setUpdatedBy(updatedBy);
+        enumMaster.setUpdatedAt(LocalDateTime.now());
+        
+        log.info("Toggled enum status: {} - {} -> active: {}", 
+            enumMaster.getModuleName(), enumMaster.getCode(), enumMaster.getIsActive());
+        
+        return enumRepository.save(enumMaster);
     }
 }

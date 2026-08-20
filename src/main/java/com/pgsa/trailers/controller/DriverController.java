@@ -2,7 +2,7 @@ package com.pgsa.trailers.controller;
 
 import com.pgsa.trailers.dto.DriverDTO;
 import com.pgsa.trailers.dto.DriverRequest;
-import com.pgsa.trailers.enums.DriverStatus;
+
 import com.pgsa.trailers.service.DriverService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -62,20 +62,11 @@ public class DriverController {
     }
 
     @GetMapping("/status/{status}")
-    public ResponseEntity<List<DriverDTO>> getDriversByStatus(@PathVariable String status) {
-        log.info("GET /api/drivers/status/{}", status);
-        try {
-            DriverStatus driverStatus = DriverStatus.valueOf(status.toUpperCase());
-            List<DriverDTO> drivers = driverService.getDriversByStatus(driverStatus);
-            return ResponseEntity.ok(drivers);
-        } catch (IllegalArgumentException e) {
-            log.error("Invalid status: {}", status);
-            return ResponseEntity.badRequest().build();
-        } catch (Exception e) {
-            log.error("Error fetching drivers by status {}: {}", status, e.getMessage(), e);
-            return ResponseEntity.internalServerError().build();
-        }
-    }
+public ResponseEntity<List<DriverDTO>> getDriversByStatus(@PathVariable String status) {
+    // Pass the string directly
+    List<DriverDTO> drivers = driverService.getDriversByStatus(status);
+    return ResponseEntity.ok(drivers);
+}
 
     // ====== POST Endpoints ======
     

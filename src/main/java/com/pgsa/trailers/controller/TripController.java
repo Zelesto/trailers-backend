@@ -6,7 +6,6 @@ import com.pgsa.trailers.dto.*;
 import com.pgsa.trailers.entity.ops.Trip;
 import com.pgsa.trailers.entity.ops.TripResponseMapper;
 import com.pgsa.trailers.entity.security.AppUser;
-import com.pgsa.trailers.enums.TripStatus;
 import com.pgsa.trailers.repository.AppUserRepository;
 import com.pgsa.trailers.repository.TripRepository;
 import com.pgsa.trailers.service.TripService;

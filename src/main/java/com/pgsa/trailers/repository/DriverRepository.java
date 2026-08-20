@@ -1,7 +1,7 @@
 package com.pgsa.trailers.repository;
 
 import com.pgsa.trailers.entity.assets.Driver;
-import com.pgsa.trailers.enums.DriverStatus;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -21,12 +21,12 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
     Optional<Driver> findByFirstNameIgnoreCaseAndLastNameIgnoreCase(String firstName, String lastName);
     
     // Status finders
-    List<Driver> findByStatus(DriverStatus status);
-    List<Driver> findByStatusIn(List<DriverStatus> statuses);
+    List<Driver> findByStatus(String status);
+    List<Driver> findByStatusIn(List<String> statuses);
     
     // Active finders
     List<Driver> findByIsActiveTrue();
-    List<Driver> findByIsActiveTrueAndStatus(DriverStatus status);
+    List<Driver> findByIsActiveTrueAndStatus(String status);
     
     // License expiry
     List<Driver> findByLicenseExpiryBefore(LocalDate date);
@@ -48,10 +48,10 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
     Optional<Driver> findByAppUserId(Long appUserId);
     
     // Counts
-    long countByStatus(DriverStatus status);
+    long countByStatus(String status);
     long countByIsActiveTrue();
     
     // Available for assignment
-    @Query("SELECT d FROM Driver d WHERE d.status = :status AND d.isActive = true AND d.assignedVehicleId IS NULL")
-    List<Driver> findAvailableDrivers(@Param("status") DriverStatus status);
+   @Query("SELECT d FROM Driver d WHERE d.status = :status AND d.isActive = true AND d.assignedVehicleId IS NULL")
+    List<Driver> findAvailableDrivers(@Param("status") String status);
 }

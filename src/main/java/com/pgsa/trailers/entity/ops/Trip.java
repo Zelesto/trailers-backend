@@ -2,7 +2,6 @@ package com.pgsa.trailers.entity.ops;
 
 import com.pgsa.trailers.entity.assets.Driver;
 import com.pgsa.trailers.entity.assets.Vehicle;
-import com.pgsa.trailers.enums.TripStatus;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -402,8 +401,8 @@ public class Trip {
         }
     }
 
-    public boolean isPlanned() {
-    return "PLANNED".equals(status);
+        public boolean isPlanned() {
+            return "PLANNED".equals(status);
         }
         
         public boolean isInProgress() {
@@ -475,9 +474,10 @@ public class Trip {
         return cargoValue;
     }
 
-    public TripStatus getStatus() {
-        return status;
-    }
+        public String getStatus() {
+            return status;
+        }
+
 
     public BigDecimal getFromDepotKm() {
         return fromDepotKm;
@@ -531,9 +531,9 @@ public class Trip {
         this.cargoValue = cargoValue;
     }
 
-    public void setStatus(TripStatus status) {
-        this.status = status;
-    }
+        public void setStatus(String status) {
+            this.status = status;
+        }
 
     public void setFromDepotKm(BigDecimal fromDepotKm) {
         this.fromDepotKm = fromDepotKm;

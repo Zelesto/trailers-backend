@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pgsa.trailers.entity.ops.Trip;
 import com.pgsa.trailers.entity.ops.TripResponseMapper;
 import com.pgsa.trailers.entity.security.AppUser;
-import com.pgsa.trailers.enums.TripStatus;
 import com.pgsa.trailers.repository.AppUserRepository;
 import com.pgsa.trailers.repository.TripRepository;
 import com.pgsa.trailers.repository.VehicleRepository;
@@ -44,6 +43,11 @@ public class TestController {
     private final TripRepository tripRepository;
     private final VehicleRepository vehicleRepository;
     private final TripResponseMapper tripResponseMapper;
+
+    // ============================================================
+    // CONSTANTS FOR STATUS VALUES (from enum_master table)
+    // ============================================================
+    public static final String STATUS_PLANNED = "PLANNED";
 
     // ======================== HEALTH ========================
 
@@ -91,7 +95,7 @@ public class TestController {
         return ResponseEntity.ok(response);
     }
 
-    // ======================== TEST CREATE ========================
+    // ======================== TEST CREATE - FIXED ========================
 
     @PostMapping("/test-create")
     public ResponseEntity<Map<String, Object>> testCreateTrip() {
@@ -105,7 +109,8 @@ public class TestController {
             // Get vehicle
             vehicleRepository.findById(1L).ifPresent(trip::setVehicle);
             
-            trip.setStatus(TripStatus.PLANNED);
+            // Use String status instead of enum
+            trip.setStatus(STATUS_PLANNED);
             trip.setOriginLocation("Test Origin");
             trip.setDestinationLocation("Test Destination");
             trip.setCreatedAt(LocalDateTime.now());

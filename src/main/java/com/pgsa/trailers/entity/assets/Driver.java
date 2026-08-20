@@ -35,6 +35,21 @@ import java.util.Map;
 )
 public class Driver extends BaseEntity {
 
+    // ============================================================
+    // CONSTANTS FOR STATUS VALUES (from enum_master table)
+    // ============================================================
+    public static final String STATUS_ACTIVE = "ACTIVE";
+    public static final String STATUS_INACTIVE = "INACTIVE";
+    public static final String STATUS_AVAILABLE = "AVAILABLE";
+    public static final String STATUS_ON_LEAVE = "ON_LEAVE";
+    public static final String STATUS_SUSPENDED = "SUSPENDED";
+    public static final String STATUS_ASSIGNED = "ASSIGNED";
+    public static final String STATUS_ON_TRIP = "ON_TRIP";
+    public static final String STATUS_CLOCKED_IN = "CLOCKED_IN";
+    public static final String STATUS_CLOCKED_OUT = "CLOCKED_OUT";
+    public static final String STATUS_ON_BREAK = "ON_BREAK";
+    public static final String STATUS_OFF_DUTY = "OFF_DUTY";
+
     // ====== EXPLICIT LOGGER ======
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(Driver.class);
 
@@ -66,7 +81,6 @@ public class Driver extends BaseEntity {
     @Column(name = "email", length = 100)
     private String email;
 
-    
     @Column(name = "status", nullable = false)
     private String status;
 
@@ -116,7 +130,7 @@ public class Driver extends BaseEntity {
 
     // ====== NEW PUNCH CLOCK FIELDS ======
     @Column(name = "current_status", length = 20)
-    private String currentStatus = "OFF_DUTY";
+    private String currentStatus = STATUS_OFF_DUTY;
 
     @Column(name = "last_clock_in")
     private LocalDateTime lastClockIn;
@@ -196,11 +210,11 @@ public class Driver extends BaseEntity {
     // ========== CONSTRUCTORS ==========
 
     public Driver() {
-        this.status = "ACTIVE";
+        this.status = STATUS_ACTIVE;
         this.incidentsLogged = 0;
         this.totalTrips = 0;
         this.trainingCompleted = false;
-        this.currentStatus = "OFF_DUTY";
+        this.currentStatus = STATUS_OFF_DUTY;
         this.auditTrail = new HashMap<>();
         this.setIsActive(true);
         this.setVersion(0);
@@ -229,16 +243,17 @@ public class Driver extends BaseEntity {
     }
 
     public boolean isActive() {
-        return "ACTIVE".equals(status) && super.isActive();
+        return STATUS_ACTIVE.equals(status) && super.isActive();
     }
 
     public boolean isAvailableForAssignment() {
-            return isActive() && 
-                   !isLicenseExpired() && 
-                   !"SUSPENDED".equals(status) &&
-                   !"ON_LEAVE".equals(status) &&
-                   assignedVehicleId == null;
-        }
+        return isActive() && 
+               !isLicenseExpired() && 
+               !STATUS_SUSPENDED.equals(status) &&
+               !STATUS_ON_LEAVE.equals(status) &&
+               assignedVehicleId == null;
+    }
+
     public Integer getYearsOfService() {
         if (hireDate == null) {
             return null;
@@ -276,85 +291,85 @@ public class Driver extends BaseEntity {
         return String.format("%s (%s) - %s",
                 getFullName(),
                 licenseNumber,
-                status != null ? status.name() : "Unknown status");
+                status != null ? status : "Unknown status");
     }
 
     // ========== PUNCH CLOCK METHODS ==========
 
     public boolean isClockedIn() {
-        return "CLOCKED_IN".equals(currentStatus) || "ON_BREAK".equals(currentStatus);
+        return STATUS_CLOCKED_IN.equals(currentStatus) || STATUS_ON_BREAK.equals(currentStatus);
     }
 
     public boolean isOnBreak() {
-        return "ON_BREAK".equals(currentStatus);
+        return STATUS_ON_BREAK.equals(currentStatus);
     }
 
     public boolean isOffDuty() {
-        return "OFF_DUTY".equals(currentStatus);
+        return STATUS_OFF_DUTY.equals(currentStatus);
     }
 
     public void clockIn() {
-        this.currentStatus = "CLOCKED_IN";
+        this.currentStatus = STATUS_CLOCKED_IN;
         this.lastClockIn = LocalDateTime.now();
     }
 
     public void startBreak() {
-        this.currentStatus = "ON_BREAK";
+        this.currentStatus = STATUS_ON_BREAK;
     }
 
     public void endBreak() {
-        this.currentStatus = "CLOCKED_IN";
+        this.currentStatus = STATUS_CLOCKED_IN;
     }
 
     public void clockOut() {
-        this.currentStatus = "OFF_DUTY";
+        this.currentStatus = STATUS_OFF_DUTY;
         this.lastClockOut = LocalDateTime.now();
     }
 
-    // ========== BUSINESS LOGIC METHODS ==========
+    // ========== BUSINESS LOGIC METHODS - FIXED ==========
 
     public void activate() {
-        this.status = DriverStatus.ACTIVE;
+        this.status = STATUS_ACTIVE;
         this.terminationDate = null;
         this.terminationReason = null;
         this.setIsActive(true);
-        this.currentStatus = "OFF_DUTY";
+        this.currentStatus = STATUS_OFF_DUTY;
     }
 
     public void deactivate(String reason) {
-        this.status = DriverStatus.INACTIVE;
+        this.status = STATUS_INACTIVE;
         this.terminationDate = LocalDate.now();
         this.terminationReason = reason;
         this.setIsActive(false);
-        this.currentStatus = "OFF_DUTY";
+        this.currentStatus = STATUS_OFF_DUTY;
     }
 
     public void suspend(String reason) {
-        this.status = DriverStatus.SUSPENDED;
+        this.status = STATUS_SUSPENDED;
         this.terminationReason = reason;
-        this.currentStatus = "OFF_DUTY";
+        this.currentStatus = STATUS_OFF_DUTY;
     }
 
     public void reinstate() {
-        this.status = DriverStatus.ACTIVE;
+        this.status = STATUS_ACTIVE;
         this.terminationReason = null;
         this.setIsActive(true);
-        this.currentStatus = "OFF_DUTY";
+        this.currentStatus = STATUS_OFF_DUTY;
     }
 
     public void setOnLeave() {
-        this.status = DriverStatus.ON_LEAVE;
-        this.currentStatus = "OFF_DUTY";
+        this.status = STATUS_ON_LEAVE;
+        this.currentStatus = STATUS_OFF_DUTY;
     }
 
     public boolean canBeAssigned() {
-            return isActive() &&
-                    !isLicenseExpired() &&
-                    !"SUSPENDED".equals(status) &&
-                    !"ON_LEAVE".equals(status) &&
-                    assignedVehicleId == null &&
-                    !isClockedIn();
-        }
+        return isActive() &&
+                !isLicenseExpired() &&
+                !STATUS_SUSPENDED.equals(status) &&
+                !STATUS_ON_LEAVE.equals(status) &&
+                assignedVehicleId == null &&
+                !isClockedIn();
+    }
 
     public void assignVehicle(Long vehicleId) {
         this.assignedVehicleId = vehicleId;
@@ -509,13 +524,13 @@ public class Driver extends BaseEntity {
     }
 
     // --- Status ---
-        public String getStatus() {
-            return status;
-        }
-        
-        public void setStatus(String status) {
-            this.status = status;
-        }
+    public String getStatus() {
+        return status;
+    }
+    
+    public void setStatus(String status) {
+        this.status = status;
+    }
 
     // --- Termination Date ---
     public LocalDate getTerminationDate() {
@@ -912,7 +927,7 @@ public class Driver extends BaseEntity {
     @PrePersist
     protected void onCreate() {
         if (status == null) {
-            status = DriverStatus.ACTIVE;
+            status = STATUS_ACTIVE;
         }
         if (incidentsLogged == null) {
             incidentsLogged = 0;
@@ -924,7 +939,7 @@ public class Driver extends BaseEntity {
             trainingCompleted = false;
         }
         if (currentStatus == null) {
-            currentStatus = "OFF_DUTY";
+            currentStatus = STATUS_OFF_DUTY;
         }
         if (auditTrail == null) {
             auditTrail = new HashMap<>();

@@ -8,12 +8,14 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import java.net.URI;
+import java.time.Duration;
 
 @Configuration
 @Slf4j
@@ -43,8 +45,23 @@ public class SupabaseS3Config {
         this.environment = environment;
     }
 
+    /**
+     * Shared HTTP client with cookie management disabled
+     */
     @Bean
-    public S3Client supabaseS3Client() {
+    public ApacheHttpClient supabaseHttpClient() {
+        log.info("Creating Supabase HTTP client with cookie management disabled");
+        return ApacheHttpClient.builder()
+                .connectionTimeout(Duration.ofSeconds(30))
+                .socketTimeout(Duration.ofSeconds(30))
+                .maxConnections(50)
+                .connectionTimeToLive(Duration.ofMinutes(5))
+                .disableCookieManagement()  // <-- Disable cookie handling
+                .build();
+    }
+
+    @Bean
+    public S3Client supabaseS3Client(ApacheHttpClient httpClient) {
         String[] activeProfiles = environment.getActiveProfiles();
         String profile = activeProfiles.length > 0 ? activeProfiles[0] : "default";
         
@@ -64,6 +81,7 @@ public class SupabaseS3Config {
         }
 
         return S3Client.builder()
+                .httpClient(httpClient)
                 .endpointOverride(URI.create(endpoint))
                 .region(Region.of(region))
                 .credentialsProvider(StaticCredentialsProvider.create(
@@ -77,8 +95,9 @@ public class SupabaseS3Config {
     }
 
     @Bean
-    public S3Presigner supabaseS3Presigner() {
+    public S3Presigner supabaseS3Presigner(ApacheHttpClient httpClient) {
         return S3Presigner.builder()
+                .httpClient(httpClient)
                 .endpointOverride(URI.create(endpoint))
                 .region(Region.of(region))
                 .credentialsProvider(StaticCredentialsProvider.create(

@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
@@ -45,23 +45,8 @@ public class SupabaseS3Config {
         this.environment = environment;
     }
 
-    /**
-     * Shared HTTP client with cookie management disabled
-     */
     @Bean
-    public ApacheHttpClient supabaseHttpClient() {
-        log.info("Creating Supabase HTTP client with cookie management disabled");
-        return ApacheHttpClient.builder()
-                .connectionTimeout(Duration.ofSeconds(30))
-                .socketTimeout(Duration.ofSeconds(30))
-                .maxConnections(50)
-                .connectionTimeToLive(Duration.ofMinutes(5))
-                .disableCookieManagement()  // <-- Disable cookie handling
-                .build();
-    }
-
-    @Bean
-    public S3Client supabaseS3Client(ApacheHttpClient httpClient) {
+    public S3Client supabaseS3Client() {
         String[] activeProfiles = environment.getActiveProfiles();
         String profile = activeProfiles.length > 0 ? activeProfiles[0] : "default";
         
@@ -74,11 +59,16 @@ public class SupabaseS3Config {
         log.info("Supabase URL: {}", supabaseUrl);
         log.info("========================================");
 
-        // Validate credentials are not empty
+        // Validate credentials
         if (accessKeyId == null || accessKeyId.isEmpty()) {
-            log.error("Supabase Access Key ID is missing! Check your configuration.");
+            log.error("Supabase Access Key ID is missing!");
             throw new IllegalStateException("Supabase Access Key ID is required");
         }
+
+        // Use URLConnection HTTP client (no extra dependencies needed)
+        UrlConnectionHttpClient httpClient = UrlConnectionHttpClient.builder()
+                .connectionTimeout(Duration.ofSeconds(30))
+                .build();
 
         return S3Client.builder()
                 .httpClient(httpClient)
@@ -95,7 +85,11 @@ public class SupabaseS3Config {
     }
 
     @Bean
-    public S3Presigner supabaseS3Presigner(ApacheHttpClient httpClient) {
+    public S3Presigner supabaseS3Presigner() {
+        UrlConnectionHttpClient httpClient = UrlConnectionHttpClient.builder()
+                .connectionTimeout(Duration.ofSeconds(30))
+                .build();
+
         return S3Presigner.builder()
                 .httpClient(httpClient)
                 .endpointOverride(URI.create(endpoint))

@@ -62,20 +62,20 @@ public class LoadMapper {
         if (load.getTrips() != null && !load.getTrips().isEmpty()) {
             completedTrips = (int) load.getTrips().stream()
                     .filter(t -> t.getStatus() != null && 
-                        (t.getStatus().name().equals("COMPLETED") || 
-                         t.getStatus().name().equals("FINALIZED")))
+                        ("COMPLETED".equals(t.getStatus()) || 
+                         "FINALIZED".equals(t.getStatus())))
                     .count();
             
             pendingTrips = (int) load.getTrips().stream()
                     .filter(t -> t.getStatus() != null && 
-                        t.getStatus().name().equals("PLANNED"))
+                        "PLANNED".equals(t.getStatus()))
                     .count();
             
             inProgressTrips = (int) load.getTrips().stream()
                     .filter(t -> t.getStatus() != null && 
-                        (t.getStatus().name().equals("IN_PROGRESS") || 
-                         t.getStatus().name().equals("ACTIVE") ||
-                         t.getStatus().name().equals("ASSIGNED")))
+                        ("IN_PROGRESS".equals(t.getStatus()) || 
+                         "ACTIVE".equals(t.getStatus()) ||
+                         "ASSIGNED".equals(t.getStatus())))
                     .count();
             
             totalWeight = load.getTrips().stream()
@@ -102,7 +102,7 @@ public class LoadMapper {
                 .loadingDate(load.getLoadingDate())
                 .unloadingDate(load.getUnloadingDate())
                 .lastStatusUpdate(load.getLastStatusUpdate())
-                .status(load.getStatus() != null ? load.getStatus().name() : null)
+                .status(load.getStatus() != null ? load.getStatus() : null)  // REMOVED .name()
                 .priority(load.getPriority())
                 .commodityType(load.getCommodityType())
                 .palletCount(load.getPalletCount())
@@ -167,7 +167,7 @@ public class LoadMapper {
                 .id(trip.getId())
                 .tripNumber(trip.getTripNumber())
                 .referenceNumber(trip.getReferenceNumber())
-                .status(trip.getStatus())
+                .status(trip.getStatus())  // REMOVED .name()
                 .vehicleRegistration(vehicleRegistration)
                 .driverName(driverName)
                 .plannedStartDate(trip.getPlannedStartDate())
@@ -193,8 +193,8 @@ public class LoadMapper {
                 .vehicleId(trip.getVehicle() != null ? trip.getVehicle().getId() : null)
                 .driverId(trip.getDriver() != null ? trip.getDriver().getId() : null)
                 .loadNumber(trip.getLoadNumber())
-                .tripType(trip.getTripType() != null ? trip.getTripType().name() : null)
-                .approvalStatus(trip.getApprovalStatus() != null ? trip.getApprovalStatus().name() : null)
+                .tripType(trip.getTripType() != null ? trip.getTripType() : null)  // REMOVED .name()
+                .approvalStatus(trip.getApprovalStatus() != null ? trip.getApprovalStatus() : null)  // REMOVED .name()
                 .actualDistanceKm(trip.getActualDistanceKm())
                 .plannedDistanceKm(trip.getPlannedDistanceKm())
                 .actualStartDate(trip.getActualStartDate())

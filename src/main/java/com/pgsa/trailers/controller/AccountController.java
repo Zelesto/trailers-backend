@@ -13,6 +13,14 @@ import java.util.List;
 @RequestMapping("/api/accounts")
 public class AccountController {
 
+    // ============================================================
+    // CONSTANTS FOR ACCOUNT TYPES (from enum_master table)
+    // ============================================================
+    public static final String ACCOUNT_TYPE_FUEL = "FUEL";
+    public static final String ACCOUNT_TYPE_BANK = "BANK";
+    public static final String ACCOUNT_TYPE_CASH = "CASH";
+    public static final String ACCOUNT_TYPE_EXPENSE = "EXPENSE";
+
     /**
      * GET /api/accounts - Get all accounts
      */
@@ -24,12 +32,12 @@ public class AccountController {
             return ResponseEntity.ok(accounts);
         } catch (Exception e) {
             log.error("Error in getAllAccounts: {}", e.getMessage(), e);
-            return ResponseEntity.ok(new ArrayList<>()); // Return empty array instead of 500
+            return ResponseEntity.ok(new ArrayList<>());
         }
     }
 
     /**
-     * GET /api/accounts?type=FUEL - Get accounts by type
+     * GET /api/accounts?type=FUEL - Get accounts by type - FIXED
      */
     @GetMapping(params = "type")
     public ResponseEntity<List<Account>> getAccountsByType(@RequestParam String type) {
@@ -38,9 +46,9 @@ public class AccountController {
             List<Account> filteredAccounts = new ArrayList<>();
             List<Account> allAccounts = createSampleAccounts();
 
-            // Filter by type
+            // ✅ FIXED: Use String comparison instead of enum .name()
             for (Account account : allAccounts) {
-                if (account.getType().name().equalsIgnoreCase(type)) {
+                if (account.getType() != null && account.getType().equalsIgnoreCase(type)) {
                     filteredAccounts.add(account);
                 }
             }
@@ -50,7 +58,7 @@ public class AccountController {
 
         } catch (Exception e) {
             log.error("Error in getAccountsByType: {}", e.getMessage(), e);
-            return ResponseEntity.ok(new ArrayList<>()); // Return empty array instead of 500
+            return ResponseEntity.ok(new ArrayList<>());
         }
     }
 
@@ -63,7 +71,6 @@ public class AccountController {
         try {
             List<Account> allAccounts = createSampleAccounts();
 
-            // Find account by ID
             for (Account account : allAccounts) {
                 if (account.getId() != null && account.getId().equals(id)) {
                     return ResponseEntity.ok(account);
@@ -86,9 +93,7 @@ public class AccountController {
     public ResponseEntity<Account> createAccount(@RequestBody Account account) {
         log.info("POST /api/accounts - Creating new account: {}", account.getName());
         try {
-            // In a real application, you would save to database
-            // For now, just return the account with a new ID
-            account.setId(System.currentTimeMillis()); // Generate a fake ID
+            account.setId(System.currentTimeMillis());
             return ResponseEntity.ok(account);
         } catch (Exception e) {
             log.error("Error in createAccount: {}", e.getMessage(), e);
@@ -103,7 +108,6 @@ public class AccountController {
     public ResponseEntity<Account> updateAccount(@PathVariable Long id, @RequestBody Account account) {
         log.info("PUT /api/accounts/{} - Updating account", id);
         try {
-            // Set the ID from path variable
             account.setId(id);
             return ResponseEntity.ok(account);
         } catch (Exception e) {
@@ -119,7 +123,6 @@ public class AccountController {
     public ResponseEntity<Void> deleteAccount(@PathVariable Long id) {
         log.info("DELETE /api/accounts/{} - Deleting account", id);
         try {
-            // In a real application, you would delete from database
             return ResponseEntity.noContent().build();
         } catch (Exception e) {
             log.error("Error in deleteAccount: {}", e.getMessage(), e);
@@ -128,16 +131,16 @@ public class AccountController {
     }
 
     /**
-     * Helper method to create sample accounts
+     * Helper method to create sample accounts - FIXED
      */
     private List<Account> createSampleAccounts() {
         List<Account> accounts = new ArrayList<>();
 
-        // Sample Fuel Accounts
+        // Sample Fuel Accounts - ✅ FIXED: Use String constants
         Account fuelAccount1 = new Account();
         fuelAccount1.setId(1L);
         fuelAccount1.setName("Main Fuel Account");
-        fuelAccount1.setType(AccountType.FUEL);
+        fuelAccount1.setType(ACCOUNT_TYPE_FUEL);
         fuelAccount1.setCurrency("ZAR");
         fuelAccount1.setActive(true);
         accounts.add(fuelAccount1);
@@ -145,7 +148,7 @@ public class AccountController {
         Account fuelAccount2 = new Account();
         fuelAccount2.setId(2L);
         fuelAccount2.setName("Backup Fuel Account");
-        fuelAccount2.setType(AccountType.FUEL);
+        fuelAccount2.setType(ACCOUNT_TYPE_FUEL);
         fuelAccount2.setCurrency("USD");
         fuelAccount2.setActive(true);
         accounts.add(fuelAccount2);
@@ -153,16 +156,16 @@ public class AccountController {
         Account fuelAccount3 = new Account();
         fuelAccount3.setId(3L);
         fuelAccount3.setName("Diesel Account");
-        fuelAccount3.setType(AccountType.FUEL);
+        fuelAccount3.setType(ACCOUNT_TYPE_FUEL);
         fuelAccount3.setCurrency("ZAR");
         fuelAccount3.setActive(true);
         accounts.add(fuelAccount3);
 
-        // Sample Other Accounts
+        // Sample Other Accounts - ✅ FIXED: Use String constants
         Account bankAccount = new Account();
         bankAccount.setId(4L);
         bankAccount.setName("Standard Bank");
-        bankAccount.setType(AccountType.BANK);
+        bankAccount.setType(ACCOUNT_TYPE_BANK);
         bankAccount.setCurrency("ZAR");
         bankAccount.setActive(true);
         accounts.add(bankAccount);
@@ -170,7 +173,7 @@ public class AccountController {
         Account cashAccount = new Account();
         cashAccount.setId(5L);
         cashAccount.setName("Petty Cash");
-        cashAccount.setType(AccountType.CASH);
+        cashAccount.setType(ACCOUNT_TYPE_CASH);
         cashAccount.setCurrency("ZAR");
         cashAccount.setActive(true);
         accounts.add(cashAccount);
@@ -178,7 +181,7 @@ public class AccountController {
         Account expenseAccount = new Account();
         expenseAccount.setId(6L);
         expenseAccount.setName("Maintenance Expenses");
-        expenseAccount.setType(AccountType.EXPENSE);
+        expenseAccount.setType(ACCOUNT_TYPE_EXPENSE);
         expenseAccount.setCurrency("ZAR");
         expenseAccount.setActive(true);
         accounts.add(expenseAccount);

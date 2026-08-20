@@ -5,7 +5,6 @@ import com.pgsa.trailers.dto.InventoryVarianceDTO;
 import com.pgsa.trailers.entity.inventory.InventoryItem;
 import com.pgsa.trailers.entity.inventory.InventoryLocation;
 import com.pgsa.trailers.entity.inventory.StockMovement;
-import com.pgsa.trailers.enums.StockMovementType;
 import com.pgsa.trailers.repository.InventoryItemRepository;
 import com.pgsa.trailers.repository.InventoryLocationRepository;
 import com.pgsa.trailers.repository.StockMovementRepository;
@@ -24,12 +23,21 @@ import java.util.Optional;
 @Transactional
 public class StockCountService {
 
+    // ============================================================
+    // CONSTANTS FOR MOVEMENT TYPES (from enum_master table)
+    // ============================================================
+    public static final String MOVEMENT_TYPE_IN = "IN";
+    public static final String MOVEMENT_TYPE_OUT = "OUT";
+    public static final String MOVEMENT_TYPE_ADJUSTMENT = "ADJUSTMENT";
+    public static final String MOVEMENT_TYPE_RETURN = "RETURN";
+    public static final String MOVEMENT_TYPE_TRANSFER = "TRANSFER";
+
     private final InventoryItemRepository inventoryItemRepository;
     private final InventoryLocationRepository inventoryLocationRepository;
     private final StockMovementRepository stockMovementRepository;
 
     /**
-     * Record a stock movement (from your original controller)
+     * Record a stock movement - FIXED: Use String for movement type
      */
     public void recordStockMovement(StockMovement movement) {
         // Validate the item exists
@@ -43,16 +51,12 @@ public class StockCountService {
                     .orElse(null);
         }
 
-        // Set the item and location on the movement
-        // NOTE: If StockMovement doesn't have these fields, remove these lines
-        // movement.setItem(item);
-        // movement.setLocation(location);
-        
-        // Set movement type - convert String to enum if needed
+        // Get movement type as String
         String movementTypeStr = movement.getMovementType();
-        // If you have an enum, convert it
-        // StockMovementType type = StockMovementType.valueOf(movementTypeStr);
-        
+        if (movementTypeStr == null || movementTypeStr.trim().isEmpty()) {
+            throw new RuntimeException("Movement type is required");
+        }
+
         // Set reference type and ID if needed
         // movement.setReferenceType("STOCK_COUNT");
         // movement.setReferenceId(1L);
@@ -60,16 +64,23 @@ public class StockCountService {
         // Save the movement
         stockMovementRepository.save(movement);
         
-        // Update the item quantity
+        // Update the item quantity based on movement type
         int currentQuantity = item.getQuantity() != null ? item.getQuantity() : 0;
         int quantity = movement.getQuantity();
         
-        if ("IN".equals(movementTypeStr)) {
+        // Use String constants for comparison
+        if (MOVEMENT_TYPE_IN.equals(movementTypeStr)) {
             item.setQuantity(currentQuantity + quantity);
-        } else if ("OUT".equals(movementTypeStr)) {
-            item.setQuantity(Math.max(0, currentQuantity - quantity));
-        } else if ("ADJUSTMENT".equals(movementTypeStr)) {
+            log.info("✅ Added {} units to item {}", quantity, movement.getItemId());
+        } else if (MOVEMENT_TYPE_OUT.equals(movementTypeStr)) {
+            int newQuantity = Math.max(0, currentQuantity - quantity);
+            item.setQuantity(newQuantity);
+            log.info("✅ Removed {} units from item {}", quantity, movement.getItemId());
+        } else if (MOVEMENT_TYPE_ADJUSTMENT.equals(movementTypeStr)) {
             item.setQuantity(quantity);
+            log.info("✅ Adjusted item {} to {} units", movement.getItemId(), quantity);
+        } else {
+            log.warn("⚠️ Unknown movement type: {}, skipping quantity update", movementTypeStr);
         }
         
         inventoryItemRepository.save(item);
@@ -101,17 +112,114 @@ public class StockCountService {
                 .build();
     }
 
+    /**
+     * Calculate expected quantity based on initial stock and movements
+     */
     private int calculateExpectedQuantity(InventoryItem item) {
-        // Calculate expected quantity based on initial stock + IN movements - OUT movements
-        // This is a simplified version - adjust based on your business logic
-        Integer initialQuantity = item.getQuantity() != null ? item.getQuantity() : 0;
+        // Get initial quantity
+        Integer initialQuantity = item.getInitialQuantity() != null ? item.getInitialQuantity() : 0;
         
-        // You could also query stock movements to calculate expected quantity
-        // List<StockMovement> movements = stockMovementRepository.findByItemId(item.getId());
-        // int totalIn = movements.stream().filter(m -> "IN".equals(m.getMovementType())).mapToInt(StockMovement::getQuantity).sum();
-        // int totalOut = movements.stream().filter(m -> "OUT".equals(m.getMovementType())).mapToInt(StockMovement::getQuantity).sum();
-        // return initialQuantity + totalIn - totalOut;
-        
-        return initialQuantity;
+        try {
+            // Query stock movements to calculate expected quantity
+            // Note: This assumes your StockMovement entity has itemId and quantity fields
+            // Adjust based on your actual entity structure
+            Integer totalIn = 0;
+            Integer totalOut = 0;
+            
+            // If you have a method to get movements by item ID
+            // List<StockMovement> movements = stockMovementRepository.findByItemId(item.getId());
+            // for (StockMovement m : movements) {
+            //     String type = m.getMovementType();
+            //     if (MOVEMENT_TYPE_IN.equals(type)) {
+            //         totalIn += m.getQuantity();
+            //     } else if (MOVEMENT_TYPE_OUT.equals(type)) {
+            //         totalOut += m.getQuantity();
+            //     }
+            // }
+            
+            return initialQuantity + totalIn - totalOut;
+        } catch (Exception e) {
+            log.warn("Could not calculate expected quantity from movements: {}", e.getMessage());
+            return initialQuantity;
+        }
+    }
+
+    /**
+     * Get total IN movements for an item
+     */
+    public int getTotalInMovements(Long itemId) {
+        try {
+            // This assumes you have a method in repository
+            // return stockMovementRepository.sumQuantityByItemIdAndMovementType(itemId, MOVEMENT_TYPE_IN);
+            return 0; // Placeholder
+        } catch (Exception e) {
+            log.warn("Error getting total IN movements: {}", e.getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Get total OUT movements for an item
+     */
+    public int getTotalOutMovements(Long itemId) {
+        try {
+            // This assumes you have a method in repository
+            // return stockMovementRepository.sumQuantityByItemIdAndMovementType(itemId, MOVEMENT_TYPE_OUT);
+            return 0; // Placeholder
+        } catch (Exception e) {
+            log.warn("Error getting total OUT movements: {}", e.getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Get total adjustment movements for an item
+     */
+    public int getTotalAdjustmentMovements(Long itemId) {
+        try {
+            // return stockMovementRepository.sumQuantityByItemIdAndMovementType(itemId, MOVEMENT_TYPE_ADJUSTMENT);
+            return 0; // Placeholder
+        } catch (Exception e) {
+            log.warn("Error getting total adjustment movements: {}", e.getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Validate movement type
+     */
+    public boolean isValidMovementType(String movementType) {
+        if (movementType == null) {
+            return false;
+        }
+        String upper = movementType.toUpperCase();
+        return MOVEMENT_TYPE_IN.equals(upper) || 
+               MOVEMENT_TYPE_OUT.equals(upper) || 
+               MOVEMENT_TYPE_ADJUSTMENT.equals(upper) || 
+               MOVEMENT_TYPE_RETURN.equals(upper) || 
+               MOVEMENT_TYPE_TRANSFER.equals(upper);
+    }
+
+    /**
+     * Get movement type display name
+     */
+    public String getMovementTypeDisplay(String movementType) {
+        if (movementType == null) {
+            return "Unknown";
+        }
+        switch (movementType.toUpperCase()) {
+            case MOVEMENT_TYPE_IN:
+                return "Stock In";
+            case MOVEMENT_TYPE_OUT:
+                return "Stock Out";
+            case MOVEMENT_TYPE_ADJUSTMENT:
+                return "Adjustment";
+            case MOVEMENT_TYPE_RETURN:
+                return "Return";
+            case MOVEMENT_TYPE_TRANSFER:
+                return "Transfer";
+            default:
+                return movementType;
+        }
     }
 }

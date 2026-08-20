@@ -33,7 +33,7 @@ public class Reconciliation extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
-    private ReconciliationStatus status;
+    private String status;
 
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;

@@ -63,9 +63,8 @@ public class Load extends BaseEntity {
     @Column(name = "unloading_date")
     private LocalDateTime unloadingDate;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", length = 50)
-    private LoadStatus status;
+        @Column(name = "status", length = 50)
+        private String status;
 
     @Column(name = "commodity_type", length = 100)
     private String commodityType;
@@ -172,7 +171,7 @@ public class Load extends BaseEntity {
         trip.setLoadNumber(this.loadNumber);
         trip.setLoadType(this.commodityType);
         trip.setLoadDescription(this.description);
-        trip.setLoadStatus(this.status != null ? this.status.name() : "PENDING");
+        trip.setLoadStatus(this.status != null ? this.status : "PENDING");
         
         if (this.tripsCount == null) {
             this.tripsCount = 0;
@@ -277,6 +276,9 @@ public class Load extends BaseEntity {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+
+
+
     /* ========================
        LIFECYCLE CALLBACKS
        ======================== */
@@ -319,6 +321,10 @@ public class Load extends BaseEntity {
         if (totalDepotKm == null) {
             totalDepotKm = BigDecimal.ZERO;
         }
+
+        if (status == null) {
+           status = "PENDING";
+        }
         
         log.info("✅ Load pre-persist complete: {} | Status: {} | Ref: {}", 
             this.loadNumber, this.status, this.referenceNumber);
@@ -352,14 +358,18 @@ public class Load extends BaseEntity {
     }
 
     public boolean canAcceptTrip() {
-        return status != LoadStatus.COMPLETED && status != LoadStatus.CANCELLED;
-    }
-
-    public String getStatusDisplay() {
-        return status != null ? status.name() : "UNKNOWN";
-    }
-
-    public boolean isActive() {
-        return status != LoadStatus.COMPLETED && status != LoadStatus.CANCELLED;
-    }
+    return status != null && 
+           !"COMPLETED".equals(status) && 
+           !"CANCELLED".equals(status);
+        }
+        
+        public String getStatusDisplay() {
+            return status != null ? status : "UNKNOWN";
+        }
+        
+        public boolean isActive() {
+            return status != null && 
+                   !"COMPLETED".equals(status) && 
+                   !"CANCELLED".equals(status);
+        }
 }

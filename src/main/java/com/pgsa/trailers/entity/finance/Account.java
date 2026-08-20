@@ -1,7 +1,6 @@
 package com.pgsa.trailers.entity.finance;
 
 import com.pgsa.trailers.config.BaseEntity;
-import com.pgsa.trailers.enums.AccountType;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -16,9 +15,9 @@ public class Account extends BaseEntity {
     @Column(nullable = false)
     private String name;
 
-    @Enumerated(EnumType.STRING)
+    
     @Column(nullable = false)
-    private AccountType type;
+    private String type;
 
     private String provider;
 
@@ -40,5 +39,13 @@ public class Account extends BaseEntity {
     // Optional constructor for convenience if you need to create with ID
     public Account(Long id) {
         this.setId(id); // uses BaseEntity's ID
+    }
+
+    public String getType() {
+        return type;
+    }
+    
+    public void setType(String type) {
+        this.type = type;
     }
 }

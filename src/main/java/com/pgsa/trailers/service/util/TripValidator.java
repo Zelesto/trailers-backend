@@ -8,6 +8,8 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 @Component
@@ -33,20 +35,22 @@ public class TripValidator {
         STATUS_COMPLETED, STATUS_FINALIZED, STATUS_CLOSED, STATUS_CANCELLED
     );
 
-    // Valid transitions mapping
-    private static final java.util.Map<String, Set<String>> VALID_TRANSITIONS = java.util.Map.of(
-        STATUS_DRAFT, Set.of(STATUS_PLANNED, STATUS_CANCELLED),
-        STATUS_PLANNED, Set.of(STATUS_ASSIGNED, STATUS_IN_PROGRESS, STATUS_CANCELLED),
-        STATUS_ASSIGNED, Set.of(STATUS_IN_PROGRESS, STATUS_ON_HOLD, STATUS_CANCELLED),
-        STATUS_IN_PROGRESS, Set.of(STATUS_COMPLETED, STATUS_ON_HOLD, STATUS_CANCELLED),
-        STATUS_ACTIVE, Set.of(STATUS_COMPLETED, STATUS_ON_HOLD, STATUS_CANCELLED),
-        STATUS_ON_HOLD, Set.of(STATUS_IN_PROGRESS, STATUS_ACTIVE, STATUS_COMPLETED, STATUS_CANCELLED),
-        STATUS_PENDING, Set.of(STATUS_PLANNED, STATUS_ASSIGNED, STATUS_CANCELLED),
-        STATUS_COMPLETED, Set.of(STATUS_FINALIZED, STATUS_CLOSED),
-        STATUS_FINALIZED, Set.of(),
-        STATUS_CLOSED, Set.of(),
-        STATUS_CANCELLED, Set.of()
-    );
+    // ✅ FIXED: Use HashMap instead of Map.of() for more than 10 entries
+    private static final Map<String, Set<String>> VALID_TRANSITIONS = new HashMap<>();
+
+    static {
+        VALID_TRANSITIONS.put(STATUS_DRAFT, Set.of(STATUS_PLANNED, STATUS_CANCELLED));
+        VALID_TRANSITIONS.put(STATUS_PLANNED, Set.of(STATUS_ASSIGNED, STATUS_IN_PROGRESS, STATUS_CANCELLED));
+        VALID_TRANSITIONS.put(STATUS_ASSIGNED, Set.of(STATUS_IN_PROGRESS, STATUS_ON_HOLD, STATUS_CANCELLED));
+        VALID_TRANSITIONS.put(STATUS_IN_PROGRESS, Set.of(STATUS_COMPLETED, STATUS_ON_HOLD, STATUS_CANCELLED));
+        VALID_TRANSITIONS.put(STATUS_ACTIVE, Set.of(STATUS_COMPLETED, STATUS_ON_HOLD, STATUS_CANCELLED));
+        VALID_TRANSITIONS.put(STATUS_ON_HOLD, Set.of(STATUS_IN_PROGRESS, STATUS_ACTIVE, STATUS_COMPLETED, STATUS_CANCELLED));
+        VALID_TRANSITIONS.put(STATUS_PENDING, Set.of(STATUS_PLANNED, STATUS_ASSIGNED, STATUS_CANCELLED));
+        VALID_TRANSITIONS.put(STATUS_COMPLETED, Set.of(STATUS_FINALIZED, STATUS_CLOSED));
+        VALID_TRANSITIONS.put(STATUS_FINALIZED, Set.of());
+        VALID_TRANSITIONS.put(STATUS_CLOSED, Set.of());
+        VALID_TRANSITIONS.put(STATUS_CANCELLED, Set.of());
+    }
 
     /**
      * Validates create trip request
@@ -114,7 +118,7 @@ public class TripValidator {
     }
 
     /**
-     * Validates if a trip can be started - FIXED: Use String for status
+     * Validates if a trip can be started
      */
     public void validateCanStart(Trip trip, BigDecimal actualStartOdometer) {
         if (trip == null) {
@@ -146,7 +150,7 @@ public class TripValidator {
     }
 
     /**
-     * Validates if a trip can be ended - FIXED: Use String for status
+     * Validates if a trip can be ended
      */
     public void validateCanEnd(Trip trip, BigDecimal actualEndOdometer) {
         if (trip == null) {
@@ -177,7 +181,7 @@ public class TripValidator {
     }
 
     /**
-     * Validates if a trip can be updated - FIXED: Use String for status
+     * Validates if a trip can be updated
      */
     public void validateCanUpdate(Trip trip) {
         if (trip == null) {
@@ -193,7 +197,7 @@ public class TripValidator {
     }
 
     /**
-     * Validates trip update request - FIXED: Use String for status
+     * Validates trip update request
      */
     public void validateUpdateRequest(UpdateTripRequest request, Trip existingTrip) {
         if (request == null) {
@@ -227,7 +231,7 @@ public class TripValidator {
     }
 
     /**
-     * Validates trip status transition - FIXED: Use String
+     * Validates trip status transition
      */
     public void validateStatusTransition(String from, String to) {
         if (from == null || to == null) {
@@ -248,7 +252,7 @@ public class TripValidator {
     }
 
     /**
-     * Validates if a trip can be deleted - FIXED: Use String for status
+     * Validates if a trip can be deleted
      */
     public void validateCanDelete(Trip trip) {
         if (trip == null) {

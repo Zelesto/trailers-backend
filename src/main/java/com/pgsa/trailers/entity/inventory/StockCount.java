@@ -1,7 +1,6 @@
 package com.pgsa.trailers.entity.inventory;
 
 import com.pgsa.trailers.config.BaseEntity;
-import com.pgsa.trailers.enums.StockCountStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -16,6 +15,15 @@ import java.util.List;
 @Table(name = "stock_count")
 public class StockCount extends BaseEntity {
 
+    // ============================================================
+    // CONSTANTS FOR STATUS VALUES (from enum_master table)
+    // ============================================================
+    public static final String STATUS_DRAFT = "DRAFT";
+    public static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
+    public static final String STATUS_COMPLETED = "COMPLETED";
+    public static final String STATUS_POSTED = "POSTED";
+    public static final String STATUS_CANCELLED = "CANCELLED";
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "location_id")
     private InventoryLocation location;
@@ -25,9 +33,8 @@ public class StockCount extends BaseEntity {
 
     private String performedBy;
 
-    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private StockCountStatus status = StockCountStatus.DRAFT;
+    private String status = STATUS_DRAFT;
 
     @OneToMany(
             mappedBy = "stockCount",
@@ -41,7 +48,17 @@ public class StockCount extends BaseEntity {
     public StockCount() { }
 
     public StockCount(Long id) {
-        this.setId(id); // from BaseEntity
+        this.setId(id);
+    }
+
+    // ---------------- GETTERS AND SETTERS ----------------
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 
     // ---------------- HELPER METHODS ----------------
@@ -66,6 +83,90 @@ public class StockCount extends BaseEntity {
      * Convenience method to check if the stock count is posted.
      */
     public boolean isPosted() {
-        return status == StockCountStatus.POSTED;
+        return STATUS_POSTED.equals(status);
+    }
+
+    /**
+     * Convenience method to check if the stock count is in draft.
+     */
+    public boolean isDraft() {
+        return STATUS_DRAFT.equals(status);
+    }
+
+    /**
+     * Convenience method to check if the stock count is in progress.
+     */
+    public boolean isInProgress() {
+        return STATUS_IN_PROGRESS.equals(status);
+    }
+
+    /**
+     * Convenience method to check if the stock count is completed.
+     */
+    public boolean isCompleted() {
+        return STATUS_COMPLETED.equals(status);
+    }
+
+    /**
+     * Convenience method to check if the stock count is cancelled.
+     */
+    public boolean isCancelled() {
+        return STATUS_CANCELLED.equals(status);
+    }
+
+    /**
+     * Check if the stock count can be edited.
+     */
+    public boolean canBeEdited() {
+        return STATUS_DRAFT.equals(status) || STATUS_IN_PROGRESS.equals(status);
+    }
+
+    /**
+     * Check if the stock count can be posted.
+     */
+    public boolean canBePosted() {
+        return STATUS_COMPLETED.equals(status) || STATUS_IN_PROGRESS.equals(status);
+    }
+
+    /**
+     * Check if the stock count can be cancelled.
+     */
+    public boolean canBeCancelled() {
+        return !STATUS_POSTED.equals(status);
+    }
+
+    /**
+     * Get status display name.
+     */
+    public String getStatusDisplay() {
+        if (status == null) {
+            return "UNKNOWN";
+        }
+        switch (status) {
+            case STATUS_DRAFT:
+                return "Draft";
+            case STATUS_IN_PROGRESS:
+                return "In Progress";
+            case STATUS_COMPLETED:
+                return "Completed";
+            case STATUS_POSTED:
+                return "Posted";
+            case STATUS_CANCELLED:
+                return "Cancelled";
+            default:
+                return status;
+        }
+    }
+
+    // ---------------- LIFECYCLE CALLBACKS ----------------
+
+    @PrePersist
+    protected void onCreate() {
+        if (status == null) {
+            status = STATUS_DRAFT;
+        }
+        if (countDate == null) {
+            countDate = LocalDate.now();
+        }
     }
 }

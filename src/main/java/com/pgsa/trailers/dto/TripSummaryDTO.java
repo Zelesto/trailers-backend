@@ -1,7 +1,7 @@
 // src/main/java/com/pgsa/trailers/dto/TripSummaryDTO.java
 package com.pgsa.trailers.dto;
 
-import com.pgsa.trailers.enums.TripStatus;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -116,7 +116,7 @@ public class TripSummaryDTO {
      * Get display status
      */
     public String getStatusDisplay() {
-        return status != null ? status.name() : "N/A";
+        return status != null ? status : "N/A";
     }
     
     /**

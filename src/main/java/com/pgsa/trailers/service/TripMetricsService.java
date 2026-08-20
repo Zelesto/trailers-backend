@@ -6,7 +6,6 @@ import com.pgsa.trailers.dto.TripMetricsUpdateRequest;
 import com.pgsa.trailers.entity.ops.Trip;
 import com.pgsa.trailers.entity.ops.TripMetrics;
 import com.pgsa.trailers.entity.ops.TripMetricsMapper;
-import com.pgsa.trailers.enums.TripStatus;
 import com.pgsa.trailers.entity.ResourceNotFoundException;
 import com.pgsa.trailers.repository.TripMetricsRepository;
 import com.pgsa.trailers.repository.TripRepository;
@@ -24,6 +23,12 @@ import java.time.LocalDateTime;
 @Service
 @RequiredArgsConstructor
 public class TripMetricsService {
+
+    // ============================================================
+    // CONSTANTS FOR STATUS VALUES (from enum_master table)
+    // ============================================================
+    public static final String STATUS_COMPLETED = "COMPLETED";
+    public static final String STATUS_FINALIZED = "FINALIZED";
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(TripMetricsService.class);
 
@@ -108,7 +113,7 @@ public class TripMetricsService {
         // Fuel/cost derived from ACTUAL distance
         if (metrics.getTotalDistanceKm() != null) {
             String vehicleType = trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null
-                    ? trip.getVehicle().getVehicleType().name()
+                    ? trip.getVehicle().getVehicleType()
                     : null;
             applyFuelAndCost(metrics, metrics.getTotalDistanceKm(), vehicleType);
         }
@@ -149,7 +154,7 @@ public class TripMetricsService {
             String vehicleType =
                     trip.getVehicle() != null &&
                     trip.getVehicle().getVehicleType() != null
-                            ? trip.getVehicle().getVehicleType().name()
+                            ? trip.getVehicle().getVehicleType()
                             : null;
 
             applyFuelAndCost(metrics, distance, vehicleType);
@@ -283,7 +288,6 @@ public class TripMetricsService {
                 request.setVehicleType(
                         trip.getVehicle()
                                 .getVehicleType()
-                                .name()
                 );
             }
 
@@ -323,7 +327,7 @@ public class TripMetricsService {
         
         // Recalculate derived metrics
         String vehicleType = trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null
-                ? trip.getVehicle().getVehicleType().name()
+                ? trip.getVehicle().getVehicleType()
                 : null;
         
         if (metrics.getTotalDistanceKm() != null) {
@@ -400,13 +404,26 @@ public class TripMetricsService {
         BigDecimal ratePer100km = DEFAULT_FUEL_RATE;
 
         if (vehicleType != null) {
-            ratePer100km = switch (vehicleType.toUpperCase()) {
-                case "VAN" -> new BigDecimal("12");
-                case "CAR", "SUV" -> new BigDecimal("8");
-                case "TRAILER", "SEMI" -> new BigDecimal("40");
-                case "TRUCK" -> new BigDecimal("35");
-                default -> DEFAULT_FUEL_RATE;
-            };
+            String vehicleTypeUpper = vehicleType.toUpperCase();
+            switch (vehicleTypeUpper) {
+                case "VAN":
+                    ratePer100km = new BigDecimal("12");
+                    break;
+                case "CAR":
+                case "SUV":
+                    ratePer100km = new BigDecimal("8");
+                    break;
+                case "TRAILER":
+                case "SEMI":
+                    ratePer100km = new BigDecimal("40");
+                    break;
+                case "TRUCK":
+                    ratePer100km = new BigDecimal("35");
+                    break;
+                default:
+                    ratePer100km = DEFAULT_FUEL_RATE;
+                    break;
+            }
         }
 
         return distance.multiply(ratePer100km)

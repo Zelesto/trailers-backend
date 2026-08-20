@@ -2,7 +2,6 @@ package com.pgsa.trailers.controller;
 
 import com.pgsa.trailers.dto.DriverDTO;
 import com.pgsa.trailers.dto.DriverRequest;
-
 import com.pgsa.trailers.service.DriverService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +16,11 @@ import java.util.List;
 @RequestMapping("/api/drivers")
 @RequiredArgsConstructor
 public class DriverController {
+
+    // ============================================================
+    // CONSTANTS FOR STATUS VALUES (from enum_master table)
+    // ============================================================
+    public static final String STATUS_ACTIVE = "ACTIVE";
 
     private final DriverService driverService;
 
@@ -34,11 +38,12 @@ public class DriverController {
         }
     }
 
+    // ✅ FIXED: Use String constant instead of enum
     @GetMapping("/active")
     public ResponseEntity<List<DriverDTO>> getActiveDrivers() {
         log.info("GET /api/drivers/active");
         try {
-            List<DriverDTO> drivers = driverService.getDriversByStatus(DriverStatus.ACTIVE);
+            List<DriverDTO> drivers = driverService.getDriversByStatus(STATUS_ACTIVE);
             return ResponseEntity.ok(drivers);
         } catch (Exception e) {
             log.error("Error fetching active drivers: {}", e.getMessage(), e);
@@ -61,12 +66,13 @@ public class DriverController {
         }
     }
 
+    // ✅ FIXED: Already using String - no changes needed
     @GetMapping("/status/{status}")
-public ResponseEntity<List<DriverDTO>> getDriversByStatus(@PathVariable String status) {
-    // Pass the string directly
-    List<DriverDTO> drivers = driverService.getDriversByStatus(status);
-    return ResponseEntity.ok(drivers);
-}
+    public ResponseEntity<List<DriverDTO>> getDriversByStatus(@PathVariable String status) {
+        log.info("GET /api/drivers/status/{}", status);
+        List<DriverDTO> drivers = driverService.getDriversByStatus(status);
+        return ResponseEntity.ok(drivers);
+    }
 
     // ====== POST Endpoints ======
     
@@ -145,12 +151,13 @@ public ResponseEntity<List<DriverDTO>> getDriversByStatus(@PathVariable String s
         }
     }
 
+    // ✅ FIXED: Use String directly instead of enum
     @PutMapping("/{id}/status/{status}")
     public ResponseEntity<?> updateStatus(@PathVariable Long id, @PathVariable String status) {
         log.info("PUT /api/drivers/{}/status/{}", id, status);
         try {
-            DriverStatus driverStatus = DriverStatus.valueOf(status.toUpperCase());
-            driverService.updateStatus(id, driverStatus);
+            // Pass the String directly - DriverService will handle it
+            driverService.updateStatus(id, status.toUpperCase());
             return ResponseEntity.ok().body("Status updated successfully");
         } catch (IllegalArgumentException e) {
             log.error("Invalid status: {}", status);

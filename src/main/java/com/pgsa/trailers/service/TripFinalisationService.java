@@ -3,8 +3,6 @@ package com.pgsa.trailers.service;
 import com.pgsa.trailers.entity.ops.Load;
 import com.pgsa.trailers.entity.ops.Trip;
 import com.pgsa.trailers.entity.ops.TripMetrics;
-import com.pgsa.trailers.enums.LoadStatus;
-import com.pgsa.trailers.enums.TripStatus;
 import com.pgsa.trailers.entity.suppliers.TripValidationException;
 import com.pgsa.trailers.repository.TripRepository;
 import com.pgsa.trailers.repository.PodRepository;
@@ -22,6 +20,27 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class TripFinalisationService {
+
+    // ============================================================
+    // CONSTANTS FOR STATUS VALUES (from enum_master table)
+    // ============================================================
+    public static final String STATUS_COMPLETED = "COMPLETED";
+    public static final String STATUS_FINALIZED = "FINALIZED";
+    public static final String STATUS_PENDING = "PENDING";
+    public static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
+    public static final String STATUS_ACTIVE = "ACTIVE";
+    public static final String STATUS_ASSIGNED = "ASSIGNED";
+    public static final String STATUS_PLANNED = "PLANNED";
+    public static final String STATUS_DRAFT = "DRAFT";
+    public static final String STATUS_CANCELLED = "CANCELLED";
+    public static final String STATUS_ON_HOLD = "ON_HOLD";
+
+    public static final String LOAD_STATUS_PENDING = "PENDING";
+    public static final String LOAD_STATUS_PLANNED = "PLANNED";
+    public static final String LOAD_STATUS_IN_TRANSIT = "IN_TRANSIT";
+    public static final String LOAD_STATUS_DELIVERED = "DELIVERED";
+    public static final String LOAD_STATUS_COMPLETED = "COMPLETED";
+    public static final String LOAD_STATUS_CANCELLED = "CANCELLED";
 
     private final TripRepository tripRepository;
     private final PodRepository podRepository;
@@ -41,13 +60,13 @@ public class TripFinalisationService {
 
             // 2. Check if already finalized
             log.debug("Step 2: Checking if already finalized...");
-            if (TripStatus.FINALIZED.equals(trip.getStatus())) {
+            if (STATUS_FINALIZED.equals(trip.getStatus())) {
                 throw new TripValidationException("Trip already FINALIZED");
             }
 
             // 3. Check if trip is COMPLETED
             log.debug("Step 3: Checking if trip is COMPLETED...");
-            if (!TripStatus.COMPLETED.equals(trip.getStatus())) {
+            if (!STATUS_COMPLETED.equals(trip.getStatus())) {
                 throw new TripValidationException(
                     String.format("Cannot finalize trip with status: %s. Trip must be COMPLETED first.", trip.getStatus())
                 );
@@ -152,21 +171,18 @@ public class TripFinalisationService {
             metrics.setFinalized(true);
             metrics.setFinalizedAt(LocalDateTime.now());
 
-            trip.setStatus(TripStatus.FINALIZED);
+            trip.setStatus(STATUS_FINALIZED);
             trip.setLastStatusUpdate(LocalDateTime.now());
 
             // 11. Update Load - mark trip as completed in load
             log.debug("Step 11: Updating Load...");
             try {
-                // Try to find the load using loadId (String)
                 if (trip.getLoadId() != null && !trip.getLoadId().isEmpty()) {
                     try {
-                        // Try to parse as Long first (for backward compatibility)
                         Long loadIdLong = null;
                         try {
                             loadIdLong = Long.parseLong(trip.getLoadId());
                         } catch (NumberFormatException e) {
-                            // If not a number, it's a load number
                             log.debug("LoadId is a string: {}", trip.getLoadId());
                         }
                         
@@ -175,28 +191,25 @@ public class TripFinalisationService {
                             load = loadRepository.findById(loadIdLong).orElse(null);
                         }
                         if (load == null) {
-                            // Try to find by load number
                             load = loadRepository.findByLoadNumber(trip.getLoadId()).orElse(null);
                         }
                         
                         if (load != null) {
-                            // Update load statistics
                             load.setTripsCount(load.getTrips() != null ? load.getTrips().size() : 0);
                             
-                            // Check if all trips in load are completed
                             boolean allCompleted = true;
                             if (load.getTrips() != null) {
                                 for (Trip t : load.getTrips()) {
-                                    if (t.getStatus() != TripStatus.COMPLETED && t.getStatus() != TripStatus.FINALIZED) {
+                                    if (!STATUS_COMPLETED.equals(t.getStatus()) && !STATUS_FINALIZED.equals(t.getStatus())) {
                                         allCompleted = false;
                                         break;
                                     }
                                 }
                             }
                             
-                            // FIX: Use LoadStatus enum instead of String
+                            // ✅ FIXED: Use String constant instead of LoadStatus enum
                             if (allCompleted && load.getTripsCount() > 0) {
-                                load.setStatus(LoadStatus.COMPLETED);
+                                load.setStatus(LOAD_STATUS_COMPLETED);
                                 log.info("✅ All trips in load {} are completed", load.getLoadNumber());
                             }
                             
@@ -208,14 +221,12 @@ public class TripFinalisationService {
                         }
                     } catch (Exception e) {
                         log.error("❌ Error updating load for trip {}: {}", tripId, e.getMessage());
-                        // Don't block finalization if load update fails
                     }
                 } else {
                     log.warn("⚠️ Trip {} has no load assigned", tripId);
                 }
             } catch (Exception e) {
                 log.error("❌ Error in load update: {}", e.getMessage());
-                // Don't block finalization
             }
 
             // 12. Save trip
@@ -240,7 +251,7 @@ public class TripFinalisationService {
                     .orElseThrow(() -> new TripValidationException("Trip not found"));
             
             // Check if trip is COMPLETED
-            if (!TripStatus.COMPLETED.equals(trip.getStatus())) {
+            if (!STATUS_COMPLETED.equals(trip.getStatus())) {
                 log.debug("Trip {} cannot be finalized - status is {}", tripId, trip.getStatus());
                 return false;
             }
@@ -278,18 +289,17 @@ public class TripFinalisationService {
         long podCount = podRepository.countByTripId(tripId);
         boolean hasPods = podCount > 0;
         
-        // Check if all PODs are in valid status
         long validPods = podRepository.countByTripIdAndStatusIn(
             tripId, List.of("DELIVERED", "VERIFIED")
         );
         long invalidPods = podCount - validPods;
         
-        boolean canFinalize = hasPods && invalidPods == 0 && trip.getStatus() == TripStatus.COMPLETED;
+        boolean canFinalize = hasPods && invalidPods == 0 && STATUS_COMPLETED.equals(trip.getStatus());
         
         return TripFinalizationStatus.builder()
             .tripId(tripId)
             .tripNumber(trip.getTripNumber())
-            .currentStatus(trip.getStatus())
+            .currentStatus(trip.getStatus())  // Now a String
             .canBeFinalized(canFinalize)
             .hasPods(hasPods)
             .podCount(podCount)
@@ -298,8 +308,8 @@ public class TripFinalisationService {
             .build();
     }
 
-    private String getFinalizationMessage(boolean hasPods, long invalidPods, TripStatus status) {
-        if (status != TripStatus.COMPLETED) {
+    private String getFinalizationMessage(boolean hasPods, long invalidPods, String status) {
+        if (!STATUS_COMPLETED.equals(status)) {
             return String.format("Cannot finalize: Trip is %s. Must be COMPLETED first.", status);
         }
         if (!hasPods) {

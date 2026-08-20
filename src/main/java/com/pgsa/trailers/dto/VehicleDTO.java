@@ -142,7 +142,7 @@ public class VehicleDTO {
     @JsonProperty("insurance_expiry_date")
     private LocalDate insuranceExpiryDate;
 
-    // ====== FUEL FIELDS - ADD THESE ======
+    // ====== FUEL FIELDS ======
     
     @JsonProperty("current_fuel_level")
     private Double currentFuelLevel;
@@ -159,7 +159,9 @@ public class VehicleDTO {
     @JsonProperty("last_fuel_update")
     private LocalDateTime lastFuelUpdate;
 
-    // Optional: Add a method to convert from Entity to DTO
+    // ============================================================
+    // CONVERT FROM ENTITY TO DTO - FIXED
+    // ============================================================
     public static VehicleDTO fromEntity(Vehicle vehicle) {
         if (vehicle == null) {
             return null;
@@ -174,7 +176,8 @@ public class VehicleDTO {
         dto.setYear(vehicle.getYear());
         dto.setFuelType(vehicle.getFuelType());
         dto.setCurrentMileage(vehicle.getCurrentMileage());
-        dto.setStatus(vehicle.getStatus() != null ? vehicle.getStatus().name() : null);
+        // ✅ FIXED: Remove .name() - status is now a String
+        dto.setStatus(vehicle.getStatus());
         dto.setCreatedBy(vehicle.getCreatedBy());
         dto.setUpdatedBy(vehicle.getUpdatedBy());
         dto.setAvgConsumption(vehicle.getAvgConsumption());
@@ -195,7 +198,8 @@ public class VehicleDTO {
         dto.setIncidentsLogged(vehicle.getIncidentsLogged());
         dto.setNotes(vehicle.getNotes());
         dto.setCategory(vehicle.getCategory());
-        dto.setVehicleType(vehicle.getVehicleType() != null ? vehicle.getVehicleType().name() : null);
+        // ✅ FIXED: Remove .name() - vehicleType is now a String
+        dto.setVehicleType(vehicle.getVehicleType());
         dto.setIsActive(vehicle.getIsActive());
         dto.setVersion(vehicle.getVersion());
         dto.setCurrentValue(vehicle.getCurrentValue());
@@ -208,7 +212,7 @@ public class VehicleDTO {
         dto.setInsuranceProvider(vehicle.getInsuranceProvider());
         dto.setInsuranceExpiryDate(vehicle.getInsuranceExpiryDate());
         
-        // ====== FUEL FIELDS - ADD THESE ======
+        // ====== FUEL FIELDS ======
         dto.setCurrentFuelLevel(vehicle.getCurrentFuelLevel());
         dto.setFuelCapacity(vehicle.getFuelCapacity());
         dto.setFuelTankCount(vehicle.getFuelTankCount());

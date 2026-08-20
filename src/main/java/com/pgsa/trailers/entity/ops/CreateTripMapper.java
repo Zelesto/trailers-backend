@@ -31,7 +31,8 @@ public class CreateTripMapper {
         trip.setTripType(request.getTripType());
 
         // ======================== WORKFLOW ========================
-        trip.setStatus(request.getStatus()); 
+        // status is now a String, not an enum
+        trip.setStatus(request.getStatus());
         trip.setApprovalStatus(request.getApprovalStatus());
 
         // ======================== PLANNING ========================
@@ -56,7 +57,6 @@ public class CreateTripMapper {
         trip.setFuelConsumedLiters(request.getFuelConsumedLiters());
 
         // ======================== ORIGIN LOCATION (REQUIRED) ========================
-        // originLocation is required (@NotNull in DTO)
         if (request.getOriginLocation() != null && !request.getOriginLocation().isEmpty()) {
             trip.setOriginLocation(request.getOriginLocation());
         } else {
@@ -67,13 +67,11 @@ public class CreateTripMapper {
                 request.getOriginZipCode(),
                 request.getOriginProvince()
             );
-            // This should never happen due to @NotNull, but just in case
             trip.setOriginLocation(builtOrigin.isEmpty() ? "Origin not specified" : builtOrigin);
             log.warn("Origin location was null, built from components: {}", builtOrigin);
         }
 
         // ======================== DESTINATION LOCATION (REQUIRED) ========================
-        // destinationLocation is required (@NotNull in DTO)
         if (request.getDestinationLocation() != null && !request.getDestinationLocation().isEmpty()) {
             trip.setDestinationLocation(request.getDestinationLocation());
         } else {
@@ -84,7 +82,6 @@ public class CreateTripMapper {
                 request.getDestinationZipCode(),
                 request.getDestinationProvince()
             );
-            // This should never happen due to @NotNull, but just in case
             trip.setDestinationLocation(builtDestination.isEmpty() ? "Destination not specified" : builtDestination);
             log.warn("Destination location was null, built from components: {}", builtDestination);
         }
@@ -125,18 +122,15 @@ public class CreateTripMapper {
         trip.setCheckpoints(request.getCheckpoints());
 
         // ======================== AUDIT ========================
-        // ⭐ FIX: Convert String to Map for auditTrail
+        // FIXED: Convert to String for auditTrail
         Map<String, Object> auditMap = new HashMap<>();
         auditMap.put("action", "TRIP_CREATED");
         auditMap.put("timestamp", LocalDateTime.now());
         auditMap.put("createdBy", "system");
         auditMap.put("tripType", request.getTripType());
-        auditMap.put("status", request.getStatus() != null ? request.getStatus().name() : "DRAFT");
+        // ✅ FIXED: status is now a String, so no need for .name()
+        auditMap.put("status", request.getStatus() != null ? request.getStatus() : "DRAFT");
         
-        // If the request has auditTrail as a String, parse it or add it as a note
-        //if (request.getAuditTrail() != null && !request.getAuditTrail().isEmpty()) {
-         //   auditMap.put("note", request.getAuditTrail());
-        //}
         trip.setAuditTrail(auditMap);
 
         // ======================== DEFAULT VALUES ========================

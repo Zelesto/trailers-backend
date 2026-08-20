@@ -1,7 +1,6 @@
 package com.pgsa.trailers.entity.assets;
 
 import com.pgsa.trailers.config.BaseEntity;
-import com.pgsa.trailers.enums.DriverStatus;
 import com.pgsa.trailers.entity.security.AppUser;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;

@@ -1,7 +1,6 @@
 package com.pgsa.trailers.entity.finance;
 
 import com.pgsa.trailers.config.BaseEntity;
-import com.pgsa.trailers.enums.PaymentStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;

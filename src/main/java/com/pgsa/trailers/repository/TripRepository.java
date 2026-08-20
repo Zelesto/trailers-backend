@@ -18,32 +18,32 @@ import java.math.BigDecimal;
 public interface TripRepository extends JpaRepository<Trip, Long> {
 
     // ============================================================
-    // COUNT QUERIES
+    // COUNT QUERIES - FIXED: Use String for status
     // ============================================================
     
     @Query("SELECT t.status, COUNT(t) FROM Trip t GROUP BY t.status")
     List<Object[]> countByStatusGrouped();
     
-    long countByStatus(TripStatus status);
+    long countByStatus(String status);
     
-    long countByDriverIdAndStatus(Long driverId, TripStatus status);
+    long countByDriverIdAndStatus(Long driverId, String status);
     
-    long countByVehicleIdAndStatus(Long vehicleId, TripStatus status);
+    long countByVehicleIdAndStatus(Long vehicleId, String status);
     
     @Query("SELECT COUNT(t) FROM Trip t WHERE t.status = :status AND t.createdAt BETWEEN :startDate AND :endDate")
-    long countByStatusAndDateRange(@Param("status") TripStatus status,
+    long countByStatusAndDateRange(@Param("status") String status,
                                    @Param("startDate") LocalDateTime startDate,
                                    @Param("endDate") LocalDateTime endDate);
     
     // ============================================================
-    // JOIN FETCH QUERIES - For single entity only (not paginated)
+    // JOIN FETCH QUERIES
     // ============================================================
     
     @Query("SELECT t FROM Trip t")
     Page<Trip> findAllWithCustomer(Pageable pageable);
     
     @Query("SELECT t FROM Trip t WHERE t.status IN :statuses")
-    Page<Trip> findByStatusIn(@Param("statuses") List<TripStatus> statuses, Pageable pageable);
+    Page<Trip> findByStatusIn(@Param("statuses") List<String> statuses, Pageable pageable);
     
     @Query("SELECT t FROM Trip t WHERE t.customerId = :customerId")
     Page<Trip> findByCustomerId(@Param("customerId") Long customerId, Pageable pageable);
@@ -77,7 +77,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     Page<Trip> searchTripsWithCustomer(@Param("searchTerm") String searchTerm, Pageable pageable);
     
     // ============================================================
-    // FIND BY STATUS
+    // FIND BY STATUS - FIXED: Use String
     // ============================================================
     
     List<Trip> findByStatus(String status);
@@ -106,7 +106,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     Page<Trip> findAllTrips(Pageable pageable);
     
     // ============================================================
-    // FIND BY RELATIONSHIPS
+    // FIND BY RELATIONSHIPS - FIXED: Use String for status
     // ============================================================
     
     List<Trip> findByDriverId(Long driverId);
@@ -121,11 +121,11 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     
     List<Trip> findByDriverIdAndVehicleId(Long driverId, Long vehicleId);
     
-    List<Trip> findByDriverIdAndStatus(Long driverId, TripStatus status);
+    List<Trip> findByDriverIdAndStatus(Long driverId, String status);
     
-    List<Trip> findByVehicleIdAndStatus(Long vehicleId, TripStatus status);
+    List<Trip> findByVehicleIdAndStatus(Long vehicleId, String status);
     
-    List<Trip> findByDriverIdAndVehicleIdAndStatus(Long driverId, Long vehicleId, TripStatus status);
+    List<Trip> findByDriverIdAndVehicleIdAndStatus(Long driverId, Long vehicleId, String status);
     
     // ============================================================
     // FIND BY TRIP NUMBER
@@ -139,7 +139,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     boolean existsByTripNumber(String tripNumber);
     
     // ============================================================
-    // LOAD QUERIES
+    // LOAD QUERIES - FIXED: Use String for status
     // ============================================================
     
     Page<Trip> findByLoadIdIsNull(Pageable pageable);
@@ -151,7 +151,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     List<Trip> findTripsWithoutLoadOrderByIdDesc();
     
     @Query("SELECT t FROM Trip t WHERE (t.loadId IS NULL OR t.loadId = '') AND t.status IN :statuses")
-    Page<Trip> findByLoadIdIsNullAndStatusIn(@Param("statuses") List<TripStatus> statuses, Pageable pageable);
+    Page<Trip> findByLoadIdIsNullAndStatusIn(@Param("statuses") List<String> statuses, Pageable pageable);
     
     @Query("SELECT t FROM Trip t WHERE t.customerId = :customerId " +
            "AND t.plannedStartDate BETWEEN :startDate AND :endDate " +
@@ -206,7 +206,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     List<Trip> searchTripsOrderByIdDesc(@Param("searchTerm") String searchTerm);
     
     // ============================================================
-    // FILTER QUERIES - With pagination
+    // FILTER QUERIES - FIXED: Use String for status
     // ============================================================
     
     @Query("SELECT t FROM Trip t WHERE " +
@@ -229,7 +229,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
            "AND (:customer IS NULL OR LOWER(t.customer.name) = LOWER(:customer)) " +
            "ORDER BY t.id DESC")
     Page<Trip> findWithFilters(@Param("searchTerm") String searchTerm,
-                               @Param("status") TripStatus status,
+                               @Param("status") String status,
                                @Param("city") String city,
                                @Param("customer") String customer,
                                Pageable pageable);
@@ -246,13 +246,13 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
            "AND (:customer IS NULL OR LOWER(t.customer.name) = LOWER(:customer)) " +
            "ORDER BY t.id DESC")
     Page<Trip> findWithFiltersOrderByIdDesc(@Param("searchTerm") String searchTerm,
-                                            @Param("status") TripStatus status,
+                                            @Param("status") String status,
                                             @Param("city") String city,
                                             @Param("customer") String customer,
                                             Pageable pageable);
     
     // ============================================================
-    // ADVANCED QUERIES
+    // ADVANCED QUERIES - FIXED: Use String for status
     // ============================================================
     
     @Query("SELECT t FROM Trip t WHERE " +
@@ -261,7 +261,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
             "(:status IS NULL OR t.status = :status)")
     Page<Trip> findByFilters(@Param("driverId") Long driverId,
                              @Param("vehicleId") Long vehicleId,
-                             @Param("status") TripStatus status,
+                             @Param("status") String status,
                              Pageable pageable);
     
     @Query("SELECT t FROM Trip t WHERE " +
@@ -271,7 +271,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
             "ORDER BY t.id DESC")
     List<Trip> findByFiltersOrderByIdDesc(@Param("driverId") Long driverId,
                                           @Param("vehicleId") Long vehicleId,
-                                          @Param("status") TripStatus status);
+                                          @Param("status") String status);
     
     @Query("SELECT t FROM Trip t WHERE t.plannedStartDate BETWEEN :startDate AND :endDate")
     List<Trip> findByPlannedStartDateBetween(@Param("startDate") LocalDateTime startDate,
@@ -300,36 +300,24 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
                                                         @Param("endDate") LocalDateTime endDate);
 
     // ============================================================
-    // DRIVER QUERIES WITH PAGINATION
+    // DRIVER QUERIES WITH PAGINATION - FIXED: Use String for status
     // ============================================================
     
-    /**
-     * Find trips by driver ID with pagination using JPQL
-     */
     @Query("SELECT t FROM Trip t WHERE t.driver.id = :driverId")
     Page<Trip> findTripsByDriverId(@Param("driverId") Long driverId, Pageable pageable);
     
-    /**
-     * Find trips by driver ID and status list with pagination using JPQL
-     */
     @Query("SELECT t FROM Trip t WHERE t.driver.id = :driverId AND t.status IN :statuses")
     Page<Trip> findTripsByDriverIdAndStatusIn(
         @Param("driverId") Long driverId,
-        @Param("statuses") List<TripStatus> statuses,
+        @Param("statuses") List<String> statuses,
         Pageable pageable
     );
     
-    /**
-     * Find trips by driver ID with pagination using Native Query
-     */
     @Query(value = "SELECT * FROM trip WHERE driver_id = :driverId ORDER BY id DESC", 
            countQuery = "SELECT COUNT(*) FROM trip WHERE driver_id = :driverId",
            nativeQuery = true)
     Page<Trip> findTripsByDriverIdNative(@Param("driverId") Long driverId, Pageable pageable);
     
-    /**
-     * Find trips by driver ID and status list with pagination using Native Query
-     */
     @Query(value = "SELECT * FROM trip WHERE driver_id = :driverId AND status IN :statuses ORDER BY id DESC",
            countQuery = "SELECT COUNT(*) FROM trip WHERE driver_id = :driverId AND status IN :statuses",
            nativeQuery = true)
@@ -339,49 +327,36 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
         Pageable pageable
     );
 
-
-        // ============================================================
-    // VEHICLE QUERIES WITH PAGINATION
+    // ============================================================
+    // VEHICLE QUERIES WITH PAGINATION - FIXED: Use String for status
     // ============================================================
 
-    /**
- * Find trips by vehicle ID with pagination
- */
-@Query("SELECT t FROM Trip t WHERE t.vehicle.id = :vehicleId")
-Page<Trip> findTripsByVehicleId(@Param("vehicleId") Long vehicleId, Pageable pageable);
+    @Query("SELECT t FROM Trip t WHERE t.vehicle.id = :vehicleId")
+    Page<Trip> findTripsByVehicleId(@Param("vehicleId") Long vehicleId, Pageable pageable);
 
-/**
- * Find trips by vehicle ID and status list with pagination
- */
-@Query("SELECT t FROM Trip t WHERE t.vehicle.id = :vehicleId AND t.status IN :statuses")
-Page<Trip> findTripsByVehicleIdAndStatusIn(
-    @Param("vehicleId") Long vehicleId,
-    @Param("statuses") List<TripStatus> statuses,
-    Pageable pageable
-);
+    @Query("SELECT t FROM Trip t WHERE t.vehicle.id = :vehicleId AND t.status IN :statuses")
+    Page<Trip> findTripsByVehicleIdAndStatusIn(
+        @Param("vehicleId") Long vehicleId,
+        @Param("statuses") List<String> statuses,
+        Pageable pageable
+    );
 
-/**
- * Find trips by vehicle ID with pagination using Native Query
- */
-@Query(value = "SELECT * FROM trip WHERE vehicle_id = :vehicleId ORDER BY id DESC", 
-       countQuery = "SELECT COUNT(*) FROM trip WHERE vehicle_id = :vehicleId",
-       nativeQuery = true)
-Page<Trip> findTripsByVehicleIdNative(@Param("vehicleId") Long vehicleId, Pageable pageable);
+    @Query(value = "SELECT * FROM trip WHERE vehicle_id = :vehicleId ORDER BY id DESC", 
+           countQuery = "SELECT COUNT(*) FROM trip WHERE vehicle_id = :vehicleId",
+           nativeQuery = true)
+    Page<Trip> findTripsByVehicleIdNative(@Param("vehicleId") Long vehicleId, Pageable pageable);
 
-/**
- * Find trips by vehicle ID and status list with pagination using Native Query
- */
-@Query(value = "SELECT * FROM trip WHERE vehicle_id = :vehicleId AND status IN :statuses ORDER BY id DESC",
-       countQuery = "SELECT COUNT(*) FROM trip WHERE vehicle_id = :vehicleId AND status IN :statuses",
-       nativeQuery = true)
-Page<Trip> findTripsByVehicleIdAndStatusInNative(
-    @Param("vehicleId") Long vehicleId,
-    @Param("statuses") List<String> statuses,
-    Pageable pageable
-);
+    @Query(value = "SELECT * FROM trip WHERE vehicle_id = :vehicleId AND status IN :statuses ORDER BY id DESC",
+           countQuery = "SELECT COUNT(*) FROM trip WHERE vehicle_id = :vehicleId AND status IN :statuses",
+           nativeQuery = true)
+    Page<Trip> findTripsByVehicleIdAndStatusInNative(
+        @Param("vehicleId") Long vehicleId,
+        @Param("statuses") List<String> statuses,
+        Pageable pageable
+    );
     
     // ============================================================
-    // ACTIVE TRIPS
+    // ACTIVE TRIPS - FIXED: Use String constants
     // ============================================================
     
     @Query("SELECT t FROM Trip t WHERE t.status IN ('PLANNED', 'ASSIGNED', 'IN_PROGRESS', 'ACTIVE')")
@@ -397,20 +372,20 @@ Page<Trip> findTripsByVehicleIdAndStatusInNative(
     List<Trip> findCurrentlyRunningTripsOrderByIdDesc();
     
     // ============================================================
-    // UPDATE QUERIES
+    // UPDATE QUERIES - FIXED: Use String for status
     // ============================================================
     
     @Modifying
     @Query("UPDATE Trip t SET t.status = :newStatus, t.lastStatusUpdate = :now WHERE t.id = :tripId")
     int updateStatus(@Param("tripId") Long tripId,
-                     @Param("newStatus") TripStatus newStatus,
+                     @Param("newStatus") String newStatus,
                      @Param("now") LocalDateTime now);
     
     @Modifying
     @Query("UPDATE Trip t SET t.status = :newStatus, t.lastStatusUpdate = :now WHERE t.id = :tripId AND t.status = :currentStatus")
     int updateStatusIfCurrent(@Param("tripId") Long tripId,
-                              @Param("newStatus") TripStatus newStatus,
-                              @Param("currentStatus") TripStatus currentStatus,
+                              @Param("newStatus") String newStatus,
+                              @Param("currentStatus") String currentStatus,
                               @Param("now") LocalDateTime now);
     
     // ============================================================
@@ -427,10 +402,10 @@ Page<Trip> findTripsByVehicleIdAndStatusInNative(
     Optional<BigDecimal> getTotalDistanceForDriver(@Param("driverId") Long driverId);
 
     // ============================================================
-    // EXISTS QUERIES
+    // EXISTS QUERIES - FIXED: Use String for status
     // ============================================================
     
-    boolean existsByDriverIdAndStatus(Long driverId, TripStatus status);
+    boolean existsByDriverIdAndStatus(Long driverId, String status);
     
-    boolean existsByVehicleIdAndStatus(Long vehicleId, TripStatus status);
+    boolean existsByVehicleIdAndStatus(Long vehicleId, String status);
 }

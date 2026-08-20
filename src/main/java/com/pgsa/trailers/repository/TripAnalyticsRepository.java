@@ -4,7 +4,6 @@ package com.pgsa.trailers.repository;
 import com.pgsa.trailers.dto.TripKpiDTO;
 import com.pgsa.trailers.dto.TripSummaryDTO;
 import com.pgsa.trailers.entity.ops.Trip;
-import com.pgsa.trailers.enums.TripStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
@@ -42,7 +41,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         WHERE (:status IS NULL OR t.status = :status)
         AND t.isActive = true
     """)
-    List<TripSummaryDTO> findTripSummariesByStatus(@Param("status") TripStatus status);
+    List<TripSummaryDTO> findTripSummariesByStatus(@Param("status") String status);
 
     /**
      * Get trip summaries with filters + pagination

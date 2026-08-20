@@ -286,7 +286,7 @@ public class Load extends BaseEntity {
     @PrePersist
     protected void onCreate() {
         if (status == null) {
-            status = LoadStatus.PENDING;
+           status = "PENDING";
         }
         if (priority == null) {
             priority = "NORMAL";
@@ -322,9 +322,7 @@ public class Load extends BaseEntity {
             totalDepotKm = BigDecimal.ZERO;
         }
 
-        if (status == null) {
-           status = "PENDING";
-        }
+
         
         log.info("✅ Load pre-persist complete: {} | Status: {} | Ref: {}", 
             this.loadNumber, this.status, this.referenceNumber);

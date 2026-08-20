@@ -509,13 +509,13 @@ public class Driver extends BaseEntity {
     }
 
     // --- Status ---
-    public DriverStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(DriverStatus status) {
-        this.status = status;
-    }
+        public String getStatus() {
+            return status;
+        }
+        
+        public void setStatus(String status) {
+            this.status = status;
+        }
 
     // --- Termination Date ---
     public LocalDate getTerminationDate() {

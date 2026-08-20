@@ -56,9 +56,9 @@ public class Vehicle extends BaseEntity {
     @Column(name = "year")
     private Integer year;
 
-    @Enumerated(EnumType.STRING)
+    
     @Column(name = "vehicle_type", length = 20, nullable = false)
-    private VehicleType vehicleType = VehicleType.TRUCK;
+    private String vehicleType;
 
     @Column(name = "fuel_type", length = 20)
     private String fuelType;
@@ -123,9 +123,9 @@ public class Vehicle extends BaseEntity {
     @Column(name = "audit_trail", columnDefinition = "jsonb")
     private Map<String, Object> auditTrail = new HashMap<>();
 
-    @Enumerated(EnumType.STRING)
+    
     @Column(name = "status", length = 20, nullable = false)
-    private VehicleStatus status = VehicleStatus.ACTIVE;
+    private String status;
 
     @Column(name = "category", length = 50)
     private String category;
@@ -177,7 +177,7 @@ public class Vehicle extends BaseEntity {
 
     // ====== Constructors ======
     public Vehicle() {
-        this.status = VehicleStatus.ACTIVE;
+        this.status = "ACTIVE";
         this.incidentsLogged = 0;
         this.auditTrail = new HashMap<>();
         this.setIsActive(true);
@@ -196,9 +196,8 @@ public class Vehicle extends BaseEntity {
     }
 
     public boolean isActive() {
-        return (status == VehicleStatus.ACTIVE || status == VehicleStatus.AVAILABLE) && 
-               super.isActive();
-    }
+            return ("ACTIVE".equals(status) || "AVAILABLE".equals(status)) && super.isActive();
+        }
 
     public boolean isAvailable() {
         return isActive() &&
@@ -218,7 +217,7 @@ public class Vehicle extends BaseEntity {
 
     public boolean isInMaintenance() {
         return "MAINTENANCE".equalsIgnoreCase(maintenanceStatus) || 
-               status == VehicleStatus.MAINTENANCE;
+               "MAINTENANCE".equals(status);
     }
 
     public boolean isOverdueForService() {

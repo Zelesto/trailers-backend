@@ -112,7 +112,7 @@ public class TripResponse {
     private String containerNumber;
 
     // ======================== WORKFLOW ========================
-    private TripStatus status;
+    private String status;
     private String approvalStatus;
     private String priority;
     private LocalDateTime approvedAt;

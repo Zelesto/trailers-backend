@@ -3,8 +3,9 @@ package com.pgsa.trailers.entity.ops.auto;
 import java.util.EnumSet;
 
 import java.util.Map;
+import java.util.Set;
 
-import static com.pgsa.trailers.enums.TripStatus.*;
+
 
 public class TripStateMachine {
 

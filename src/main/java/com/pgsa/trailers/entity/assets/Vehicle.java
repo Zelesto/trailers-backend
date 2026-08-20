@@ -1,8 +1,6 @@
 package com.pgsa.trailers.entity.assets;
 
 import com.pgsa.trailers.config.BaseEntity;
-import com.pgsa.trailers.enums.VehicleStatus;
-import com.pgsa.trailers.enums.VehicleType;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -321,9 +319,12 @@ public class Vehicle extends BaseEntity {
     // ====== Lifecycle Hooks ======
     @PrePersist
     protected void onCreate() {
-        if (status == null) {
-            status = VehicleStatus.ACTIVE;
-        }
+            if (status == null) {
+                status = "ACTIVE";
+            }
+            if (vehicleType == null) {
+                vehicleType = "TRUCK";
+            }
         if (incidentsLogged == null) {
             incidentsLogged = 0;
         }
@@ -357,22 +358,22 @@ public class Vehicle extends BaseEntity {
         this.registrationNumber = registrationNumber;
     }
 
-    public VehicleType getVehicleType() {
-        return vehicleType;
-    }
+        public String getVehicleType() {
+            return vehicleType;
+        }
 
-    public void setVehicleType(VehicleType vehicleType) {
-        this.vehicleType = vehicleType;
-    }
+        public void setVehicleType(String vehicleType) {
+            this.vehicleType = vehicleType;
+        }
 
-    public VehicleStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(VehicleStatus status) {
-        this.status = status;
-    }
-
+        public String getStatus() {
+            return status;
+        }
+        
+        public void setStatus(String status) {
+            this.status = status;
+        }
+        
     public BigDecimal getCurrentOdometer() {
         return currentOdometer;
     }

@@ -358,7 +358,7 @@ public class DriverService {
     dto.setHireDate(driver.getHireDate());
     dto.setPhoneNumber(driver.getPhoneNumber());
     dto.setEmail(driver.getEmail());
-    dto.setStatus(driver.getStatus() != null ? driver.getStatus().name() : null);
+    dto.setStatus(driver.getStatus());
     dto.setTerminationDate(driver.getTerminationDate());
     dto.setTerminationReason(driver.getTerminationReason());
     dto.setEmploymentType(driver.getEmploymentType());

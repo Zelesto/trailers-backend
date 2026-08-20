@@ -42,9 +42,8 @@ public class TripResponseMapper {
             response.setLoadNumber(trip.getLoad().getLoadNumber());
             response.setLoadType(trip.getLoad().getCommodityType());
             response.setLoadDescription(trip.getLoad().getDescription());
-            response.setLoadStatus(trip.getLoad().getStatus() != null 
-                ? trip.getLoad().getStatus().name() 
-                : null);
+            // ✅ FIXED: Remove .name() - status is now a String
+            response.setLoadStatus(trip.getLoad().getStatus());
         } else if (trip.getLoadId() != null) {
             response.setLoadId(trip.getLoadId());
             response.setLoadNumber(trip.getLoadNumber());
@@ -229,42 +228,42 @@ public class TripResponseMapper {
     }
 
     /**
- * Convert Vehicle entity to VehicleDTO - Safe version with null/exception handling
- */
-private VehicleDTO toVehicleDTO(Vehicle vehicle) {
-    if (vehicle == null) {
-        return null;
-    }
+     * Convert Vehicle entity to VehicleDTO - Safe version with null/exception handling
+     */
+    private VehicleDTO toVehicleDTO(Vehicle vehicle) {
+        if (vehicle == null) {
+            return null;
+        }
 
-    VehicleDTO dto = new VehicleDTO();
-    dto.setId(vehicle.getId());
-    
-    try {
-        dto.setRegistrationNumber(vehicle.getRegistrationNumber());
-    } catch (Exception e) {
-        log.warn("Could not load registration number for vehicle {}: {}", vehicle.getId(), e.getMessage());
+        VehicleDTO dto = new VehicleDTO();
+        dto.setId(vehicle.getId());
+        
+        try {
+            dto.setRegistrationNumber(vehicle.getRegistrationNumber());
+        } catch (Exception e) {
+            log.warn("Could not load registration number for vehicle {}: {}", vehicle.getId(), e.getMessage());
+        }
+        
+        try {
+            dto.setMake(vehicle.getMake());
+        } catch (Exception e) {
+            log.warn("Could not load make for vehicle {}: {}", vehicle.getId(), e.getMessage());
+        }
+        
+        try {
+            dto.setModel(vehicle.getModel());
+        } catch (Exception e) {
+            log.warn("Could not load model for vehicle {}: {}", vehicle.getId(), e.getMessage());
+        }
+        
+        try {
+            dto.setIsActive(vehicle.getIsActive());
+        } catch (Exception e) {
+            log.warn("Could not load isActive for vehicle {}: {}", vehicle.getId(), e.getMessage());
+        }
+        
+        return dto;
     }
-    
-    try {
-        dto.setMake(vehicle.getMake());
-    } catch (Exception e) {
-        log.warn("Could not load make for vehicle {}: {}", vehicle.getId(), e.getMessage());
-    }
-    
-    try {
-        dto.setModel(vehicle.getModel());
-    } catch (Exception e) {
-        log.warn("Could not load model for vehicle {}: {}", vehicle.getId(), e.getMessage());
-    }
-    
-    try {
-        dto.setIsActive(vehicle.getIsActive());
-    } catch (Exception e) {
-        log.warn("Could not load isActive for vehicle {}: {}", vehicle.getId(), e.getMessage());
-    }
-    
-    return dto;
-}
 
     /**
      * Convert Driver entity to DriverDTO
@@ -279,22 +278,13 @@ private VehicleDTO toVehicleDTO(Vehicle vehicle) {
         dto.setFirstName(driver.getFirstName());
         dto.setLastName(driver.getLastName());
         dto.setLicenseNumber(driver.getLicenseNumber());
-        // Only set these if they exist in your Driver entity
-        // dto.setLicenseClass(driver.getLicenseClass());
-        // dto.setLicenseExpiry(driver.getLicenseExpiry());
-        // dto.setPhone(driver.getPhone());
-        // dto.setEmail(driver.getEmail());
-        // dto.setAddress(driver.getAddress());
-        // dto.setHireDate(driver.getHireDate());
-        // dto.setEmployeeNumber(driver.getEmployeeNumber());
         dto.setIsActive(driver.getIsActive());
-        // dto.setNotes(driver.getNotes());
         
         return dto;
     }
 
     /**
-     * Convert Load entity to LoadResponseDTO
+     * Convert Load entity to LoadResponseDTO - FIXED
      */
     private LoadResponseDTO toLoadResponseDTO(Load load) {
         if (load == null) {
@@ -308,7 +298,8 @@ private VehicleDTO toVehicleDTO(Vehicle vehicle) {
                 .customerId(load.getCustomerId())
                 .description(load.getDescription())
                 .commodityType(load.getCommodityType())
-                .status(load.getStatus() != null ? load.getStatus().name() : null)
+                // ✅ FIXED: Remove .name() - status is now a String
+                .status(load.getStatus())
                 .tripsCount(load.getTripsCount())
                 .originLocation(load.getOriginLocation())
                 .destinationLocation(load.getDestinationLocation())
@@ -318,11 +309,6 @@ private VehicleDTO toVehicleDTO(Vehicle vehicle) {
                 .createdAt(load.getCreatedAt())
                 .updatedAt(load.getUpdatedAt())
                 .lastStatusUpdate(load.getLastStatusUpdate());
-
-        // Only set these if they exist in your Load entity
-        // .createdBy(load.getCreatedBy())
-        // .updatedBy(load.getUpdatedBy())
-        // .auditTrail(load.getAuditTrail())
 
         return builder.build();
     }

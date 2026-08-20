@@ -8,7 +8,6 @@ import com.pgsa.trailers.dto.VehicleDTO;
 import com.pgsa.trailers.entity.assets.Vehicle;
 import com.pgsa.trailers.entity.vehicle.Certificate;
 import com.pgsa.trailers.entity.vehicle.MaintenanceRecord;
-import com.pgsa.trailers.enums.VehicleStatus;
 import com.pgsa.trailers.service.VehicleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,9 +15,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import com.pgsa.trailers.dto.CertificateRequest;
-import com.pgsa.trailers.dto.VehicleCertificateDTO;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -34,6 +30,24 @@ import java.util.Map;
 public class VehicleController {
 
     private final VehicleService vehicleService;
+
+    // ============================================================
+    // CONSTANTS FOR STATUS VALUES (from enum_master table)
+    // ============================================================
+    public static final String STATUS_AVAILABLE = "AVAILABLE";
+    public static final String STATUS_ASSIGNED = "ASSIGNED";
+    public static final String STATUS_IN_TRIP = "IN_TRIP";
+    public static final String STATUS_ACTIVE = "ACTIVE";
+    public static final String STATUS_INACTIVE = "INACTIVE";
+    public static final String STATUS_MAINTENANCE = "MAINTENANCE";
+    public static final String STATUS_OUT_OF_SERVICE = "OUT_OF_SERVICE";
+
+    // List of all valid statuses for validation
+    private static final List<String> VALID_STATUSES = List.of(
+        STATUS_AVAILABLE, STATUS_ASSIGNED, STATUS_IN_TRIP,
+        STATUS_ACTIVE, STATUS_INACTIVE, STATUS_MAINTENANCE,
+        STATUS_OUT_OF_SERVICE
+    );
 
     // ====== GET Endpoints ======
     
@@ -76,75 +90,73 @@ public class VehicleController {
         }
     }
 
-    // In VehicleController.java - Add this method
-
-@PostMapping("/maintenance")
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'MANAGER')")
-public ResponseEntity<?> addMaintenanceRecord(@RequestBody MaintenanceRecordRequest request) {
-    log.info("📋 Adding maintenance record for vehicle: {}", request.getVehicleId());
-    try {
-        MaintenanceRecord record = vehicleService.addMaintenanceRecord(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
-            "success", true,
-            "message", "Maintenance record added successfully",
-            "record", record
-        ));
-    } catch (RuntimeException e) {
-        log.error("Error adding maintenance record: {}", e.getMessage());
-        return ResponseEntity.badRequest().body(Map.of(
-            "success", false,
-            "error", e.getMessage()
-        ));
-    } catch (Exception e) {
-        log.error("Error adding maintenance record: {}", e.getMessage(), e);
-        return ResponseEntity.internalServerError().body(Map.of(
-            "success", false,
-            "error", "Failed to add maintenance record: " + e.getMessage()
-        ));
+    @PostMapping("/maintenance")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'MANAGER')")
+    public ResponseEntity<?> addMaintenanceRecord(@RequestBody MaintenanceRecordRequest request) {
+        log.info("📋 Adding maintenance record for vehicle: {}", request.getVehicleId());
+        try {
+            MaintenanceRecord record = vehicleService.addMaintenanceRecord(request);
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                "success", true,
+                "message", "Maintenance record added successfully",
+                "record", record
+            ));
+        } catch (RuntimeException e) {
+            log.error("Error adding maintenance record: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "error", e.getMessage()
+            ));
+        } catch (Exception e) {
+            log.error("Error adding maintenance record: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                "success", false,
+                "error", "Failed to add maintenance record: " + e.getMessage()
+            ));
+        }
     }
-}
 
     @PutMapping("/maintenance/{id}")
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'MANAGER')")
-public ResponseEntity<?> updateMaintenanceRecord(
-        @PathVariable Long id,
-        @RequestBody MaintenanceRecordRequest request
-) {
-    log.info("📋 Updating maintenance record: {}", id);
-    try {
-        MaintenanceRecord updated = vehicleService.updateMaintenanceRecord(id, request);
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "message", "Maintenance record updated successfully",
-            "record", updated
-        ));
-    } catch (Exception e) {
-        log.error("Error updating maintenance record: {}", e.getMessage(), e);
-        return ResponseEntity.internalServerError().body(Map.of(
-            "success", false,
-            "error", "Failed to update maintenance record: " + e.getMessage()
-        ));
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'MANAGER')")
+    public ResponseEntity<?> updateMaintenanceRecord(
+            @PathVariable Long id,
+            @RequestBody MaintenanceRecordRequest request
+    ) {
+        log.info("📋 Updating maintenance record: {}", id);
+        try {
+            MaintenanceRecord updated = vehicleService.updateMaintenanceRecord(id, request);
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Maintenance record updated successfully",
+                "record", updated
+            ));
+        } catch (Exception e) {
+            log.error("Error updating maintenance record: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                "success", false,
+                "error", "Failed to update maintenance record: " + e.getMessage()
+            ));
+        }
     }
-}
 
-@DeleteMapping("/maintenance/{id}")
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'MANAGER')")
-public ResponseEntity<?> deleteMaintenanceRecord(@PathVariable Long id) {
-    log.info("🗑️ Deleting maintenance record: {}", id);
-    try {
-        vehicleService.deleteMaintenanceRecord(id);
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "message", "Maintenance record deleted successfully"
-        ));
-    } catch (Exception e) {
-        log.error("Error deleting maintenance record: {}", e.getMessage(), e);
-        return ResponseEntity.internalServerError().body(Map.of(
-            "success", false,
-            "error", "Failed to delete maintenance record: " + e.getMessage()
-        ));
+    @DeleteMapping("/maintenance/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'MANAGER')")
+    public ResponseEntity<?> deleteMaintenanceRecord(@PathVariable Long id) {
+        log.info("🗑️ Deleting maintenance record: {}", id);
+        try {
+            vehicleService.deleteMaintenanceRecord(id);
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Maintenance record deleted successfully"
+            ));
+        } catch (Exception e) {
+            log.error("Error deleting maintenance record: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                "success", false,
+                "error", "Failed to delete maintenance record: " + e.getMessage()
+            ));
+        }
     }
-}
     
     @PutMapping("/{id}/fuel-level")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'MANAGER')")
@@ -162,12 +174,10 @@ public ResponseEntity<?> deleteMaintenanceRecord(@PathVariable Long id) {
                 ));
             }
             
-            // Use the service to get and update the vehicle
             Vehicle vehicle = vehicleService.getVehicleById(id);
             vehicle.setCurrentFuelLevel(fuelLevel);
             vehicle.setLastFuelUpdate(LocalDateTime.now());
             
-            // Use the service to save the vehicle
             Vehicle saved = vehicleService.updateVehicle(id, VehicleDTO.fromEntity(vehicle));
             
             return ResponseEntity.ok(Map.of(
@@ -208,9 +218,6 @@ public ResponseEntity<?> deleteMaintenanceRecord(@PathVariable Long id) {
         }
     }
 
-    /**
-     * Reset fuel to full for a vehicle
-     */
     @PostMapping("/{id}/fuel/reset")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'MANAGER')")
     public ResponseEntity<?> resetFuelToFull(
@@ -240,9 +247,6 @@ public ResponseEntity<?> deleteMaintenanceRecord(@PathVariable Long id) {
         }
     }
 
-    /**
-     * Add a certificate to a vehicle
-     */
     @PostMapping("/{id}/certificates")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'MANAGER')")
     public ResponseEntity<?> addCertificate(
@@ -297,16 +301,22 @@ public ResponseEntity<?> deleteMaintenanceRecord(@PathVariable Long id) {
         }
     }
 
+    // ============================================================
+    // STATUS ENDPOINTS - FIXED to use String
+    // ============================================================
     @GetMapping("/status/{status}")
     public ResponseEntity<List<Vehicle>> getVehiclesByStatus(@PathVariable String status) {
         log.info("GET /api/vehicles/status/{}", status);
         try {
-            VehicleStatus vehicleStatus = VehicleStatus.valueOf(status.toUpperCase());
-            List<Vehicle> vehicles = vehicleService.getVehiclesByStatus(vehicleStatus);
+            // Validate status is valid
+            String statusUpper = status.toUpperCase();
+            if (!VALID_STATUSES.contains(statusUpper)) {
+                log.warn("Invalid status: {}", status);
+                return ResponseEntity.badRequest().build();
+            }
+            
+            List<Vehicle> vehicles = vehicleService.getVehiclesByStatus(statusUpper);
             return ResponseEntity.ok(vehicles);
-        } catch (IllegalArgumentException e) {
-            log.error("Invalid status: {}", status);
-            return ResponseEntity.badRequest().build();
         } catch (Exception e) {
             log.error("Error fetching vehicles by status {}: {}", status, e.getMessage(), e);
             return ResponseEntity.internalServerError().build();

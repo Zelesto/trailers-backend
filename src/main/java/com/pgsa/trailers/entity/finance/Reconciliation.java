@@ -1,7 +1,6 @@
 package com.pgsa.trailers.entity.finance;
 
 import com.pgsa.trailers.config.BaseEntity;
-import com.pgsa.trailers.enums.ReconciliationStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -53,12 +52,12 @@ public class Reconciliation extends BaseEntity {
     @Column(name = "to_date")
     private LocalDateTime to;
 
-public String getStatus() {
-    return status;
-}
-
-public void setStatus(String status) {
-    this.status = status;
-}
+    public String getStatus() {
+        return status;
+    }
+    
+    public void setStatus(String status) {
+        this.status = status;
+    }
     
 }

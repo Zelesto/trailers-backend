@@ -31,7 +31,6 @@ public class Reconciliation extends BaseEntity {
     @Column(name = "variance", precision = 15, scale = 2)
     private BigDecimal variance;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private String status;
 
@@ -53,4 +52,13 @@ public class Reconciliation extends BaseEntity {
 
     @Column(name = "to_date")
     private LocalDateTime to;
+
+public String getStatus() {
+    return status;
+}
+
+public void setStatus(String status) {
+    this.status = status;
+}
+    
 }

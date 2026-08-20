@@ -5,7 +5,7 @@ import com.pgsa.trailers.dto.DriverRequest;
 import com.pgsa.trailers.dto.UserRequest;
 import com.pgsa.trailers.entity.assets.Driver;
 import com.pgsa.trailers.entity.security.AppUser;
-import com.pgsa.trailers.enums.DriverStatus;
+
 import com.pgsa.trailers.repository.DriverRepository;
 import com.pgsa.trailers.repository.AppUserRepository;
 import com.pgsa.trailers.service.security.UserService;
@@ -84,8 +84,7 @@ public class DriverService {
         return convertToDTO(driver);
     }
 
-    public List<DriverDTO> getDriversByStatus(DriverStatus status) {
-        log.debug("Fetching drivers by status: {}", status);
+    public List<DriverDTO> getDriversByStatus(String status) {
         return driverRepository.findByStatus(status).stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
@@ -251,14 +250,12 @@ public class DriverService {
     }
 
     @Transactional
-    public void updateStatus(Long driverId, DriverStatus status) {
-        log.info("Updating driver {} status to {}", driverId, status);
+    public void updateStatus(Long driverId, String status) {
         Driver driver = driverRepository.findById(driverId)
-                .orElseThrow(() -> new RuntimeException("Driver not found with ID: " + driverId));
+                .orElseThrow(() -> new RuntimeException("Driver not found"));
         driver.setStatus(status);
         driver.setUpdatedAt(LocalDateTime.now());
         driverRepository.save(driver);
-        log.info("✅ Driver {} status updated to {}", driverId, status);
     }
 
     // ====== HELPER METHODS ======

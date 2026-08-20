@@ -18,9 +18,11 @@ public class VehicleMapper {
         dto.setMake(vehicle.getMake());
         dto.setModel(vehicle.getModel());
         dto.setYear(vehicle.getYear());
-        dto.setVehicleType(vehicle.getVehicleType() != null ? vehicle.getVehicleType().name() : null);
+        // ✅ FIXED: Remove .name() - vehicleType is now a String
+        dto.setVehicleType(vehicle.getVehicleType());
         dto.setFuelType(vehicle.getFuelType());
-        dto.setStatus(vehicle.getStatus() != null ? vehicle.getStatus().name() : null);
+        // ✅ FIXED: Remove .name() - status is now a String
+        dto.setStatus(vehicle.getStatus());
         dto.setCurrentMileage(vehicle.getCurrentMileage());
         dto.setCurrentOdometer(vehicle.getCurrentOdometer());
         

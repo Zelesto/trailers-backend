@@ -296,9 +296,8 @@ public class Trip {
     /* ========================
        Workflow
        ======================== */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", length = 50, nullable = false)
-    private TripStatus status;
+        @Column(name = "status", length = 50, nullable = false)
+        private String status;
 
     @Column(name = "approval_status", length = 30)
     private String approvalStatus;
@@ -404,24 +403,27 @@ public class Trip {
     }
 
     public boolean isPlanned() {
-        return status == TripStatus.PLANNED;
-    }
-
-    public boolean isInProgress() {
-        return status == TripStatus.IN_PROGRESS;
-    }
-
-    public boolean isCompleted() {
-        return status == TripStatus.COMPLETED;
-    }
-
-    public boolean isCancelled() {
-        return status == TripStatus.CANCELLED;
-    }
-
-    public boolean isActive() {
-        return status == TripStatus.PLANNED || status == TripStatus.IN_PROGRESS || status == TripStatus.ON_HOLD;
-    }
+    return "PLANNED".equals(status);
+        }
+        
+        public boolean isInProgress() {
+            return "IN_PROGRESS".equals(status);
+        }
+        
+        public boolean isCompleted() {
+            return "COMPLETED".equals(status);
+        }
+        
+        public boolean isCancelled() {
+            return "CANCELLED".equals(status);
+        }
+        
+        public boolean isActive() {
+            return status != null && 
+                   ("PLANNED".equals(status) || 
+                    "IN_PROGRESS".equals(status) || 
+                    "ON_HOLD".equals(status));
+        }
 
     public BigDecimal getTotalDepotKm() {
         BigDecimal from = fromDepotKm != null ? fromDepotKm : BigDecimal.ZERO;
@@ -611,7 +613,7 @@ public class Trip {
     protected void onCreate() {
         // Set default values
         if (status == null) {
-            status = TripStatus.PLANNED;
+            status = "PLANNED";
         }
         if (incidentsLogged == null) {
             incidentsLogged = 0;

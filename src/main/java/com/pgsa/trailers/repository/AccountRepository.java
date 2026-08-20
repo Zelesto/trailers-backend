@@ -1,7 +1,7 @@
 package com.pgsa.trailers.repository;
 
 import com.pgsa.trailers.entity.finance.Account;
-import com.pgsa.trailers.enums.AccountType;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import java.util.List;
@@ -10,7 +10,7 @@ import java.util.List;
 public interface AccountRepository extends JpaRepository<Account, Long> {
 
     // Use AccountType enum
-    List<Account> findByType(AccountType type);
+    List<Account> findByType(String type);
 
     // Find active accounts
     List<Account> findByActiveTrue();

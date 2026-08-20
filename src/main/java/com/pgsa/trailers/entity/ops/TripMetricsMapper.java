@@ -32,9 +32,9 @@ public class TripMetricsMapper {
             dto.setTripNumber(trip.getTripNumber());
             dto.setOriginLocation(trip.getOriginLocation());
             dto.setDestinationLocation(trip.getDestinationLocation());
-            // Set vehicle type if vehicle exists
+            // FIXED: Removed .name() call - vehicleType is String
             if (trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null) {
-                dto.setVehicleType(trip.getVehicle().getVehicleType().name());
+                dto.setVehicleType(trip.getVehicle().getVehicleType());
             }
         } else {
             log.warn("⚠️ TripMetrics with ID {} has no associated Trip", metrics.getId());

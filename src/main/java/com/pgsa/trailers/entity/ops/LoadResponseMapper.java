@@ -28,7 +28,8 @@ public class LoadResponseMapper {
                 .volumeCubicM(load.getVolumeCubicM())
                 .loadingDate(load.getLoadingDate())
                 .unloadingDate(load.getUnloadingDate())
-                .status(load.getStatus() != null ? load.getStatus().name() : null)
+                // ✅ FIXED: Remove .name() - status is now a String
+                .status(load.getStatus())
                 .commodityType(load.getCommodityType())
                 .palletCount(load.getPalletCount())
                 .containerNumber(load.getContainerNumber())
@@ -37,14 +38,14 @@ public class LoadResponseMapper {
                 .estimatedValue(load.getEstimatedValue())
                 .actualValue(load.getActualValue())
                 .priority(load.getPriority())
-                .tripCount(load.getTripCount())
+                // ✅ FIXED: Use tripsCount instead of tripCount
+                .tripsCount(load.getTripCount())
                 .trips(load.getTrips() != null ? 
                     load.getTrips().stream().map(this::toTripSummary).collect(Collectors.toList()) : 
                     null)
                 .createdAt(load.getCreatedAt())
                 .updatedAt(load.getUpdatedAt())
                 
-                // Only include fields that exist in Load entity
                 .originLocation(load.getOriginLocation())
                 .destinationLocation(load.getDestinationLocation())
                 .handlingInstructions(load.getHandlingInstructions())
@@ -52,20 +53,19 @@ public class LoadResponseMapper {
                 .hazardClass(load.getHazardClass())
                 .temperatureRequirements(load.getTemperatureRequirements())
                 
-
-                
                 .tripsCount(load.getTripsCount())
                 .totalDistanceKm(load.getTotalDistanceKm())
                 .totalHoursActive(load.getTotalHoursActive())
                 .incidentsLogged(load.getIncidentsLogged())
                 .completedTrips(load.getCompletedTrips())
+                // ✅ FIXED: Use String comparison instead of .name()
                 .pendingTrips(load.getTrips() != null ? 
                     (int) load.getTrips().stream()
-                        .filter(t -> t.getStatus() != null && t.getStatus().name().equals("PLANNED"))
+                        .filter(t -> t.getStatus() != null && "PLANNED".equals(t.getStatus()))
                         .count() : 0)
                 .inProgressTrips(load.getTrips() != null ? 
                     (int) load.getTrips().stream()
-                        .filter(t -> t.getStatus() != null && t.getStatus().name().equals("IN_PROGRESS"))
+                        .filter(t -> t.getStatus() != null && "IN_PROGRESS".equals(t.getStatus()))
                         .count() : 0)
                 
                 .insurancePolicyNumber(load.getInsurancePolicyNumber())
@@ -88,7 +88,6 @@ public class LoadResponseMapper {
                 .isActive(load.isActive())
                 .canAcceptTrip(load.canAcceptTrip())
                 
-                // Merge suggestion fields - default to false/null
                 .mergeSuggestion(false)
                 .mergeMessage(null)
                 

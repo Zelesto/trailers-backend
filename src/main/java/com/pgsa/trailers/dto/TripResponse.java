@@ -1,7 +1,7 @@
 // src/main/java/com/pgsa/trailers/dto/TripResponse.java
 package com.pgsa.trailers.dto;
 
-import com.pgsa.trailers.enums.TripStatus;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

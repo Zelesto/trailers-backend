@@ -1,8 +1,6 @@
 package com.pgsa.trailers.repository;
 
 import com.pgsa.trailers.entity.assets.Vehicle;
-import com.pgsa.trailers.enums.VehicleStatus;
-import com.pgsa.trailers.enums.VehicleType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -28,11 +26,11 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
     List<Vehicle> findByIsActiveTrue();
 
     // ====== Status Finders ======
-    List<Vehicle> findByStatus(VehicleStatus status);
-    List<Vehicle> findByStatusIn(List<VehicleStatus> statuses);
+    List<Vehicle> findByStatus(String status);
+    List<Vehicle> findByStatusIn(List<String> statuses);
 
     // ====== Vehicle Type ======
-    List<Vehicle> findByVehicleType(VehicleType vehicleType);
+    List<Vehicle> findByVehicleType(String vehicleType);
 
     // ====== Make/Model ======
     List<Vehicle> findByMakeContainingIgnoreCase(String make);
@@ -50,7 +48,7 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
     // ====== Driver Related ======
     List<Vehicle> findByAssignedDriverIsNotNull();
     List<Vehicle> findByAssignedDriverIsNull();
-    List<Vehicle> findByAssignedDriverIsNullAndStatusIn(List<VehicleStatus> statuses);
+    List<Vehicle> findByAssignedDriverIsNullAndStatusIn(List<String> statuses);
     List<Vehicle> findByAssignedDriverId(Long driverId);
 
     // ====== Maintenance ======
@@ -67,6 +65,6 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
     List<Vehicle> findByFuelType(String fuelType);
 
     // ====== Counts ======
-    long countByStatus(VehicleStatus status);
+    long countByStatus(String status);
     long countByIsActiveTrue();
 }

@@ -1,7 +1,6 @@
 package com.pgsa.trailers.controller.debug;
 
 import com.pgsa.trailers.entity.finance.Account;
-import com.pgsa.trailers.enums.AccountType;
 import com.pgsa.trailers.repository.AccountRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,7 +29,7 @@ public class AccountDebugController {
             response.put("totalAccounts", count);
 
             // Test 2: Try to find by type
-            List<Account> fuelAccounts = accountRepository.findByType(AccountType.FUEL);
+            List<Account> fuelAccounts = accountRepository.findByType("FUEL");
             response.put("fuelAccountsCount", fuelAccounts.size());
             response.put("fuelAccounts", fuelAccounts);
 

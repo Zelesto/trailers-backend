@@ -67,9 +67,9 @@ public class Driver extends BaseEntity {
     @Column(name = "email", length = 100)
     private String email;
 
-    @Enumerated(EnumType.STRING)
+    
     @Column(name = "status", nullable = false)
-    private DriverStatus status;
+    private String status;
 
     @Column(name = "termination_date")
     private LocalDate terminationDate;
@@ -197,7 +197,7 @@ public class Driver extends BaseEntity {
     // ========== CONSTRUCTORS ==========
 
     public Driver() {
-        this.status = DriverStatus.ACTIVE;
+        this.status = "ACTIVE";
         this.incidentsLogged = 0;
         this.totalTrips = 0;
         this.trainingCompleted = false;
@@ -230,17 +230,16 @@ public class Driver extends BaseEntity {
     }
 
     public boolean isActive() {
-        return status == DriverStatus.ACTIVE && super.isActive();
+        return "ACTIVE".equals(status) && super.isActive();
     }
 
     public boolean isAvailableForAssignment() {
-        return isActive() && 
-               !isLicenseExpired() && 
-               status != DriverStatus.SUSPENDED &&
-               status != DriverStatus.ON_LEAVE &&
-               assignedVehicleId == null;
-    }
-
+            return isActive() && 
+                   !isLicenseExpired() && 
+                   !"SUSPENDED".equals(status) &&
+                   !"ON_LEAVE".equals(status) &&
+                   assignedVehicleId == null;
+        }
     public Integer getYearsOfService() {
         if (hireDate == null) {
             return null;
@@ -350,13 +349,13 @@ public class Driver extends BaseEntity {
     }
 
     public boolean canBeAssigned() {
-        return isActive() &&
-                !isLicenseExpired() &&
-                status != DriverStatus.SUSPENDED &&
-                status != DriverStatus.ON_LEAVE &&
-                assignedVehicleId == null &&
-                !isClockedIn();
-    }
+            return isActive() &&
+                    !isLicenseExpired() &&
+                    !"SUSPENDED".equals(status) &&
+                    !"ON_LEAVE".equals(status) &&
+                    assignedVehicleId == null &&
+                    !isClockedIn();
+        }
 
     public void assignVehicle(Long vehicleId) {
         this.assignedVehicleId = vehicleId;

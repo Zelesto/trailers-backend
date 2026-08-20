@@ -17,6 +17,11 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AccountDebugController {
 
+    // ============================================================
+    // CONSTANTS FOR ACCOUNT TYPES (from enum_master table)
+    // ============================================================
+    public static final String ACCOUNT_TYPE_FUEL = "FUEL";
+
     private final AccountRepository accountRepository;
 
     @GetMapping("/test")
@@ -28,15 +33,15 @@ public class AccountDebugController {
             long count = accountRepository.count();
             response.put("totalAccounts", count);
 
-            // Test 2: Try to find by type
-            List<Account> fuelAccounts = accountRepository.findByType("FUEL");
+            // Test 2: Try to find by type - FIXED: Use String constant
+            List<Account> fuelAccounts = accountRepository.findByType(ACCOUNT_TYPE_FUEL);
             response.put("fuelAccountsCount", fuelAccounts.size());
             response.put("fuelAccounts", fuelAccounts);
 
-            // Test 3: Try to save a test account
+            // Test 3: Try to save a test account - FIXED: Use String constant
             Account testAccount = new Account();
             testAccount.setName("Test Fuel Account");
-            testAccount.setType(AccountType.FUEL);
+            testAccount.setType(ACCOUNT_TYPE_FUEL);
             testAccount.setCurrency("ZAR");
             testAccount.setActive(true);
 

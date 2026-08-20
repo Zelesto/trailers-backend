@@ -27,7 +27,14 @@ public class Payment extends BaseEntity {
 
     private String reference;
 
-    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private String status;
+
+    public String getStatus() {
+        return status;
+    }
+    
+    public void setStatus(String status) {
+        this.status = status;
+    }
 }

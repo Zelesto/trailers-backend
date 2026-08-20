@@ -16,7 +16,8 @@ public class RouteCalculationRequestDTO {
 
         dto.setOriginLocation(trip.getOriginLocation());
         dto.setDestinationLocation(trip.getDestinationLocation());
-        dto.setVehicleType(trip.getVehicle() != null ? trip.getVehicle().getVehicleType().name() : null);
+        // ✅ FIXED: Remove .name() - vehicleType is now a String
+        dto.setVehicleType(trip.getVehicle() != null ? trip.getVehicle().getVehicleType() : null);
         return dto;
     }
 }

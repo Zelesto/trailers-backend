@@ -10,8 +10,6 @@ import com.pgsa.trailers.entity.assets.Vehicle;
 import com.pgsa.trailers.entity.assets.VehicleMapper;
 import com.pgsa.trailers.entity.vehicle.Certificate;
 import com.pgsa.trailers.entity.vehicle.MaintenanceRecord;
-import com.pgsa.trailers.enums.VehicleStatus;
-import com.pgsa.trailers.enums.VehicleType;
 import com.pgsa.trailers.repository.CertificateRepository;
 import com.pgsa.trailers.repository.DriverRepository;
 import com.pgsa.trailers.repository.MaintenanceRepository;
@@ -68,8 +66,7 @@ public class VehicleService {
                 .orElseThrow(() -> new RuntimeException("Vehicle not found with registration: " + registrationNumber));
     }
 
-    public List<Vehicle> getVehiclesByStatus(VehicleStatus status) {
-        log.debug("Fetching vehicles by status: {}", status);
+    public List<Vehicle> getVehiclesByStatus(String status) {
         return vehicleRepository.findByStatus(status);
     }
 
@@ -288,7 +285,7 @@ public VehicleDTO resetFuelToFull(Long vehicleId, Integer tankNumber) {
         }
 
         if (vehicle.getStatus() == null) {
-            vehicle.setStatus(VehicleStatus.ACTIVE);
+            vehicle.setStatus("ACTIVE");
         }
         if (vehicle.getIsActive() == null) {
             vehicle.setIsActive(true);
@@ -372,7 +369,7 @@ public VehicleDTO resetFuelToFull(Long vehicleId, Integer tankNumber) {
         log.info("Soft deleting vehicle ID: {}", id);
         Vehicle vehicle = getVehicleById(id);
         vehicle.softDelete();
-        vehicle.setStatus(VehicleStatus.INACTIVE);
+        vehicle.setStatus("INACTIVE");
         vehicleRepository.save(vehicle);
         log.info("✅ Successfully soft deleted vehicle ID: {}", id);
     }
@@ -383,7 +380,7 @@ public VehicleDTO resetFuelToFull(Long vehicleId, Integer tankNumber) {
         Vehicle vehicle = getVehicleById(id);
         vehicle.restore();
         if (vehicle.getStatus() == VehicleStatus.INACTIVE) {
-            vehicle.setStatus(VehicleStatus.AVAILABLE);
+            vehicle.setStatus("AVAILABLE");
         }
         vehicleRepository.save(vehicle);
         log.info("✅ Successfully restored vehicle ID: {}", id);
@@ -456,11 +453,11 @@ public VehicleDTO resetFuelToFull(Long vehicleId, Integer tankNumber) {
             } catch (IllegalArgumentException e) {
                 log.warn("❌ Invalid status: {}, keeping current: {}", dto.getStatus(), vehicle.getStatus());
                 if (vehicle.getStatus() == null) {
-                    vehicle.setStatus(VehicleStatus.ACTIVE);
+                    vehicle.setStatus("ACTIVE");
                 }
             }
         } else if (vehicle.getStatus() == null) {
-            vehicle.setStatus(VehicleStatus.ACTIVE);
+            vehicle.setStatus("ACTIVE");
         }
         
         if (dto.getVehicleType() != null && !dto.getVehicleType().isEmpty()) {

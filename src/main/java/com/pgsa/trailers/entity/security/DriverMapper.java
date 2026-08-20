@@ -26,8 +26,8 @@ public class DriverMapper {
         dto.setPhoneNumber(driver.getPhoneNumber());
         dto.setEmail(driver.getEmail());
 
-        // Convert enum to string for DTO
-        dto.setStatus(driver.getStatus() != null ? driver.getStatus().name() : null);
+        // ✅ FIXED: Remove .name() - status is now a String
+        dto.setStatus(driver.getStatus());
 
         // ✅ Map the linked AppUser to DTO
         dto.setAppUser(toAppUserDTO(driver.getAppUser()));

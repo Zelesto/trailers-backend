@@ -16,8 +16,15 @@ import java.util.List;
 
 public interface TripAnalyticsRepository extends Repository<Trip, Long> {
 
+    // ============================================================
+    // CONSTANTS FOR STATUS VALUES (from enum_master table)
+    // ============================================================
+    String STATUS_COMPLETED = "COMPLETED";
+    String STATUS_CLOSED = "CLOSED";
+    String STATUS_FINALIZED = "FINALIZED";
+
     /**
-     * Get trip summaries by status
+     * Get trip summaries by status - FIXED: Use String for status
      */
     @Query("""
         SELECT new com.pgsa.trailers.dto.TripSummaryDTO(
@@ -44,7 +51,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
     List<TripSummaryDTO> findTripSummariesByStatus(@Param("status") String status);
 
     /**
-     * Get trip summaries with filters + pagination
+     * Get trip summaries with filters + pagination - FIXED: Use String for status
      */
     @Query("""
         SELECT new com.pgsa.trailers.dto.TripSummaryDTO(
@@ -73,13 +80,13 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
     """)
     Page<TripSummaryDTO> findTripSummariesWithFilters(
             @Param("search") String search,
-            @Param("status") TripStatus status,
+            @Param("status") String status,
             @Param("city") String city,
             Pageable pageable
     );
 
     /**
-     * Trip KPIs
+     * Trip KPIs - FIXED: Use String for status
      */
     @Query("""
         SELECT new com.pgsa.trailers.dto.TripKpiDTO(
@@ -108,11 +115,11 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
     List<TripKpiDTO> findTripKpis(
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate,
-            @Param("status") TripStatus status
+            @Param("status") String status
     );
 
     /**
-     * Native profitability query
+     * Native profitability query - Uses String constants
      */
     @Query(value = """
         SELECT 
@@ -125,7 +132,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
             COALESCE(t.cost_amount, 0),
             COALESCE(t.revenue_amount - t.cost_amount, 0),
             COALESCE(t.fuel_consumed_liters, 0)
-        FROM trips t
+        FROM trip t
         WHERE t.is_active = true
         AND t.status IN ('COMPLETED', 'CLOSED', 'FINALIZED')
         AND DATE(t.actual_end_date) BETWEEN CAST(:startDate AS DATE) AND CAST(:endDate AS DATE)
@@ -137,7 +144,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
     );
 
     /**
-     * Dashboard summary
+     * Dashboard summary - Uses String constants
      */
     @Query("""
         SELECT 

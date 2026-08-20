@@ -7,7 +7,6 @@ import com.pgsa.trailers.entity.assets.Vehicle;
 import com.pgsa.trailers.entity.finance.AccountStatement;
 import com.pgsa.trailers.entity.ops.FuelSource;
 import com.pgsa.trailers.entity.ops.FuelSlip;
-import com.pgsa.trailers.enums.DriverStatus;
 import com.pgsa.trailers.repository.FuelSlipRepository;
 import com.pgsa.trailers.repository.DriverRepository;
 import com.pgsa.trailers.repository.VehicleRepository;
@@ -16,7 +15,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.pgsa.trailers.enums.VehicleStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -31,6 +29,12 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class FuelSlipService {
+
+    // ============================================================
+    // CONSTANTS FOR STATUS VALUES (from enum_master table)
+    // ============================================================
+    public static final String DRIVER_STATUS_ACTIVE = "ACTIVE";
+    public static final String VEHICLE_STATUS_ACTIVE = "ACTIVE";
 
     private final FuelSlipRepository fuelSlipRepository;
     private final VehicleRepository vehicleRepository;
@@ -81,44 +85,34 @@ public class FuelSlipService {
         fuelSlip.setTotalAmount(totalAmount);
 
         // ========== SET REQUIRED FIELDS WITH DEFAULTS ==========
-        // Odometer reading (optional)
         if (request.getOdometerReading() != null) {
             fuelSlip.setOdometerReading(new BigDecimal(request.getOdometerReading().toString()));
         } else {
-            fuelSlip.setOdometerReading(null); // Default null
+            fuelSlip.setOdometerReading(null);
         }
 
-        // Location (required for auditing)
         fuelSlip.setLocation(request.getLocation() != null ? request.getLocation() : "Unknown Location");
-
-        // Station name (required)
         fuelSlip.setStationName(request.getStationName());
-
-        // Pump number (optional)
         fuelSlip.setPumpNumber(request.getPumpNumber());
 
-        // Receipt number (optional, generate if not provided)
         if (request.getReceiptNumber() != null && !request.getReceiptNumber().trim().isEmpty()) {
             fuelSlip.setReceiptNumber(request.getReceiptNumber().trim());
         } else {
             fuelSlip.setReceiptNumber(generateReceiptNumber());
         }
 
-        // Notes (optional)
         fuelSlip.setNotes(request.getNotes());
 
-        // Fuel type (required)
         if (request.getFuelType() != null && !request.getFuelType().trim().isEmpty()) {
             fuelSlip.setFuelType(request.getFuelType());
         } else {
-            fuelSlip.setFuelType("Diesel (50ppm)"); // Default fuel type
+            fuelSlip.setFuelType("Diesel (50ppm)");
         }
 
-        // Payment method (required)
         if (request.getPaymentMethod() != null && !request.getPaymentMethod().trim().isEmpty()) {
             fuelSlip.setPaymentMethod(request.getPaymentMethod());
         } else {
-            fuelSlip.setPaymentMethod("Fleet Card"); // Default payment method
+            fuelSlip.setPaymentMethod("Fleet Card");
         }
 
         // ========== SET TRIP AND LOAD REFERENCES ==========
@@ -126,20 +120,12 @@ public class FuelSlipService {
         fuelSlip.setLoadId(request.getLoadId());
 
         // ========== SET STATUS FIELDS ==========
-        // Finalized status (default to false)
         fuelSlip.setFinalized(request.getFinalized() != null ? request.getFinalized() : false);
-
-        // Incident flag (default to false)
         fuelSlip.setIncidentFlag(false);
-
-        // Last status update (set to now)
         fuelSlip.setLastStatusUpdate(LocalDateTime.now());
 
         // ========== SET VERIFICATION FIELDS ==========
-        // Verified by (null by default, set when verified)
         fuelSlip.setVerifiedBy(null);
-
-        // Verification date (null by default)
         fuelSlip.setVerificationDate(null);
 
         // ========== SET AUDIT TRAIL ==========
@@ -152,14 +138,11 @@ public class FuelSlipService {
         fuelSlip.setAuditTrail(auditTrail);
 
         // ========== SET ACCOUNT STATEMENT ==========
-        // Null by default, will be linked later when reconciled
         fuelSlip.setAccountStatement(null);
 
         // ========== SET BASE ENTITY FIELDS ==========
-        // These might be set automatically by @PrePersist, but set explicitly if needed
         fuelSlip.setCreatedAt(LocalDateTime.now());
         fuelSlip.setUpdatedAt(LocalDateTime.now());
-        // createdBy and updatedBy might be set from security context
 
         // Save the fuel slip
         FuelSlip savedFuelSlip = fuelSlipRepository.save(fuelSlip);
@@ -170,12 +153,10 @@ public class FuelSlipService {
 
     private void handleVehicleAssignment(FuelSlipRequest request, FuelSlip fuelSlip) {
         if (request.getVehicleId() != null) {
-            // Scenario 2: Trip mode - use vehicle ID
             Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
                     .orElseThrow(() -> new RuntimeException("Vehicle not found with id: " + request.getVehicleId()));
             fuelSlip.setVehicle(vehicle);
         } else if (request.getVehicleRegistration() != null && !request.getVehicleRegistration().trim().isEmpty()) {
-            // Scenario 1: Manual mode - find by registration or create placeholder
             Optional<Vehicle> existingVehicle = vehicleRepository.findByRegistrationNumberIgnoreCase(
                     request.getVehicleRegistration().trim());
 
@@ -188,7 +169,8 @@ public class FuelSlipService {
                 manualVehicle.setMake("MANUAL_ENTRY");
                 manualVehicle.setModel("UNKNOWN");
 
-                manualVehicle.setStatus(VehicleStatus.ACTIVE);
+                // ✅ FIXED: Use String constant instead of enum
+                manualVehicle.setStatus(VEHICLE_STATUS_ACTIVE);
                 manualVehicle.setCreatedAt(LocalDateTime.now());
                 manualVehicle.setUpdatedAt(LocalDateTime.now());
 
@@ -203,17 +185,14 @@ public class FuelSlipService {
 
     private void handleDriverAssignment(FuelSlipRequest request, FuelSlip fuelSlip) {
         if (request.getDriverId() != null) {
-            // Scenario 2: Trip mode - use driver ID
             Driver driver = driverRepository.findById(request.getDriverId())
                     .orElseThrow(() -> new RuntimeException("Driver not found with id: " + request.getDriverId()));
             fuelSlip.setDriver(driver);
         } else if (request.getDriverName() != null && !request.getDriverName().trim().isEmpty()) {
-            // Scenario 1: Manual mode - find by name or create placeholder
             String[] nameParts = request.getDriverName().trim().split(" ", 2);
             String firstName = nameParts[0];
             String lastName = nameParts.length > 1 ? nameParts[1] : "";
 
-            // Search for driver by first and last name
             Optional<Driver> existingDriver = driverRepository.findByFirstNameIgnoreCaseAndLastNameIgnoreCase(
                     firstName, lastName);
 
@@ -225,7 +204,9 @@ public class FuelSlipService {
                 manualDriver.setFirstName(firstName);
                 manualDriver.setLastName(lastName);
                 manualDriver.setLicenseNumber("MANUAL_" + System.currentTimeMillis());
-                manualDriver.setStatus(DriverStatus.ACTIVE);
+
+                // ✅ FIXED: Use String constant instead of enum
+                manualDriver.setStatus(DRIVER_STATUS_ACTIVE);
                 manualDriver.setPhoneNumber("N/A");
                 manualDriver.setEmail("manual_" + System.currentTimeMillis() + "@example.com");
                 manualDriver.setCreatedAt(LocalDateTime.now());
@@ -241,7 +222,6 @@ public class FuelSlipService {
     }
 
     private void handleFuelSource(FuelSlipRequest request, FuelSlip fuelSlip) {
-        // Try to find a default fuel source if not provided
         if (request.getFuelSourceId() != null) {
             FuelSource fuelSource = fuelSourceRepository.findById(request.getFuelSourceId())
                     .orElse(null);
@@ -250,18 +230,15 @@ public class FuelSlipService {
             }
         }
 
-        // If no fuel source found, try to find a default one
         if (fuelSlip.getFuelSource() == null) {
-            // You might have a method to find default fuel source
             List<FuelSource> defaultSources = fuelSourceRepository.findByNameContainingIgnoreCase("default");
             if (!defaultSources.isEmpty()) {
                 fuelSlip.setFuelSource(defaultSources.get(0));
             } else {
-                // Create a default fuel source if none exists
                 FuelSource defaultSource = new FuelSource();
                 defaultSource.setName("Default Fuel Source");
-                defaultSource.setSourceType("FLEET_CARD"); // Set a default source type
-                defaultSource.setAccountId(1L); // Set a default account ID or make it nullable
+                defaultSource.setSourceType("FLEET_CARD");
+                defaultSource.setAccountId(1L);
 
                 defaultSource.setCreatedAt(LocalDateTime.now());
                 defaultSource.setUpdatedAt(LocalDateTime.now());
@@ -277,7 +254,6 @@ public class FuelSlipService {
         LocalDateTime now = LocalDateTime.now();
         String prefix = "FS" + now.getYear() + String.format("%02d", now.getMonthValue());
 
-        // Find the next sequence number for this month
         LocalDateTime startOfMonth = LocalDateTime.of(now.getYear(), now.getMonthValue(), 1, 0, 0, 0);
         LocalDateTime endOfMonth = startOfMonth.plusMonths(1).minusSeconds(1);
 
@@ -304,7 +280,7 @@ public class FuelSlipService {
     }
 
     // ============================================================
-    // FIXED: Added @Transactional(readOnly = true) to all read methods
+    // READ METHODS
     // ============================================================
 
     @Transactional(readOnly = true)
@@ -385,7 +361,6 @@ public class FuelSlipService {
             throw new RuntimeException("Cannot update a finalized fuel slip");
         }
 
-        // Update fields
         if (request.getQuantity() != null) {
             existing.setQuantity(new BigDecimal(request.getQuantity().toString()));
         }
@@ -420,7 +395,6 @@ public class FuelSlipService {
             existing.setPaymentMethod(request.getPaymentMethod());
         }
 
-        // Update audit trail
         Map<String, Object> auditTrail = existing.getAuditTrail() != null ? existing.getAuditTrail() : new HashMap<>();
         auditTrail.put("lastUpdated", LocalDateTime.now().toString());
         auditTrail.put("updateAction", "UPDATED");
@@ -457,7 +431,6 @@ public class FuelSlipService {
         existing.setFinalized(true);
         existing.setLastStatusUpdate(LocalDateTime.now());
 
-        // Update audit trail
         Map<String, Object> auditTrail = existing.getAuditTrail() != null ? existing.getAuditTrail() : new HashMap<>();
         auditTrail.put("finalizedAt", LocalDateTime.now().toString());
         auditTrail.put("finalizedBy", "system");
@@ -476,7 +449,6 @@ public class FuelSlipService {
         existing.setVerificationDate(LocalDateTime.now());
         existing.setLastStatusUpdate(LocalDateTime.now());
 
-        // Update audit trail
         Map<String, Object> auditTrail = existing.getAuditTrail() != null ? existing.getAuditTrail() : new HashMap<>();
         auditTrail.put("verifiedAt", LocalDateTime.now().toString());
         auditTrail.put("verifiedBy", verifiedBy);

@@ -63,7 +63,7 @@ public class TripSummaryDTO {
     private String destinationProvince;
 
     // Constructor matching the query in TripAnalyticsRepository
-    public TripSummaryDTO(Long id, String tripNumber, TripStatus status, 
+    public TripSummaryDTO(Long id, String tripNumber, String status, 
                           String vehicleRegistration, String driverName,
                           LocalDateTime plannedStartDate, LocalDateTime plannedEndDate,
                           String originLocation, String destinationLocation,

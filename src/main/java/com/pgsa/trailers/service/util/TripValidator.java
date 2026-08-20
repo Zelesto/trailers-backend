@@ -3,15 +3,50 @@ package com.pgsa.trailers.service.util;
 import com.pgsa.trailers.dto.CreateTripRequest;
 import com.pgsa.trailers.dto.UpdateTripRequest;
 import com.pgsa.trailers.entity.ops.Trip;
-import com.pgsa.trailers.enums.TripStatus;
 import com.pgsa.trailers.entity.suppliers.TripValidationException;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Set;
 
 @Component
 public class TripValidator {
+
+    // ============================================================
+    // CONSTANTS FOR STATUS VALUES (from enum_master table)
+    // ============================================================
+    public static final String STATUS_DRAFT = "DRAFT";
+    public static final String STATUS_PLANNED = "PLANNED";
+    public static final String STATUS_ASSIGNED = "ASSIGNED";
+    public static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
+    public static final String STATUS_ACTIVE = "ACTIVE";
+    public static final String STATUS_ON_HOLD = "ON_HOLD";
+    public static final String STATUS_PENDING = "PENDING";
+    public static final String STATUS_COMPLETED = "COMPLETED";
+    public static final String STATUS_FINALIZED = "FINALIZED";
+    public static final String STATUS_CLOSED = "CLOSED";
+    public static final String STATUS_CANCELLED = "CANCELLED";
+
+    // Terminal statuses (cannot be changed)
+    private static final Set<String> TERMINAL_STATUSES = Set.of(
+        STATUS_COMPLETED, STATUS_FINALIZED, STATUS_CLOSED, STATUS_CANCELLED
+    );
+
+    // Valid transitions mapping
+    private static final java.util.Map<String, Set<String>> VALID_TRANSITIONS = java.util.Map.of(
+        STATUS_DRAFT, Set.of(STATUS_PLANNED, STATUS_CANCELLED),
+        STATUS_PLANNED, Set.of(STATUS_ASSIGNED, STATUS_IN_PROGRESS, STATUS_CANCELLED),
+        STATUS_ASSIGNED, Set.of(STATUS_IN_PROGRESS, STATUS_ON_HOLD, STATUS_CANCELLED),
+        STATUS_IN_PROGRESS, Set.of(STATUS_COMPLETED, STATUS_ON_HOLD, STATUS_CANCELLED),
+        STATUS_ACTIVE, Set.of(STATUS_COMPLETED, STATUS_ON_HOLD, STATUS_CANCELLED),
+        STATUS_ON_HOLD, Set.of(STATUS_IN_PROGRESS, STATUS_ACTIVE, STATUS_COMPLETED, STATUS_CANCELLED),
+        STATUS_PENDING, Set.of(STATUS_PLANNED, STATUS_ASSIGNED, STATUS_CANCELLED),
+        STATUS_COMPLETED, Set.of(STATUS_FINALIZED, STATUS_CLOSED),
+        STATUS_FINALIZED, Set.of(),
+        STATUS_CLOSED, Set.of(),
+        STATUS_CANCELLED, Set.of()
+    );
 
     /**
      * Validates create trip request
@@ -42,9 +77,6 @@ public class TripValidator {
             if (request.getPlannedEndDate().isBefore(request.getPlannedStartDate())) {
                 throw new TripValidationException("Planned end date cannot be before planned start date");
             }
-        } else if (request.getPlannedStartDate() == null) {
-            // Set default if not provided - but don't throw error, let service handle it
-            // The service will set default values
         }
 
         // Validate planned distance
@@ -82,16 +114,17 @@ public class TripValidator {
     }
 
     /**
-     * Validates if a trip can be started
+     * Validates if a trip can be started - FIXED: Use String for status
      */
     public void validateCanStart(Trip trip, BigDecimal actualStartOdometer) {
         if (trip == null) {
             throw new TripValidationException("Trip cannot be null");
         }
 
-        if (trip.getStatus() != TripStatus.PLANNED && trip.getStatus() != TripStatus.DRAFT) {
+        String status = trip.getStatus();
+        if (!STATUS_PLANNED.equals(status) && !STATUS_DRAFT.equals(status)) {
             throw new TripValidationException(
-                String.format("Cannot start trip with status: %s. Trip must be PLANNED or DRAFT", trip.getStatus())
+                String.format("Cannot start trip with status: %s. Trip must be PLANNED or DRAFT", status)
             );
         }
 
@@ -107,23 +140,23 @@ public class TripValidator {
             throw new TripValidationException("Actual start odometer cannot be negative");
         }
         
-        // Check if vehicle is available
         if (trip.getVehicle() == null) {
             throw new TripValidationException("Trip has no assigned vehicle");
         }
     }
 
     /**
-     * Validates if a trip can be ended
+     * Validates if a trip can be ended - FIXED: Use String for status
      */
     public void validateCanEnd(Trip trip, BigDecimal actualEndOdometer) {
         if (trip == null) {
             throw new TripValidationException("Trip cannot be null");
         }
 
-        if (trip.getStatus() != TripStatus.IN_PROGRESS && trip.getStatus() != TripStatus.ACTIVE) {
+        String status = trip.getStatus();
+        if (!STATUS_IN_PROGRESS.equals(status) && !STATUS_ACTIVE.equals(status)) {
             throw new TripValidationException(
-                String.format("Cannot end trip with status: %s. Trip must be IN_PROGRESS or ACTIVE", trip.getStatus())
+                String.format("Cannot end trip with status: %s. Trip must be IN_PROGRESS or ACTIVE", status)
             );
         }
 
@@ -144,23 +177,23 @@ public class TripValidator {
     }
 
     /**
-     * Validates if a trip can be updated
+     * Validates if a trip can be updated - FIXED: Use String for status
      */
     public void validateCanUpdate(Trip trip) {
         if (trip == null) {
             throw new TripValidationException("Trip cannot be null");
         }
 
-        // Cannot update terminal trips
-        if (trip.getStatus().isTerminal()) {
+        String status = trip.getStatus();
+        if (TERMINAL_STATUSES.contains(status)) {
             throw new TripValidationException(
-                String.format("Cannot update trip with terminal status: %s", trip.getStatus())
+                String.format("Cannot update trip with terminal status: %s", status)
             );
         }
     }
 
     /**
-     * Validates trip update request
+     * Validates trip update request - FIXED: Use String for status
      */
     public void validateUpdateRequest(UpdateTripRequest request, Trip existingTrip) {
         if (request == null) {
@@ -188,41 +221,26 @@ public class TripValidator {
         }
 
         // Validate status transition if status is being changed
-        if (request.getStatus() != null && request.getStatus() != existingTrip.getStatus()) {
+        if (request.getStatus() != null && !request.getStatus().equals(existingTrip.getStatus())) {
             validateStatusTransition(existingTrip.getStatus(), request.getStatus());
         }
     }
 
     /**
-     * Validates trip status transition
+     * Validates trip status transition - FIXED: Use String
      */
-    public void validateStatusTransition(TripStatus from, TripStatus to) {
+    public void validateStatusTransition(String from, String to) {
         if (from == null || to == null) {
             throw new TripValidationException("Status cannot be null");
         }
 
-        if (from == to) {
+        if (from.equals(to)) {
             throw new TripValidationException("Trip is already in status: " + from);
         }
 
-        // Define valid transitions
-        boolean isValid = switch (from) {
-            case DRAFT -> to == TripStatus.PLANNED || to == TripStatus.CANCELLED;
-            case PLANNED -> to == TripStatus.ASSIGNED || to == TripStatus.IN_PROGRESS || 
-                            to == TripStatus.CANCELLED;
-            case ASSIGNED -> to == TripStatus.IN_PROGRESS || to == TripStatus.ON_HOLD || 
-                            to == TripStatus.CANCELLED;
-            case IN_PROGRESS, ACTIVE -> to == TripStatus.COMPLETED || to == TripStatus.ON_HOLD || 
-                                         to == TripStatus.CANCELLED;
-            case ON_HOLD -> to == TripStatus.IN_PROGRESS || to == TripStatus.ACTIVE || 
-                            to == TripStatus.COMPLETED || to == TripStatus.CANCELLED;
-            case PENDING -> to == TripStatus.PLANNED || to == TripStatus.ASSIGNED || 
-                            to == TripStatus.CANCELLED;
-            case COMPLETED -> to == TripStatus.FINALIZED || to == TripStatus.CLOSED;
-            case FINALIZED, CLOSED, CANCELLED -> false;
-        };
-
-        if (!isValid) {
+        // Check if transition is valid
+        Set<String> allowedTransitions = VALID_TRANSITIONS.get(from);
+        if (allowedTransitions == null || !allowedTransitions.contains(to)) {
             throw new TripValidationException(
                 String.format("Invalid status transition from %s to %s", from, to)
             );
@@ -230,21 +248,21 @@ public class TripValidator {
     }
 
     /**
-     * Validates if a trip can be deleted
+     * Validates if a trip can be deleted - FIXED: Use String for status
      */
     public void validateCanDelete(Trip trip) {
         if (trip == null) {
             throw new TripValidationException("Trip cannot be null");
         }
 
-        if (trip.getStatus().isTerminal()) {
+        String status = trip.getStatus();
+        if (TERMINAL_STATUSES.contains(status)) {
             throw new TripValidationException(
-                String.format("Cannot delete trip with terminal status: %s", trip.getStatus())
+                String.format("Cannot delete trip with terminal status: %s", status)
             );
         }
 
-        // Check if trip is in progress
-        if (trip.getStatus() == TripStatus.IN_PROGRESS || trip.getStatus() == TripStatus.ACTIVE) {
+        if (STATUS_IN_PROGRESS.equals(status) || STATUS_ACTIVE.equals(status)) {
             throw new TripValidationException("Cannot delete an active trip. Please cancel it first.");
         }
     }

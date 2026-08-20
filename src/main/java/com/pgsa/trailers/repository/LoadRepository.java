@@ -2,8 +2,6 @@
 package com.pgsa.trailers.repository;
 
 import com.pgsa.trailers.entity.ops.Load;
-import com.pgsa.trailers.enums.LoadStatus;
-import com.pgsa.trailers.enums.TripStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -20,6 +18,17 @@ import java.math.BigDecimal;
 @Repository
 public interface LoadRepository extends JpaRepository<Load, Long> {
 
+    // ============================================================
+    // CONSTANTS FOR STATUS VALUES (from enum_master table)
+    // ============================================================
+    String STATUS_PENDING = "PENDING";
+    String STATUS_PLANNED = "PLANNED";
+    String STATUS_IN_TRANSIT = "IN_TRANSIT";
+    String STATUS_LOADING = "LOADING";
+    String STATUS_DELIVERED = "DELIVERED";
+    String STATUS_COMPLETED = "COMPLETED";
+    String STATUS_CANCELLED = "CANCELLED";
+
     // ======================== FIND BY LOAD NUMBER ========================
     
     Optional<Load> findByLoadNumber(String loadNumber);
@@ -35,18 +44,18 @@ public interface LoadRepository extends JpaRepository<Load, Long> {
     @Query("SELECT l FROM Load l WHERE l.referenceNumber LIKE CONCAT('%', :referenceNumber, '%')")
     List<Load> findByReferenceNumberContaining(@Param("referenceNumber") String referenceNumber);
     
-    // ======================== FIND BY STATUS ========================
+    // ======================== FIND BY STATUS - FIXED ========================
     
     @Query("SELECT l FROM Load l WHERE l.status = :status")
-    List<Load> findByStatus(@Param("status") LoadStatus status);
+    List<Load> findByStatus(@Param("status") String status);
     
     @Query("SELECT l FROM Load l WHERE l.status = :status")
     Page<Load> findLoadsByStatus(@Param("status") String status, Pageable pageable);
     
-    Page<Load> findByStatus(LoadStatus status, Pageable pageable);
+    Page<Load> findByStatus(String status, Pageable pageable);
     
     @Query("SELECT l FROM Load l WHERE l.status IN :statuses")
-    List<Load> findByStatusIn(@Param("statuses") List<LoadStatus> statuses);
+    List<Load> findByStatusIn(@Param("statuses") List<String> statuses);
     
     // ======================== FIND BY DATE RANGE ========================
     
@@ -58,18 +67,18 @@ public interface LoadRepository extends JpaRepository<Load, Long> {
     List<Load> findActiveLoadsBetweenDates(@Param("startDate") LocalDateTime startDate, 
                                            @Param("endDate") LocalDateTime endDate);
     
-    // ======================== FIND BY TRIP ========================
+    // ======================== FIND BY TRIP - FIXED ========================
     
     @Query("SELECT DISTINCT l FROM Load l JOIN l.trips t WHERE t.id = :tripId")
     Optional<Load> findByTripId(@Param("tripId") Long tripId);
     
     @Query("SELECT l FROM Load l JOIN l.trips t WHERE t.status = :status")
-    List<Load> findByTripStatus(@Param("status") TripStatus status);
+    List<Load> findByTripStatus(@Param("status") String status);
     
     @Query("SELECT l FROM Load l JOIN l.trips t WHERE t.tripNumber = :tripNumber")
     Optional<Load> findByTripNumber(@Param("tripNumber") String tripNumber);
     
-    // ======================== ACTIVE LOADS ========================
+    // ======================== ACTIVE LOADS - FIXED ========================
     
     @Query("SELECT l FROM Load l WHERE l.status IN ('PENDING', 'IN_TRANSIT', 'LOADING')")
     List<Load> findActiveLoads();
@@ -80,7 +89,7 @@ public interface LoadRepository extends JpaRepository<Load, Long> {
     @Query("SELECT l FROM Load l WHERE l.loadingDate <= :now AND (l.unloadingDate IS NULL OR l.unloadingDate > :now)")
     List<Load> findCurrentLoads(@Param("now") LocalDateTime now);
     
-    // ======================== CUSTOMER ========================
+    // ======================== CUSTOMER - FIXED ========================
        
     List<Load> findByCustomerId(Long customerId);
     
@@ -95,26 +104,25 @@ public interface LoadRepository extends JpaRepository<Load, Long> {
     
     @Query("SELECT l FROM Load l WHERE l.customerId = :customerId AND l.status = :status")
     List<Load> findByCustomerIdAndStatus(@Param("customerId") Long customerId, 
-                                         @Param("status") LoadStatus status);
+                                         @Param("status") String status);
     
-        
-    // ======================== COUNT QUERIES ========================
+    // ======================== COUNT QUERIES - FIXED ========================
     
     @Query("SELECT COUNT(l) FROM Load l WHERE l.status = :status")
-    long countByStatus(@Param("status") LoadStatus status);
+    long countByStatus(@Param("status") String status);
     
     @Query("SELECT COUNT(l) FROM Load l WHERE l.status = :status")
     long countByStatusString(@Param("status") String status);
     
     @Query("SELECT COUNT(l) FROM Load l WHERE l.status = :status AND l.createdAt BETWEEN :startDate AND :endDate")
-    long countByStatusAndDateRange(@Param("status") LoadStatus status,
+    long countByStatusAndDateRange(@Param("status") String status,
                                    @Param("startDate") LocalDateTime startDate,
                                    @Param("endDate") LocalDateTime endDate);
     
     @Query("SELECT COUNT(l) FROM Load l WHERE l.customerId = :customerId")
     long countByCustomerId(@Param("customerId") Long customerId);
     
-    // ======================== AGGREGATION QUERIES ========================
+    // ======================== AGGREGATION QUERIES - FIXED ========================
     
     @Query("SELECT SUM(l.weightKg) FROM Load l WHERE l.status = 'COMPLETED'")
     Optional<Double> getTotalWeightOfCompletedLoads();
@@ -126,13 +134,13 @@ public interface LoadRepository extends JpaRepository<Load, Long> {
     Optional<BigDecimal> getTotalDepotKmAllLoads();
     
     @Query("SELECT SUM(l.totalFromDepotKm) FROM Load l WHERE l.status = :status")
-    Optional<BigDecimal> getTotalFromDepotKmByStatus(@Param("status") LoadStatus status);
+    Optional<BigDecimal> getTotalFromDepotKmByStatus(@Param("status") String status);
     
-    // ======================== EXISTENCE CHECKS ========================
+    // ======================== EXISTENCE CHECKS - FIXED ========================
     
     @Query("SELECT CASE WHEN COUNT(l) > 0 THEN true ELSE false END FROM Load l WHERE l.loadNumber = :loadNumber AND l.status = :status")
     boolean existsByLoadNumberAndStatus(@Param("loadNumber") String loadNumber, 
-                                        @Param("status") LoadStatus status);
+                                        @Param("status") String status);
     
     @Query("SELECT CASE WHEN COUNT(l) > 0 THEN true ELSE false END FROM Load l JOIN l.trips t WHERE t.id = :tripId")
     boolean hasLoadAssociatedWithTrip(@Param("tripId") Long tripId);
@@ -141,23 +149,23 @@ public interface LoadRepository extends JpaRepository<Load, Long> {
     boolean existsByReferenceNumberAndIdNot(@Param("referenceNumber") String referenceNumber, 
                                              @Param("loadId") Long loadId);
     
-    // ======================== BULK OPERATIONS ========================
+    // ======================== BULK OPERATIONS - FIXED ========================
     
     @Modifying
     @Query("UPDATE Load l SET l.status = :newStatus WHERE l.id IN :loadIds AND l.status = :currentStatus")
     int updateStatusBulk(@Param("loadIds") List<Long> loadIds,
-                         @Param("newStatus") LoadStatus newStatus,
-                         @Param("currentStatus") LoadStatus currentStatus);
+                         @Param("newStatus") String newStatus,
+                         @Param("currentStatus") String currentStatus);
     
     @Modifying
     @Query("UPDATE Load l SET l.status = :status, l.lastStatusUpdate = CURRENT_TIMESTAMP WHERE l.id = :loadId")
-    int updateStatus(@Param("loadId") Long loadId, @Param("status") LoadStatus status);
+    int updateStatus(@Param("loadId") Long loadId, @Param("status") String status);
     
     @Modifying
     @Query("UPDATE Load l SET l.tripsCount = :count WHERE l.id = :loadId")
     int updateTripsCount(@Param("loadId") Long loadId, @Param("count") Integer count);
     
-    // ======================== SEARCH ========================
+    // ======================== SEARCH - FIXED ========================
     
     @Query("SELECT l FROM Load l WHERE " +
            "LOWER(l.loadNumber) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
@@ -182,7 +190,7 @@ public interface LoadRepository extends JpaRepository<Load, Long> {
            "(:customerId IS NULL OR l.customerId = :customerId)")
     Page<Load> searchLoadsAdvanced(@Param("loadNumber") String loadNumber,
                                    @Param("referenceNumber") String referenceNumber,
-                                   @Param("status") LoadStatus status,
+                                   @Param("status") String status,
                                    @Param("commodityType") String commodityType,
                                    @Param("customerId") Long customerId,
                                    Pageable pageable);

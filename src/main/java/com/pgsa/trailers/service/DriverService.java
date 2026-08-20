@@ -5,7 +5,6 @@ import com.pgsa.trailers.dto.DriverRequest;
 import com.pgsa.trailers.dto.UserRequest;
 import com.pgsa.trailers.entity.assets.Driver;
 import com.pgsa.trailers.entity.security.AppUser;
-
 import com.pgsa.trailers.repository.DriverRepository;
 import com.pgsa.trailers.repository.AppUserRepository;
 import com.pgsa.trailers.service.security.UserService;
@@ -25,6 +24,17 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 public class DriverService {
+
+    // ============================================================
+    // CONSTANTS FOR STATUS VALUES (from enum_master table)
+    // ============================================================
+    public static final String STATUS_ACTIVE = "ACTIVE";
+    public static final String STATUS_INACTIVE = "INACTIVE";
+    public static final String STATUS_AVAILABLE = "AVAILABLE";
+    public static final String STATUS_ON_LEAVE = "ON_LEAVE";
+    public static final String STATUS_SUSPENDED = "SUSPENDED";
+    public static final String STATUS_ASSIGNED = "ASSIGNED";
+    public static final String STATUS_ON_TRIP = "ON_TRIP";
 
     private final DriverRepository driverRepository;
     private final AppUserRepository appUserRepository;
@@ -60,7 +70,7 @@ public class DriverService {
         
         // Set defaults
         if (driver.getStatus() == null) {
-            driver.setStatus(DriverStatus.ACTIVE);
+            driver.setStatus(STATUS_ACTIVE);
         }
         
         Driver saved = driverRepository.save(driver);
@@ -117,7 +127,6 @@ public class DriverService {
             driver.setPhoneNumber(request.getPhoneNumber().trim());
         }
         if (request.getLicenseNumber() != null) {
-            // Check if license number changed and is unique
             if (!driver.getLicenseNumber().equals(request.getLicenseNumber())) {
                 if (driverRepository.findByLicenseNumber(request.getLicenseNumber()).isPresent()) {
                     throw new RuntimeException("License number " + request.getLicenseNumber() + " already exists");
@@ -135,11 +144,7 @@ public class DriverService {
             driver.setHireDate(request.getHireDate());
         }
         if (request.getStatus() != null) {
-            try {
-                driver.setStatus(DriverStatus.valueOf(request.getStatus().toUpperCase()));
-            } catch (IllegalArgumentException e) {
-                log.warn("Invalid status: {}, keeping current", request.getStatus());
-            }
+            driver.setStatus(request.getStatus().toUpperCase());
         }
         if (request.getEmploymentType() != null) {
             driver.setEmploymentType(request.getEmploymentType().trim());
@@ -160,25 +165,21 @@ public class DriverService {
             driver.setNotes(request.getNotes().trim());
         }
         
-        // ⭐ CRITICAL: Handle AppUser update
+        // Handle AppUser update
         if (request.getAppUserId() != null) {
-            // If appUserId is provided, use it
             AppUser appUser = appUserRepository.findById(request.getAppUserId())
                     .orElseThrow(() -> new RuntimeException("AppUser not found with ID: " + request.getAppUserId()));
             driver.setAppUser(appUser);
             log.info("Updated AppUser to ID: {}", appUser.getId());
         } else {
-            // If no appUserId provided, check if we need to update the AppUser's email
             if (request.getEmail() != null && driver.getAppUser() != null) {
                 AppUser appUser = driver.getAppUser();
                 if (!appUser.getEmail().equals(request.getEmail())) {
-                    // Update the AppUser's email
                     appUser.setEmail(request.getEmail());
                     appUserRepository.save(appUser);
                     log.info("Updated AppUser email to: {}", request.getEmail());
                 }
             }
-            // Keep existing AppUser
             log.info("Keeping existing AppUser ID: {}", 
                 driver.getAppUser() != null ? driver.getAppUser().getId() : "null");
         }
@@ -207,7 +208,7 @@ public class DriverService {
         Driver driver = driverRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Driver not found with ID: " + id));
         driver.setIsActive(false);
-        driver.setStatus(DriverStatus.INACTIVE);
+        driver.setStatus(STATUS_INACTIVE);
         driver.setUpdatedAt(LocalDateTime.now());
         driverRepository.save(driver);
         log.info("✅ Successfully soft deleted driver ID: {}", id);
@@ -219,7 +220,7 @@ public class DriverService {
         Driver driver = driverRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Driver not found with ID: " + id));
         driver.setIsActive(true);
-        driver.setStatus(DriverStatus.ACTIVE);
+        driver.setStatus(STATUS_ACTIVE);
         driver.setUpdatedAt(LocalDateTime.now());
         driverRepository.save(driver);
         log.info("✅ Successfully restored driver ID: {}", id);
@@ -251,11 +252,15 @@ public class DriverService {
 
     @Transactional
     public void updateStatus(Long driverId, String status) {
+        log.info("Updating driver {} status to {}", driverId, status);
         Driver driver = driverRepository.findById(driverId)
                 .orElseThrow(() -> new RuntimeException("Driver not found"));
-        driver.setStatus(status);
+        
+        String statusUpper = status.toUpperCase();
+        driver.setStatus(statusUpper);
         driver.setUpdatedAt(LocalDateTime.now());
         driverRepository.save(driver);
+        log.info("✅ Driver {} status updated to {}", driverId, statusUpper);
     }
 
     // ====== HELPER METHODS ======
@@ -270,7 +275,6 @@ public class DriverService {
         if (request.getLicenseNumber() == null || request.getLicenseNumber().trim().isEmpty()) {
             throw new RuntimeException("License number is required");
         }
-        // For creation, we need either appUserId or password to create one
         if (request.getAppUserId() == null && (request.getPassword() == null || request.getPassword().isEmpty())) {
             throw new RuntimeException("Either appUserId or password is required");
         }
@@ -302,12 +306,7 @@ public class DriverService {
             driver.setEmail(request.getEmail().trim());
         }
         if (request.getStatus() != null) {
-            try {
-                driver.setStatus(DriverStatus.valueOf(request.getStatus().toUpperCase()));
-            } catch (IllegalArgumentException e) {
-                log.warn("Invalid status: {}, using ACTIVE", request.getStatus());
-                driver.setStatus(DriverStatus.ACTIVE);
-            }
+            driver.setStatus(request.getStatus().toUpperCase());
         }
         if (request.getEmploymentType() != null) {
             driver.setEmploymentType(request.getEmploymentType().trim());
@@ -318,7 +317,6 @@ public class DriverService {
         if (request.getTrainingCompleted() != null) {
             driver.setTrainingCompleted(request.getTrainingCompleted());
         }
-       
         if (request.getMedicalClearanceDate() != null) {
             driver.setMedicalClearanceDate(request.getMedicalClearanceDate());
         }
@@ -331,54 +329,48 @@ public class DriverService {
     }
 
     private AppUser createAppUser(DriverRequest request) {
-        // Create a UserRequest to use the existing UserService
         UserRequest userRequest = new UserRequest();
         userRequest.setUsername(request.getEmail() != null ? request.getEmail() : request.getLicenseNumber());
         userRequest.setEmail(request.getEmail());
         userRequest.setPassword(request.getPassword());
         userRequest.setEnabled(true);
         
-        // Set default role (USER role)
         Set<Long> roleIds = new HashSet<>();
-        roleIds.add(2L); // Assuming USER role has ID 2, adjust as needed
+        roleIds.add(2L);
         userRequest.setRoleIds(roleIds);
         
-        // Use UserService to create the user
         return userService.createUserEntity(userRequest);
     }
 
     private DriverDTO convertToDTO(Driver driver) {
-    DriverDTO dto = new DriverDTO();
-    dto.setId(driver.getId());
-    dto.setFirstName(driver.getFirstName());
-    dto.setLastName(driver.getLastName());
-    dto.setLicenseNumber(driver.getLicenseNumber());
-    dto.setLicenseType(driver.getLicenseType());
-    dto.setLicenseExpiry(driver.getLicenseExpiry());
-    dto.setHireDate(driver.getHireDate());
-    dto.setPhoneNumber(driver.getPhoneNumber());
-    dto.setEmail(driver.getEmail());
-    dto.setStatus(driver.getStatus());
-    dto.setTerminationDate(driver.getTerminationDate());
-    dto.setTerminationReason(driver.getTerminationReason());
-    dto.setEmploymentType(driver.getEmploymentType());
-    dto.setShiftPattern(driver.getShiftPattern());
-    dto.setAssignedVehicleId(driver.getAssignedVehicleId());
-    dto.setTrainingCompleted(driver.getTrainingCompleted());
-    
-    
-    
-    dto.setMedicalClearanceDate(driver.getMedicalClearanceDate());
-    dto.setNextMedicalDue(driver.getNextMedicalDue());
-    dto.setIncidentsLogged(driver.getIncidentsLogged());
-    dto.setTotalTrips(driver.getTotalTrips());
-    dto.setTotalKmTravelled(driver.getTotalKmTravelled());
-    dto.setTotalHoursActive(driver.getTotalHoursActive());
-    dto.setPerformanceScore(driver.getPerformanceScore());
-    dto.setNotes(driver.getNotes());
-    dto.setIsActive(driver.getIsActive());
-    dto.setVersion(driver.getVersion());
-    dto.setAppUserId(driver.getAppUser() != null ? driver.getAppUser().getId() : null);
-    return dto;
-}
+        DriverDTO dto = new DriverDTO();
+        dto.setId(driver.getId());
+        dto.setFirstName(driver.getFirstName());
+        dto.setLastName(driver.getLastName());
+        dto.setLicenseNumber(driver.getLicenseNumber());
+        dto.setLicenseType(driver.getLicenseType());
+        dto.setLicenseExpiry(driver.getLicenseExpiry());
+        dto.setHireDate(driver.getHireDate());
+        dto.setPhoneNumber(driver.getPhoneNumber());
+        dto.setEmail(driver.getEmail());
+        dto.setStatus(driver.getStatus());
+        dto.setTerminationDate(driver.getTerminationDate());
+        dto.setTerminationReason(driver.getTerminationReason());
+        dto.setEmploymentType(driver.getEmploymentType());
+        dto.setShiftPattern(driver.getShiftPattern());
+        dto.setAssignedVehicleId(driver.getAssignedVehicleId());
+        dto.setTrainingCompleted(driver.getTrainingCompleted());
+        dto.setMedicalClearanceDate(driver.getMedicalClearanceDate());
+        dto.setNextMedicalDue(driver.getNextMedicalDue());
+        dto.setIncidentsLogged(driver.getIncidentsLogged());
+        dto.setTotalTrips(driver.getTotalTrips());
+        dto.setTotalKmTravelled(driver.getTotalKmTravelled());
+        dto.setTotalHoursActive(driver.getTotalHoursActive());
+        dto.setPerformanceScore(driver.getPerformanceScore());
+        dto.setNotes(driver.getNotes());
+        dto.setIsActive(driver.getIsActive());
+        dto.setVersion(driver.getVersion());
+        dto.setAppUserId(driver.getAppUser() != null ? driver.getAppUser().getId() : null);
+        return dto;
+    }
 }

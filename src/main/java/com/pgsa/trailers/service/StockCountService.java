@@ -114,10 +114,11 @@ public class StockCountService {
 
     /**
      * Calculate expected quantity based on initial stock and movements
+     * FIXED: Changed from getInitialQuantity() to getQuantity()
      */
     private int calculateExpectedQuantity(InventoryItem item) {
-        // Get initial quantity
-        Integer initialQuantity = item.getInitialQuantity() != null ? item.getInitialQuantity() : 0;
+        // Get initial quantity - use getQuantity() as starting point
+        Integer initialQuantity = item.getQuantity() != null ? item.getQuantity() : 0;
         
         try {
             // Query stock movements to calculate expected quantity

@@ -1,7 +1,7 @@
 // src/main/java/com/pgsa/trailers/dto/CreateTripRequest.java
 package com.pgsa.trailers.dto;
 
-import com.pgsa.trailers.enums.TripStatus;
+
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -39,7 +39,7 @@ public class CreateTripRequest {
     /* ========================
        WORKFLOW
        ======================== */
-    private TripStatus status;
+    private String status;
     private String approvalStatus;
 
     /* ========================

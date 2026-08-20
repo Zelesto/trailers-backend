@@ -85,84 +85,73 @@ public class LoadService {
     // CREATE
     // =============================================
 
-   private LoadResponseDTO mapToResponseDTO(Load load) {
-        String customerName = null;
-        if (load.getCustomerId() != null) {
-            Customer customer = customerRepository.findById(load.getCustomerId()).orElse(null);
-            if (customer != null) {
-                customerName = customer.getName();
+    public LoadResponseDTO createLoad(LoadRequestDTO request, Long userId) {
+        log.info("Creating load for customer: {}, date: {}", request.getCustomerId(), request.getLoadingDate());
+
+        if (request.getCustomerId() != null && request.getLoadingDate() != null) {
+            Load existingLoad = findMergeCandidate(request.getCustomerId(), request.getLoadingDate());
+            if (existingLoad != null) {
+                log.info("Found existing load {} that could be merged", existingLoad.getLoadNumber());
+                LoadResponseDTO response = mapToResponseDTO(existingLoad);
+                response.setMergeSuggestion(true);
+                response.setMergeMessage("A load already exists for this customer on " + 
+                    request.getLoadingDate().toLocalDate() + 
+                    ". Would you like to add this trip to the existing load?");
+                return response;
             }
         }
 
-        List<TripSummaryDTO> tripSummaries = new ArrayList<>();
-        if (load.getTrips() != null && !load.getTrips().isEmpty()) {
-            for (Trip trip : load.getTrips()) {
-                tripSummaries.add(createTripSummaryDTO(trip));
-            }
+        if (request.getCustomerId() != null && !customerRepository.existsById(request.getCustomerId())) {
+            throw new RuntimeException("Customer not found with ID: " + request.getCustomerId());
         }
 
-        return LoadResponseDTO.builder()
-                .id(load.getId())
-                .loadNumber(load.getLoadNumber())
-                .referenceNumber(load.getReferenceNumber())
-                .description(load.getDescription())
-                .customerId(load.getCustomerId())
-                .customerName(customerName)
-                .weightKg(load.getWeightKg())
-                .volumeCubicM(load.getVolumeCubicM())
-                .loadingDate(load.getLoadingDate())
-                .unloadingDate(load.getUnloadingDate())
-                .status(load.getStatus())
-                .commodityType(load.getCommodityType())
-                .palletCount(load.getPalletCount())
-                .containerNumber(load.getContainerNumber())
-                .hazardousMaterial(load.getHazardousMaterial())
-                .specialHandling(load.getSpecialHandling())
-                .estimatedValue(load.getEstimatedValue())
-                .actualValue(load.getActualValue())
-                .priority(load.getPriority())
-                // FIXED: Changed from tripCount to tripsCount
-                .tripsCount(load.getTrips() != null ? load.getTrips().size() : 0)
-                .trips(tripSummaries)
-                .createdAt(load.getCreatedAt())
-                .updatedAt(load.getUpdatedAt())
-                .originLocation(load.getOriginLocation())
-                .destinationLocation(load.getDestinationLocation())
-                .handlingInstructions(load.getHandlingInstructions())
-                .packagingType(load.getPackagingType())
-                .hazardClass(load.getHazardClass())
-                .temperatureRequirements(load.getTemperatureRequirements())
-                .totalDistanceKm(load.getTotalDistanceKm())
-                .totalHoursActive(load.getTotalHoursActive())
-                .incidentsLogged(load.getIncidentsLogged())
-                .completedTrips(load.getCompletedTrips())
-                .pendingTrips(load.getTrips() != null ? 
-                    (int) load.getTrips().stream()
-                        .filter(t -> t.getStatus() != null && TRIP_STATUS_PLANNED.equals(t.getStatus()))
-                        .count() : 0)
-                .inProgressTrips(load.getTrips() != null ? 
-                    (int) load.getTrips().stream()
-                        .filter(t -> t.getStatus() != null && TRIP_STATUS_IN_PROGRESS.equals(t.getStatus()))
-                        .count() : 0)
-                .insurancePolicyNumber(load.getInsurancePolicyNumber())
-                .insuranceExpiry(load.getInsuranceExpiry())
-                .customsClearanceStatus(load.getCustomsClearanceStatus())
-                .warehouseId(load.getWarehouseId())
-                .supervisorId(load.getSupervisorId())
-                .lastStatusUpdate(load.getLastStatusUpdate())
-                .auditTrail(load.getAuditTrail())
-                .totalFromDepotKm(load.getTotalFromDepotKm())
-                .totalToDepotKm(load.getTotalToDepotKm())
-                .totalDepotKm(load.getTotalDepotKm())
-                .totalWeight(load.getTotalWeight())
-                .totalValue(load.getTotalValue())
-                .statusDisplay(load.getStatusDisplay())
-                .isActive(load.isActive())
-                .canAcceptTrip(load.canAcceptTrip())
-                .mergeSuggestion(false)
+        String loadNumber = sequenceService.generateFormattedSequence("load", "LOAD");
+        String referenceNumber = generateReferenceNumber();
+
+        Load load = Load.builder()
+                .loadNumber(loadNumber)
+                .referenceNumber(referenceNumber)
+                .description(request.getDescription())
+                .customerId(request.getCustomerId())
+                .weightKg(request.getWeightKg())
+                .volumeCubicM(request.getVolumeCubicM())
+                .loadingDate(request.getLoadingDate())
+                .unloadingDate(request.getUnloadingDate())
+                .status(STATUS_PENDING)
+                .commodityType(request.getCommodityType())
+                .palletCount(request.getPalletCount())
+                .containerNumber(request.getContainerNumber())
+                .hazardousMaterial(request.getHazardousMaterial())
+                .specialHandling(request.getSpecialHandling())
+                .estimatedValue(request.getEstimatedValue())
+                .actualValue(request.getActualValue())
+                .priority(request.getPriority() != null ? request.getPriority() : "NORMAL")
+                .originLocation(request.getOriginLocation())
+                .destinationLocation(request.getDestinationLocation())
+                .handlingInstructions(request.getHandlingInstructions())
+                .packagingType(request.getPackagingType())
+                .hazardClass(request.getHazardClass())
+                .temperatureRequirements(request.getTemperatureRequirements())
+                .insurancePolicyNumber(request.getInsurancePolicyNumber())
+                .insuranceExpiry(request.getInsuranceExpiry())
+                .customsClearanceStatus(request.getCustomsClearanceStatus())
+                .warehouseId(request.getWarehouseId())
+                .supervisorId(request.getSupervisorId())
                 .build();
+
+        load.setCreatedBy(String.valueOf(userId));
+        load.setLastStatusUpdate(LocalDateTime.now());
+
+        Load saved = loadRepository.save(load);
+        log.info("Created load with ID: {}, Number: {}, Reference: {}", 
+            saved.getId(), saved.getLoadNumber(), saved.getReferenceNumber());
+
+        if (request.getTripIds() != null && !request.getTripIds().isEmpty()) {
+            addTripsToLoad(saved.getLoadNumber(), request.getTripIds(), userId);
+        }
+
+        return mapToResponseDTO(saved);
     }
-}
 
     // =============================================
     // READ
@@ -584,7 +573,7 @@ public class LoadService {
                 .estimatedValue(load.getEstimatedValue())
                 .actualValue(load.getActualValue())
                 .priority(load.getPriority())
-                .tripCount(load.getTrips() != null ? load.getTrips().size() : 0)
+                .tripsCount(load.getTrips() != null ? load.getTrips().size() : 0)
                 .trips(tripSummaries)
                 .createdAt(load.getCreatedAt())
                 .updatedAt(load.getUpdatedAt())
@@ -594,7 +583,6 @@ public class LoadService {
                 .packagingType(load.getPackagingType())
                 .hazardClass(load.getHazardClass())
                 .temperatureRequirements(load.getTemperatureRequirements())
-                .tripsCount(load.getTripsCount())
                 .totalDistanceKm(load.getTotalDistanceKm())
                 .totalHoursActive(load.getTotalHoursActive())
                 .incidentsLogged(load.getIncidentsLogged())

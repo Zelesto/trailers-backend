@@ -1,7 +1,7 @@
 // src/main/java/com/pgsa/trailers/dto/UpdateTripRequest.java
 package com.pgsa.trailers.dto;
 
-import com.pgsa.trailers.enums.TripStatus;
+
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
@@ -120,7 +120,7 @@ public class UpdateTripRequest {
     private BigDecimal fuelConsumedLiters;
 
     // ======================== WORKFLOW ========================
-    private TripStatus status;
+    private String status;
     private String approvalStatus;
 
     // ======================== NOTES ========================

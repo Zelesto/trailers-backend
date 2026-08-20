@@ -1,7 +1,6 @@
 package com.pgsa.trailers.entity.ops;
 
 import com.pgsa.trailers.dto.CreateTripRequest;
-import com.pgsa.trailers.enums.TripStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -32,7 +31,7 @@ public class CreateTripMapper {
         trip.setTripType(request.getTripType());
 
         // ======================== WORKFLOW ========================
-        trip.setStatus(request.getStatus() != null ? request.getStatus() : TripStatus.DRAFT);
+        trip.setStatus(request.getStatus()); 
         trip.setApprovalStatus(request.getApprovalStatus());
 
         // ======================== PLANNING ========================

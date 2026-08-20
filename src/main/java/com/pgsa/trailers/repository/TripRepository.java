@@ -1,7 +1,6 @@
 package com.pgsa.trailers.repository;
 
 import com.pgsa.trailers.entity.ops.Trip;
-import com.pgsa.trailers.enums.TripStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -81,17 +80,17 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     // FIND BY STATUS
     // ============================================================
     
-    List<Trip> findByStatus(TripStatus status);
+    List<Trip> findByStatus(String status);
     
-    List<Trip> findByStatusOrderByIdDesc(TripStatus status);
+    List<Trip> findByStatusOrderByIdDesc(String status);
     
-    Page<Trip> findByStatus(TripStatus status, Pageable pageable);
+    Page<Trip> findByStatus(String status, Pageable pageable);
 
     @Query("SELECT t FROM Trip t WHERE t.status IN :statuses")
-    List<Trip> findTripsByStatusIn(@Param("statuses") List<TripStatus> statuses);
+    List<Trip> findTripsByStatusIn(@Param("statuses") List<String> statuses);
     
     @Query("SELECT t FROM Trip t WHERE t.status IN :statuses ORDER BY t.id DESC")
-    List<Trip> findTripsByStatusInOrderByIdDesc(@Param("statuses") List<TripStatus> statuses);
+    List<Trip> findTripsByStatusInOrderByIdDesc(@Param("statuses") List<String> statuses);
     
     // ============================================================
     // FIND ALL WITH SORTING

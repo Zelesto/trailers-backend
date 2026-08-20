@@ -18,7 +18,7 @@ public class TripSummaryDTO {
     private Long id;
     private String tripNumber;
     private String referenceNumber; 
-    private TripStatus status;
+    private String status;
     private String vehicleRegistration;
     private String driverName;
     private LocalDateTime plannedStartDate;

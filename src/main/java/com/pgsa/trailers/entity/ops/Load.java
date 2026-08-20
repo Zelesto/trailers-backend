@@ -62,8 +62,8 @@ public class Load extends BaseEntity {
     @Column(name = "unloading_date")
     private LocalDateTime unloadingDate;
 
-        @Column(name = "status", length = 50)
-        private String status;
+    @Column(name = "status", length = 50)
+    private String status;
 
     @Column(name = "commodity_type", length = 100)
     private String commodityType;
@@ -240,14 +240,15 @@ public class Load extends BaseEntity {
         return trips != null ? trips.size() : 0;
     }
 
+    // FIXED: Removed .name() calls on status field (String)
     public int getCompletedTrips() {
         if (trips == null || trips.isEmpty()) {
             return 0;
         }
         return (int) trips.stream()
                 .filter(t -> t.getStatus() != null && 
-                    (t.getStatus().name().equals("COMPLETED") || 
-                     t.getStatus().name().equals("FINALIZED")))
+                    ("COMPLETED".equals(t.getStatus()) || 
+                     "FINALIZED".equals(t.getStatus())))
                 .count();
     }
 
@@ -275,9 +276,6 @@ public class Load extends BaseEntity {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-
-
-
     /* ========================
        LIFECYCLE CALLBACKS
        ======================== */
@@ -285,7 +283,7 @@ public class Load extends BaseEntity {
     @PrePersist
     protected void onCreate() {
         if (status == null) {
-           status = "PENDING";
+            status = "PENDING";
         }
         if (priority == null) {
             priority = "NORMAL";
@@ -320,8 +318,6 @@ public class Load extends BaseEntity {
         if (totalDepotKm == null) {
             totalDepotKm = BigDecimal.ZERO;
         }
-
-
         
         log.info("✅ Load pre-persist complete: {} | Status: {} | Ref: {}", 
             this.loadNumber, this.status, this.referenceNumber);
@@ -334,7 +330,8 @@ public class Load extends BaseEntity {
                 trip.setLoadNumber(this.loadNumber);
                 trip.setLoadType(this.commodityType);
                 trip.setLoadDescription(this.description);
-                trip.setLoadStatus(this.status != null ? this.status.name() : "PENDING");
+                // FIXED: Removed .name() call on status field
+                trip.setLoadStatus(this.status != null ? this.status : "PENDING");
             }
             log.debug("✅ Updated {} trips with load details", trips.size());
         }
@@ -354,17 +351,17 @@ public class Load extends BaseEntity {
         return "GENERAL";
     }
 
-        public boolean canAcceptTrip() {
-            return isActive();
-        }
-        
-        public String getStatusDisplay() {
-            return status != null ? status : "UNKNOWN";
-        }
-        
-        public boolean isActive() {
-            return status != null && 
-                   !"COMPLETED".equals(status) && 
-                   !"CANCELLED".equals(status);
-        }
+    public boolean canAcceptTrip() {
+        return isActive();
+    }
+    
+    public String getStatusDisplay() {
+        return status != null ? status : "UNKNOWN";
+    }
+    
+    public boolean isActive() {
+        return status != null && 
+               !"COMPLETED".equals(status) && 
+               !"CANCELLED".equals(status);
+    }
 }

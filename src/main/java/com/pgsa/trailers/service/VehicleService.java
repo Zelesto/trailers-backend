@@ -71,8 +71,7 @@ public class VehicleService {
     }
 
     public List<Vehicle> getActiveVehicles() {
-        log.debug("Fetching active vehicles");
-        return vehicleRepository.findByStatusIn(List.of(VehicleStatus.ACTIVE, VehicleStatus.AVAILABLE));
+        return vehicleRepository.findByStatusIn(List.of("ACTIVE", "AVAILABLE"));
     }
 
     public List<Vehicle> searchVehicles(String searchTerm) {
@@ -86,9 +85,8 @@ public class VehicleService {
     }
 
     public List<Vehicle> getAvailableVehicles() {
-        log.debug("Fetching available vehicles");
         return vehicleRepository.findByAssignedDriverIsNullAndStatusIn(
-            List.of(VehicleStatus.AVAILABLE, VehicleStatus.ACTIVE)
+            List.of("AVAILABLE", "ACTIVE")
         );
     }
 
@@ -447,30 +445,13 @@ public VehicleDTO resetFuelToFull(Long vehicleId, Integer tankNumber) {
             vehicle.setCurrentMileage(dto.getCurrentMileage());
         }
         
-        if (dto.getStatus() != null && !dto.getStatus().isEmpty()) {
-            try {
-                vehicle.setStatus(VehicleStatus.valueOf(dto.getStatus().toUpperCase()));
-            } catch (IllegalArgumentException e) {
-                log.warn("❌ Invalid status: {}, keeping current: {}", dto.getStatus(), vehicle.getStatus());
-                if (vehicle.getStatus() == null) {
-                    vehicle.setStatus("ACTIVE");
-                }
-            }
-        } else if (vehicle.getStatus() == null) {
-            vehicle.setStatus("ACTIVE");
+        if (dto.getStatus() != null) {
+            vehicle.setStatus(dto.getStatus());
         }
         
-        if (dto.getVehicleType() != null && !dto.getVehicleType().isEmpty()) {
-            try {
-                String vehicleTypeStr = dto.getVehicleType().trim().toUpperCase();
-                vehicle.setVehicleType(VehicleType.valueOf(vehicleTypeStr));
-            } catch (IllegalArgumentException e) {
-                log.error("❌ Invalid vehicle type: '{}', using default TRUCK", dto.getVehicleType());
-                vehicle.setVehicleType(VehicleType.TRUCK);
+        if (dto.getVehicleType() != null) {
+                vehicle.setVehicleType(dto.getVehicleType());
             }
-        } else if (vehicle.getVehicleType() == null) {
-            vehicle.setVehicleType(VehicleType.TRUCK);
-        }
         
         if (dto.getAvgConsumption() != null) {
             vehicle.setAvgConsumption(dto.getAvgConsumption());

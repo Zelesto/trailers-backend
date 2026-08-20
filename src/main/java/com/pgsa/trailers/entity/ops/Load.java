@@ -1,7 +1,6 @@
 package com.pgsa.trailers.entity.ops;
 
 import com.pgsa.trailers.config.BaseEntity;
-import com.pgsa.trailers.enums.LoadStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -355,10 +354,8 @@ public class Load extends BaseEntity {
         return "GENERAL";
     }
 
-    public boolean canAcceptTrip() {
-    return status != null && 
-           !"COMPLETED".equals(status) && 
-           !"CANCELLED".equals(status);
+        public boolean canAcceptTrip() {
+            return isActive();
         }
         
         public String getStatusDisplay() {

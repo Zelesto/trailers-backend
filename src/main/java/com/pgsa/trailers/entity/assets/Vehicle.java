@@ -54,7 +54,6 @@ public class Vehicle extends BaseEntity {
     @Column(name = "year")
     private Integer year;
 
-    
     @Column(name = "vehicle_type", length = 20, nullable = false)
     private String vehicleType;
 
@@ -121,7 +120,6 @@ public class Vehicle extends BaseEntity {
     @Column(name = "audit_trail", columnDefinition = "jsonb")
     private Map<String, Object> auditTrail = new HashMap<>();
 
-    
     @Column(name = "status", length = 20, nullable = false)
     private String status;
 
@@ -155,23 +153,20 @@ public class Vehicle extends BaseEntity {
     @Column(name = "insurance_expiry_date")
     private LocalDate insuranceExpiryDate;
 
-        @Column(name = "current_fuel_level")
-        private Double currentFuelLevel = 0.0;
-        
-        @Column(name = "fuel_capacity")
-        private Double fuelCapacity = 400.0;
-        
-        @Column(name = "fuel_tank_count")
-        private Integer fuelTankCount = 1;
-        
-        @Column(name = "fuel_tank_type")
-        private String fuelTankType = "SINGLE";
-        
-        @Column(name = "last_fuel_update")
-        private LocalDateTime lastFuelUpdate;
-
-
-        
+    @Column(name = "current_fuel_level")
+    private Double currentFuelLevel = 0.0;
+    
+    @Column(name = "fuel_capacity")
+    private Double fuelCapacity = 400.0;
+    
+    @Column(name = "fuel_tank_count")
+    private Integer fuelTankCount = 1;
+    
+    @Column(name = "fuel_tank_type")
+    private String fuelTankType = "SINGLE";
+    
+    @Column(name = "last_fuel_update")
+    private LocalDateTime lastFuelUpdate;
 
     // ====== Constructors ======
     public Vehicle() {
@@ -194,8 +189,8 @@ public class Vehicle extends BaseEntity {
     }
 
     public boolean isActive() {
-            return ("ACTIVE".equals(status) || "AVAILABLE".equals(status)) && super.isActive();
-        }
+        return ("ACTIVE".equals(status) || "AVAILABLE".equals(status)) && super.isActive();
+    }
 
     public boolean isAvailable() {
         return isActive() &&
@@ -233,15 +228,17 @@ public class Vehicle extends BaseEntity {
         this.incidentsLogged = (incidentsLogged == null ? 0 : incidentsLogged) + 1;
     }
 
+    // FIXED: Use String constants instead of VehicleStatus enum
     public void assignDriver(Driver driver) {
         this.assignedDriver = driver;
-        this.status = VehicleStatus.ASSIGNED;
+        this.status = "ASSIGNED";
     }
 
+    // FIXED: Use String constants instead of VehicleStatus enum
     public void unassignDriver() {
         this.assignedDriver = null;
-        if (status == VehicleStatus.ASSIGNED) {
-            this.status = VehicleStatus.AVAILABLE;
+        if ("ASSIGNED".equals(status)) {
+            this.status = "AVAILABLE";
         }
     }
 
@@ -252,14 +249,16 @@ public class Vehicle extends BaseEntity {
         }
     }
 
+    // FIXED: Use String constants instead of VehicleStatus enum
     public void markForMaintenance(String reason) {
         this.maintenanceStatus = reason;
-        this.status = VehicleStatus.MAINTENANCE;
+        this.status = "MAINTENANCE";
     }
 
+    // FIXED: Use String constants instead of VehicleStatus enum
     public void completeMaintenance() {
         this.maintenanceStatus = null;
-        this.status = VehicleStatus.AVAILABLE;
+        this.status = "AVAILABLE";
     }
 
     public BigDecimal getDistanceSinceLastService() {
@@ -277,28 +276,26 @@ public class Vehicle extends BaseEntity {
     }
 
     // ====== Explicit Getters/Setters for BaseEntity fields ======
-    // These ensure the methods exist and are accessible
 
+    public Double getCurrentFuelLevel() { return currentFuelLevel; }
+    public void setCurrentFuelLevel(Double currentFuelLevel) { this.currentFuelLevel = currentFuelLevel; }
+    
+    public Double getFuelCapacity() { return fuelCapacity; }
+    public void setFuelCapacity(Double fuelCapacity) { this.fuelCapacity = fuelCapacity; }
+    
+    public Integer getFuelTankCount() { return fuelTankCount; }
+    public void setFuelTankCount(Integer fuelTankCount) { this.fuelTankCount = fuelTankCount; }
+    
+    public String getFuelTankType() { return fuelTankType; }
+    public void setFuelTankType(String fuelTankType) { this.fuelTankType = fuelTankType; }
+    
+    public LocalDateTime getLastFuelUpdate() { return lastFuelUpdate; }
+    public void setLastFuelUpdate(LocalDateTime lastFuelUpdate) { this.lastFuelUpdate = lastFuelUpdate; }
 
-        public Double getCurrentFuelLevel() { return currentFuelLevel; }
-        public void setCurrentFuelLevel(Double currentFuelLevel) { this.currentFuelLevel = currentFuelLevel; }
-        
-        public Double getFuelCapacity() { return fuelCapacity; }
-        public void setFuelCapacity(Double fuelCapacity) { this.fuelCapacity = fuelCapacity; }
-        
-        public Integer getFuelTankCount() { return fuelTankCount; }
-        public void setFuelTankCount(Integer fuelTankCount) { this.fuelTankCount = fuelTankCount; }
-        
-        public String getFuelTankType() { return fuelTankType; }
-        public void setFuelTankType(String fuelTankType) { this.fuelTankType = fuelTankType; }
-        
-        public LocalDateTime getLastFuelUpdate() { return lastFuelUpdate; }
-        public void setLastFuelUpdate(LocalDateTime lastFuelUpdate) { this.lastFuelUpdate = lastFuelUpdate; }
-
-        public void resetFuelToFull() {
-            this.currentFuelLevel = this.fuelCapacity != null ? this.fuelCapacity : 400.0;
-            this.lastFuelUpdate = LocalDateTime.now();
-        }
+    public void resetFuelToFull() {
+        this.currentFuelLevel = this.fuelCapacity != null ? this.fuelCapacity : 400.0;
+        this.lastFuelUpdate = LocalDateTime.now();
+    }
     
     public Boolean getIsActive() {
         return super.isActive();
@@ -319,12 +316,12 @@ public class Vehicle extends BaseEntity {
     // ====== Lifecycle Hooks ======
     @PrePersist
     protected void onCreate() {
-            if (status == null) {
-                status = "ACTIVE";
-            }
-            if (vehicleType == null) {
-                vehicleType = "TRUCK";
-            }
+        if (status == null) {
+            status = "ACTIVE";
+        }
+        if (vehicleType == null) {
+            vehicleType = "TRUCK";
+        }
         if (incidentsLogged == null) {
             incidentsLogged = 0;
         }
@@ -358,22 +355,22 @@ public class Vehicle extends BaseEntity {
         this.registrationNumber = registrationNumber;
     }
 
-        public String getVehicleType() {
-            return vehicleType;
-        }
+    public String getVehicleType() {
+        return vehicleType;
+    }
 
-        public void setVehicleType(String vehicleType) {
-            this.vehicleType = vehicleType;
-        }
+    public void setVehicleType(String vehicleType) {
+        this.vehicleType = vehicleType;
+    }
 
-        public String getStatus() {
-            return status;
-        }
-        
-        public void setStatus(String status) {
-            this.status = status;
-        }
-        
+    public String getStatus() {
+        return status;
+    }
+    
+    public void setStatus(String status) {
+        this.status = status;
+    }
+    
     public BigDecimal getCurrentOdometer() {
         return currentOdometer;
     }

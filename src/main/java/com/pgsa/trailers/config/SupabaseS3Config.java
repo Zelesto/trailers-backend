@@ -59,13 +59,13 @@ public class SupabaseS3Config {
         log.info("Supabase URL: {}", supabaseUrl);
         log.info("========================================");
 
-        // Validate credentials
+        // Validate credentials are not empty
         if (accessKeyId == null || accessKeyId.isEmpty()) {
-            log.error("Supabase Access Key ID is missing!");
+            log.error("Supabase Access Key ID is missing! Check your configuration.");
             throw new IllegalStateException("Supabase Access Key ID is required");
         }
 
-        // Use URLConnection HTTP client (no extra dependencies needed)
+        // Use UrlConnectionHttpClient (built-in, no extra dependencies)
         UrlConnectionHttpClient httpClient = UrlConnectionHttpClient.builder()
                 .connectionTimeout(Duration.ofSeconds(30))
                 .build();
@@ -86,6 +86,7 @@ public class SupabaseS3Config {
 
     @Bean
     public S3Presigner supabaseS3Presigner() {
+        // Use UrlConnectionHttpClient (built-in, no extra dependencies)
         UrlConnectionHttpClient httpClient = UrlConnectionHttpClient.builder()
                 .connectionTimeout(Duration.ofSeconds(30))
                 .build();

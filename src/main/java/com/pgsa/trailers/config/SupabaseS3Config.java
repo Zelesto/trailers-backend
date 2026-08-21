@@ -8,14 +8,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import java.net.URI;
-import java.time.Duration;
 
 @Configuration
 @Slf4j
@@ -65,13 +63,7 @@ public class SupabaseS3Config {
             throw new IllegalStateException("Supabase Access Key ID is required");
         }
 
-        // Use UrlConnectionHttpClient (built-in, no extra dependencies)
-        UrlConnectionHttpClient httpClient = UrlConnectionHttpClient.builder()
-                .connectionTimeout(Duration.ofSeconds(30))
-                .build();
-
         return S3Client.builder()
-                .httpClient(httpClient)
                 .endpointOverride(URI.create(endpoint))
                 .region(Region.of(region))
                 .credentialsProvider(StaticCredentialsProvider.create(
@@ -86,13 +78,7 @@ public class SupabaseS3Config {
 
     @Bean
     public S3Presigner supabaseS3Presigner() {
-        // Use UrlConnectionHttpClient (built-in, no extra dependencies)
-        UrlConnectionHttpClient httpClient = UrlConnectionHttpClient.builder()
-                .connectionTimeout(Duration.ofSeconds(30))
-                .build();
-
         return S3Presigner.builder()
-                .httpClient(httpClient)
                 .endpointOverride(URI.create(endpoint))
                 .region(Region.of(region))
                 .credentialsProvider(StaticCredentialsProvider.create(

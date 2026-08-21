@@ -1,4 +1,4 @@
-// src/main/java/com/pgsa/trailers/config/SupabaseS3Config.java
+// src/main/java/com/pgsa/trailers/config/SupabaseS3Config.java - Simple Version
 package com.pgsa.trailers.config;
 
 import lombok.extern.slf4j.Slf4j;
@@ -57,12 +57,14 @@ public class SupabaseS3Config {
         log.info("Supabase URL: {}", supabaseUrl);
         log.info("========================================");
 
-        // Validate credentials are not empty
+        // Validate credentials
         if (accessKeyId == null || accessKeyId.isEmpty()) {
-            log.error("Supabase Access Key ID is missing! Check your configuration.");
+            log.error("Supabase Access Key ID is missing!");
             throw new IllegalStateException("Supabase Access Key ID is required");
         }
 
+        // AWS SDK will automatically use the best available HTTP client
+        // (Netty is available since you have netty-nio-client dependency)
         return S3Client.builder()
                 .endpointOverride(URI.create(endpoint))
                 .region(Region.of(region))

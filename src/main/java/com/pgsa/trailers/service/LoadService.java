@@ -53,6 +53,77 @@ public class LoadService {
     private final SequenceService sequenceService;
     private final JdbcTemplate jdbcTemplate;
 
+
+    // =============================================
+    // UPDATE LOAD DISTANCES
+    // =============================================
+
+
+    private final LoadRepository loadRepository;
+    private final TripRepository tripRepository;
+
+    @Transactional
+    public void updateLoadDistances(Long loadId) {
+        log.info("📦 Updating distances for Load ID: {}", loadId);
+
+        try {
+            Load load = loadRepository.findById(loadId)
+                    .orElseThrow(() -> new RuntimeException("Load not found: " + loadId));
+
+            List<Trip> trips = tripRepository.findByLoadId(loadId);
+
+            if (trips.isEmpty()) {
+                log.warn("⚠️ No trips found for Load {}", loadId);
+                load.setTotalCalculatedDistanceKm(BigDecimal.ZERO);
+                load.setTotalActualDistanceKm(BigDecimal.ZERO);
+                load.setTotalCalculatedDistance(BigDecimal.ZERO);
+                load.setTotalActualDistance(BigDecimal.ZERO);
+                load.setDistanceCalculated(false);
+                load.setDistanceCalculatedAt(LocalDateTime.now());
+                loadRepository.save(load);
+                return;
+            }
+
+            // Calculate totals
+            BigDecimal totalCalculated = trips.stream()
+                    .map(Trip::getCalculatedDistanceKm)
+                    .filter(d -> d != null)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal totalActual = trips.stream()
+                    .map(Trip::getActualDistanceKm)
+                    .filter(d -> d != null)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            // Update load
+            load.setTotalCalculatedDistanceKm(totalCalculated);
+            load.setTotalActualDistanceKm(totalActual);
+            load.setTotalCalculatedDistance(totalCalculated);
+            load.setTotalActualDistance(totalActual);
+            load.setTotalEstimatedDistance(totalCalculated);
+            load.setDistanceCalculated(totalCalculated.compareTo(BigDecimal.ZERO) > 0);
+            load.setDistanceCalculatedAt(LocalDateTime.now());
+
+            loadRepository.save(load);
+            log.info("✅ Load {} distances updated. Calculated: {} km, Actual: {} km",
+                    loadId, totalCalculated, totalActual);
+
+        } catch (Exception e) {
+            log.error("❌ Error updating load distances for {}: {}", loadId, e.getMessage(), e);
+        }
+    }
+
+    @Transactional
+    public void updateAllLoadDistances() {
+        log.info("📦 Updating all load distances...");
+        List<Load> loads = loadRepository.findAll();
+        for (Load load : loads) {
+            updateLoadDistances(load.getId());
+        }
+        log.info("✅ All load distances updated");
+    }
+}
+
     // =============================================
     // GENERATE REFERENCE NUMBER
     // =============================================

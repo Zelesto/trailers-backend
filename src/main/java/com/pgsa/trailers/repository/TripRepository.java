@@ -62,6 +62,38 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
            "LEFT JOIN FETCH t.metrics m " +
            "WHERE t.id = :id")
     Optional<Trip> findByIdWithAllRelations(@Param("id") Long id);
+
+
+// ============================================================
+// DISTANCE CALCULATION QUERIES
+// ============================================================
+
+@Query("SELECT t FROM Trip t WHERE t.distanceCalculated = false OR t.distanceCalculated IS NULL")
+List<Trip> findByDistanceCalculatedFalseOrDistanceCalculatedIsNull();
+
+@Query("SELECT t FROM Trip t WHERE t.calculatedDistanceKm IS NULL")
+List<Trip> findByCalculatedDistanceKmIsNull();
+
+@Query("SELECT t FROM Trip t WHERE t.actualDistanceKm IS NULL AND t.originLocation IS NOT NULL AND t.destinationLocation IS NOT NULL")
+List<Trip> findTripsNeedingDistanceCalculation();
+
+@Query("SELECT COUNT(t) FROM Trip t WHERE t.distanceCalculated = false OR t.distanceCalculated IS NULL")
+long countPendingDistanceCalculations();
+
+@Query("SELECT t FROM Trip t WHERE t.distanceCalculated = false AND t.distanceCalculationError IS NOT NULL")
+List<Trip> findFailedDistanceCalculations();
+
+@Modifying
+@Query("UPDATE Trip t SET t.distanceCalculated = false, t.distanceCalculationError = :error, t.distanceCalculatedAt = :now WHERE t.id = :tripId")
+int markDistanceCalculationFailed(@Param("tripId") Long tripId, 
+                                  @Param("error") String error, 
+                                  @Param("now") LocalDateTime now);
+
+@Modifying
+@Query("UPDATE Trip t SET t.distanceCalculated = true, t.calculatedDistanceKm = :distance, t.actualDistanceKm = :distance, t.distanceCalculatedAt = :now, t.distanceCalculationError = null WHERE t.id = :tripId")
+int markDistanceCalculationSuccess(@Param("tripId") Long tripId,
+                                   @Param("distance") BigDecimal distance,
+                                   @Param("now") LocalDateTime now);
     
     // ============================================================
     // SEARCH WITH JOIN FETCH

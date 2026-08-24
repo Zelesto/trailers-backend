@@ -108,7 +108,7 @@ public class TripService {
     @Transactional
     public CompletableFuture<Trip> calculateTripDistance(Long tripId) {
         log.info("🚗 Calculating distance for Trip ID: {}", tripId);
-
+    
         try {
             Trip trip = tripRepository.findById(tripId)
                     .orElseThrow(() -> new RuntimeException("Trip not found: " + tripId));
@@ -165,17 +165,25 @@ public class TripService {
 
             // Update load if trip is associated with one
             if (trip.getLoadId() != null && !trip.getLoadId().isEmpty()) {
+            try {
+                log.info("📦 Updating load {} for trip {}", trip.getLoadId(), tripId);
                 loadService.updateLoadDistances(trip.getLoadId());
+                log.info("✅ Load {} updated successfully", trip.getLoadId());
+            } catch (Exception e) {
+                log.error("❌ Failed to update load {}: {}", trip.getLoadId(), e.getMessage(), e);
             }
-
-            return CompletableFuture.completedFuture(trip);
-
-        } catch (Exception e) {
-            log.error("❌ Error calculating distance for Trip {}: {}", tripId, e.getMessage(), e);
-            updateTripErrorStatus(tripId, e.getMessage());
-            return CompletableFuture.failedFuture(e);
+        } else {
+            log.info("⏭️ Trip {} has no load associated, skipping load update", tripId);
         }
+
+        return CompletableFuture.completedFuture(trip);
+
+    } catch (Exception e) {
+        log.error("❌ Error calculating distance for Trip {}: {}", tripId, e.getMessage(), e);
+        updateTripErrorStatus(tripId, e.getMessage());
+        return CompletableFuture.failedFuture(e);
     }
+}
 
     @Transactional
     public void processPendingDistanceCalculations() {

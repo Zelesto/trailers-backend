@@ -2,7 +2,7 @@
 package com.pgsa.trailers.controller;
 
 import com.pgsa.trailers.service.LoadService;
-import com.pgsa.trailers.service.TripDistanceService;
+import com.pgsa.trailers.service.TripService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -18,7 +18,7 @@ import java.util.Map;
 @CrossOrigin(origins = "*")
 public class DistanceController {
 
-    private final TripDistanceService tripDistanceService;
+    private final TripService tripService; 
     private final LoadService loadService;
 
     @PostMapping("/trip/{tripId}")
@@ -26,7 +26,7 @@ public class DistanceController {
         log.info("📡 Manual trigger: Calculate trip distance for ID: {}", tripId);
         
         try {
-            tripDistanceService.calculateTripDistance(tripId);
+            tripService.calculateTripDistance(tripId); 
             return ResponseEntity.ok(Map.of(
                     "success", true,
                     "message", "Distance calculation triggered for trip " + tripId,
@@ -64,7 +64,7 @@ public class DistanceController {
         log.info("📡 Manual trigger: Process pending distance calculations");
         
         try {
-            tripDistanceService.processPendingDistanceCalculations();
+            tripService.processPendingDistanceCalculations();
             return ResponseEntity.ok(Map.of(
                     "success", true,
                     "message", "Pending distance processing triggered"
@@ -81,7 +81,7 @@ public class DistanceController {
     public ResponseEntity<Map<String, Object>> getPendingCount() {
         try {
             // You'll need to add this method to TripRepository
-            long count = tripDistanceService.getPendingCount();
+            long count = tripService.getPendingDistanceCount();
             return ResponseEntity.ok(Map.of(
                     "count", count
             ));

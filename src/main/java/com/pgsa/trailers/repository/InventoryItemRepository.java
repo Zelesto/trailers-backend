@@ -15,6 +15,10 @@ import java.util.List;
 @Repository
 public interface InventoryItemRepository extends JpaRepository<InventoryItem, Long> {
 
+    Optional<InventoryItem> findBySku(String sku);
+    boolean existsBySku(String sku);
+    Long countBySkuStartingWith(String prefix);
+
     // Find by category
     List<InventoryItem> findByCategory(String category);
 

@@ -59,9 +59,6 @@ public class LoadService {
     // =============================================
 
 
-    private final LoadRepository loadRepository;
-    private final TripRepository tripRepository;
-
     @Transactional
     public void updateLoadDistances(Long loadId) {
         log.info("📦 Updating distances for Load ID: {}", loadId);

@@ -104,6 +104,27 @@ public class Trip {
     @Column(name = "container_number", length = 50)
     private String containerNumber;
 
+
+
+        /* ========================
+       DISTANCE
+       ======================== */
+
+        @Column(name = "calculated_distance_km", precision = 10, scale = 2)
+        private BigDecimal calculatedDistanceKm;
+        
+        @Column(name = "actual_distance_km", precision = 10, scale = 2)
+        private BigDecimal actualDistanceKm;
+        
+        @Column(name = "distance_calculated")
+        private Boolean distanceCalculated = false;
+        
+        @Column(name = "distance_calculated_at")
+        private LocalDateTime distanceCalculatedAt;
+        
+        @Column(name = "distance_calculation_error", length = 500)
+        private String distanceCalculationError;
+
     /* ========================
        Notes fields
        ======================== */
@@ -459,6 +480,25 @@ public class Trip {
     }
 
     /* ========================
+       DISTANCE
+       ======================== */
+public BigDecimal getCalculatedDistanceKm() { return calculatedDistanceKm; }
+public void setCalculatedDistanceKm(BigDecimal calculatedDistanceKm) { this.calculatedDistanceKm = calculatedDistanceKm; }
+
+public BigDecimal getActualDistanceKm() { return actualDistanceKm; }
+public void setActualDistanceKm(BigDecimal actualDistanceKm) { this.actualDistanceKm = actualDistanceKm; }
+
+public Boolean getDistanceCalculated() { return distanceCalculated; }
+public void setDistanceCalculated(Boolean distanceCalculated) { this.distanceCalculated = distanceCalculated; }
+
+public LocalDateTime getDistanceCalculatedAt() { return distanceCalculatedAt; }
+public void setDistanceCalculatedAt(LocalDateTime distanceCalculatedAt) { this.distanceCalculatedAt = distanceCalculatedAt; }
+
+public String getDistanceCalculationError() { return distanceCalculationError; }
+public void setDistanceCalculationError(String distanceCalculationError) { this.distanceCalculationError = distanceCalculationError; }
+
+
+        /* ========================
        EXPLICIT GETTERS (if Lombok fails)
        ======================== */
 

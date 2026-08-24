@@ -1,3 +1,4 @@
+// src/main/java/com/pgsa/trailers/service/TripService.java
 package com.pgsa.trailers.service;
 
 import com.pgsa.trailers.dto.CreateTripRequest;
@@ -19,8 +20,10 @@ import com.pgsa.trailers.repository.DriverRepository;
 import com.pgsa.trailers.repository.LoadRepository;
 import com.pgsa.trailers.repository.TripRepository;
 import com.pgsa.trailers.repository.VehicleRepository;
-import com.pgsa.trailers.service.util.TripNumberGenerator;
+import com.pgsa.trailers.service.routing.RoutingEngine;
+import com.pgsa.trailers.service.routing.RoutingResult;
 import com.pgsa.trailers.service.util.LoadNumberGenerator;
+import com.pgsa.trailers.service.util.TripNumberGenerator;
 import com.pgsa.trailers.service.util.TripValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,16 +31,9 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import com.pgsa.trailers.service.routing.RoutingEngine;
-import com.pgsa.trailers.service.routing.RoutingResult;
-import com.pgsa.trailers.service.LoadService;
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.scheduling.annotation.AsyncResult;
-
-import org.hibernate.Hibernate;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -47,8 +43,8 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -56,13 +52,12 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 public class TripService {
 
-
     private static final int MAX_RETRIES = 3;
     private static final long RETRY_DELAY_MS = 5000;
 
-    
-    private final LoadService loadService;
-    
+    // ============================================================
+    // DEPENDENCIES
+    // ============================================================
     private final TripRepository tripRepository;
     private final TripMetricsService tripMetricsService;
     private final VehicleRepository vehicleRepository;
@@ -70,14 +65,14 @@ public class TripService {
     private final CustomerRepository customerRepository;
     private final LoadRepository loadRepository;
     private final TripNumberGenerator tripNumberGenerator;
-    private final LoadNumberGenerator loadNumberGenerator; 
+    private final LoadNumberGenerator loadNumberGenerator;
     private final CreateTripMapper createTripMapper;
     private final TripResponseMapper tripResponseMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final TripValidator tripValidator;
     private final JdbcTemplate jdbcTemplate;
-
     private final RoutingEngine routingEngine;
+    private final LoadService loadService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -86,7 +81,7 @@ public class TripService {
     private static final String TRIP_SEQUENCE_NAME = "trip";
 
     // ============================================================
-    // CONSTANTS FOR STATUS VALUES (from enum_master table)
+    // STATUS CONSTANTS
     // ============================================================
     public static final String STATUS_PENDING = "PENDING";
     public static final String STATUS_PLANNED = "PLANNED";
@@ -105,31 +100,29 @@ public class TripService {
     public static final String LOAD_STATUS_COMPLETED = "COMPLETED";
     public static final String LOAD_STATUS_CANCELLED = "CANCELLED";
 
-
-
     // ============================================================
-    // SINGLE TRIP DISTANCE CALCULATION
+    // DISTANCE CALCULATION METHODS
     // ============================================================
-    
+
     @Async("taskExecutor")
     @Transactional
     public CompletableFuture<Trip> calculateTripDistance(Long tripId) {
         log.info("🚗 Calculating distance for Trip ID: {}", tripId);
-    
+
         try {
             Trip trip = tripRepository.findById(tripId)
                     .orElseThrow(() -> new RuntimeException("Trip not found: " + tripId));
-    
+
             // Skip if already calculated
             if (Boolean.TRUE.equals(trip.getDistanceCalculated()) && trip.getCalculatedDistanceKm() != null) {
                 log.info("⏭️ Trip {} already has calculated distance: {} km", tripId, trip.getCalculatedDistanceKm());
                 return CompletableFuture.completedFuture(trip);
             }
-    
+
             // Get origin and destination
             String origin = getOriginAddress(trip);
             String destination = getDestinationAddress(trip);
-    
+
             if (origin == null || destination == null || origin.isEmpty() || destination.isEmpty()) {
                 log.warn("⚠️ Missing address for Trip {}. Origin: {}, Destination: {}", tripId, origin, destination);
                 trip.setDistanceCalculated(false);
@@ -138,7 +131,7 @@ public class TripService {
                 tripRepository.save(trip);
                 return CompletableFuture.completedFuture(trip);
             }
-    
+
             if (origin.equalsIgnoreCase(destination)) {
                 log.warn("⚠️ Origin and destination are the same for Trip {}", tripId);
                 trip.setCalculatedDistanceKm(BigDecimal.ZERO);
@@ -149,11 +142,11 @@ public class TripService {
                 tripRepository.save(trip);
                 return CompletableFuture.completedFuture(trip);
             }
-    
+
             // Calculate with retry
             String vehicleType = trip.getVehicle() != null ? trip.getVehicle().getVehicleType() : "TRUCK";
             BigDecimal distance = calculateWithRetry(origin, destination, vehicleType, tripId);
-    
+
             if (distance != null && distance.compareTo(BigDecimal.ZERO) > 0) {
                 trip.setCalculatedDistanceKm(distance);
                 trip.setActualDistanceKm(distance);
@@ -167,44 +160,40 @@ public class TripService {
                 trip.setDistanceCalculatedAt(LocalDateTime.now());
                 log.warn("⚠️ Trip {} distance calculation failed", tripId);
             }
-    
+
             tripRepository.save(trip);
-    
+
             // Update load if trip is associated with one
             if (trip.getLoadId() != null && !trip.getLoadId().isEmpty()) {
                 loadService.updateLoadDistances(trip.getLoadId());
             }
-    
+
             return CompletableFuture.completedFuture(trip);
-    
+
         } catch (Exception e) {
             log.error("❌ Error calculating distance for Trip {}: {}", tripId, e.getMessage(), e);
             updateTripErrorStatus(tripId, e.getMessage());
             return CompletableFuture.failedFuture(e);
         }
     }
-    
-    // ============================================================
-    // BATCH PROCESSING
-    // ============================================================
-    
+
     @Transactional
     public void processPendingDistanceCalculations() {
         log.info("🔄 Starting batch distance calculation for pending trips...");
-    
+
         try {
             List<Trip> pendingTrips = tripRepository.findByDistanceCalculatedFalseOrDistanceCalculatedIsNull();
-    
+
             if (pendingTrips.isEmpty()) {
                 log.info("✅ No pending distance calculations");
                 return;
             }
-    
+
             log.info("📊 Found {} trips needing distance calculation", pendingTrips.size());
-    
+
             int processed = 0;
             int failed = 0;
-    
+
             for (Trip trip : pendingTrips) {
                 try {
                     if (hasValidAddresses(trip)) {
@@ -216,169 +205,32 @@ public class TripService {
                         tripRepository.save(trip);
                         failed++;
                     }
-    
+
                     if (processed % 10 == 0) {
                         Thread.sleep(100);
                     }
-    
+
                 } catch (Exception e) {
                     log.error("Failed to process trip {}: {}", trip.getId(), e.getMessage());
                     failed++;
                 }
             }
-    
+
             log.info("✅ Batch processing complete. Processed: {}, Failed: {}", processed, failed);
-    
+
         } catch (Exception e) {
             log.error("❌ Error in batch distance calculation: {}", e.getMessage(), e);
         }
     }
-    
+
     @Transactional(readOnly = true)
     public long getPendingDistanceCount() {
         return tripRepository.countPendingDistanceCalculations();
     }
-    
+
     // ============================================================
-    // HELPER METHODS
+    // HELPER METHODS FOR DISTANCE CALCULATION
     // ============================================================
-
-
-// ============================================================
-// SINGLE TRIP DISTANCE CALCULATION
-// ============================================================
-
-@Async("taskExecutor")
-@Transactional
-public CompletableFuture<Trip> calculateTripDistance(Long tripId) {
-    log.info("🚗 Calculating distance for Trip ID: {}", tripId);
-
-    try {
-        Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new RuntimeException("Trip not found: " + tripId));
-
-        // Skip if already calculated
-        if (Boolean.TRUE.equals(trip.getDistanceCalculated()) && trip.getCalculatedDistanceKm() != null) {
-            log.info("⏭️ Trip {} already has calculated distance: {} km", tripId, trip.getCalculatedDistanceKm());
-            return CompletableFuture.completedFuture(trip);
-        }
-
-        // Get origin and destination
-        String origin = getOriginAddress(trip);
-        String destination = getDestinationAddress(trip);
-
-        if (origin == null || destination == null || origin.isEmpty() || destination.isEmpty()) {
-            log.warn("⚠️ Missing address for Trip {}. Origin: {}, Destination: {}", tripId, origin, destination);
-            trip.setDistanceCalculated(false);
-            trip.setDistanceCalculationError("Missing origin or destination address");
-            trip.setDistanceCalculatedAt(LocalDateTime.now());
-            tripRepository.save(trip);
-            return CompletableFuture.completedFuture(trip);
-        }
-
-        if (origin.equalsIgnoreCase(destination)) {
-            log.warn("⚠️ Origin and destination are the same for Trip {}", tripId);
-            trip.setCalculatedDistanceKm(BigDecimal.ZERO);
-            trip.setActualDistanceKm(BigDecimal.ZERO);
-            trip.setDistanceCalculated(true);
-            trip.setDistanceCalculatedAt(LocalDateTime.now());
-            trip.setDistanceCalculationError(null);
-            tripRepository.save(trip);
-            return CompletableFuture.completedFuture(trip);
-        }
-
-        // Calculate with retry
-        String vehicleType = trip.getVehicle() != null ? trip.getVehicle().getVehicleType() : "TRUCK";
-        BigDecimal distance = calculateWithRetry(origin, destination, vehicleType, tripId);
-
-        if (distance != null && distance.compareTo(BigDecimal.ZERO) > 0) {
-            trip.setCalculatedDistanceKm(distance);
-            trip.setActualDistanceKm(distance);
-            trip.setDistanceCalculated(true);
-            trip.setDistanceCalculatedAt(LocalDateTime.now());
-            trip.setDistanceCalculationError(null);
-            log.info("✅ Trip {} distance calculated: {} km", tripId, distance);
-        } else {
-            trip.setDistanceCalculated(false);
-            trip.setDistanceCalculationError("Failed to calculate distance - API returned null or zero");
-            trip.setDistanceCalculatedAt(LocalDateTime.now());
-            log.warn("⚠️ Trip {} distance calculation failed", tripId);
-        }
-
-        tripRepository.save(trip);
-
-        // Update load if trip is associated with one
-        if (trip.getLoadId() != null && !trip.getLoadId().isEmpty()) {
-            loadService.updateLoadDistances(trip.getLoadId());
-        }
-
-        return CompletableFuture.completedFuture(trip);
-
-    } catch (Exception e) {
-        log.error("❌ Error calculating distance for Trip {}: {}", tripId, e.getMessage(), e);
-        updateTripErrorStatus(tripId, e.getMessage());
-        return CompletableFuture.failedFuture(e);
-    }
-}
-
-// ============================================================
-// BATCH PROCESSING
-// ============================================================
-
-@Transactional
-public void processPendingDistanceCalculations() {
-    log.info("🔄 Starting batch distance calculation for pending trips...");
-
-    try {
-        List<Trip> pendingTrips = tripRepository.findByDistanceCalculatedFalseOrDistanceCalculatedIsNull();
-
-        if (pendingTrips.isEmpty()) {
-            log.info("✅ No pending distance calculations");
-            return;
-        }
-
-        log.info("📊 Found {} trips needing distance calculation", pendingTrips.size());
-
-        int processed = 0;
-        int failed = 0;
-
-        for (Trip trip : pendingTrips) {
-            try {
-                if (hasValidAddresses(trip)) {
-                    calculateTripDistance(trip.getId());
-                    processed++;
-                } else {
-                    trip.setDistanceCalculationError("Incomplete address data");
-                    trip.setDistanceCalculatedAt(LocalDateTime.now());
-                    tripRepository.save(trip);
-                    failed++;
-                }
-
-                if (processed % 10 == 0) {
-                    Thread.sleep(100);
-                }
-
-            } catch (Exception e) {
-                log.error("Failed to process trip {}: {}", trip.getId(), e.getMessage());
-                failed++;
-            }
-        }
-
-        log.info("✅ Batch processing complete. Processed: {}, Failed: {}", processed, failed);
-
-    } catch (Exception e) {
-        log.error("❌ Error in batch distance calculation: {}", e.getMessage(), e);
-    }
-}
-
-@Transactional(readOnly = true)
-public long getPendingDistanceCount() {
-    return tripRepository.countPendingDistanceCalculations();
-}
-
-// ============================================================
-// HELPER METHODS FOR DISTANCE CALCULATION
-// ============================================================
 
     private String getOriginAddress(Trip trip) {
         if (trip.getActualOriginLocation() != null && !trip.getActualOriginLocation().isEmpty()) {
@@ -387,7 +239,6 @@ public long getPendingDistanceCount() {
         if (trip.getOriginLocation() != null && !trip.getOriginLocation().isEmpty()) {
             return trip.getOriginLocation();
         }
-        // Build from components
         StringBuilder sb = new StringBuilder();
         if (trip.getOriginStreetAddress() != null && !trip.getOriginStreetAddress().isEmpty()) {
             sb.append(trip.getOriginStreetAddress()).append(", ");
@@ -403,7 +254,7 @@ public long getPendingDistanceCount() {
         }
         return sb.length() > 0 ? sb.toString() : null;
     }
-    
+
     private String getDestinationAddress(Trip trip) {
         if (trip.getActualDestinationLocation() != null && !trip.getActualDestinationLocation().isEmpty()) {
             return trip.getActualDestinationLocation();
@@ -426,7 +277,7 @@ public long getPendingDistanceCount() {
         }
         return sb.length() > 0 ? sb.toString() : null;
     }
-    
+
     private boolean hasValidAddresses(Trip trip) {
         String origin = getOriginAddress(trip);
         String destination = getDestinationAddress(trip);
@@ -434,23 +285,23 @@ public long getPendingDistanceCount() {
                destination != null && !destination.isEmpty() &&
                !origin.equalsIgnoreCase(destination);
     }
-    
+
     private BigDecimal calculateWithRetry(String origin, String destination, String vehicleType, Long tripId) {
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
                 log.debug("🔄 Attempt {}/{} for Trip {}", attempt, MAX_RETRIES, tripId);
-    
+
                 RoutingResult result = routingEngine.calculateRoute(origin, destination, vehicleType);
-    
+
                 if (result != null && result.getDistanceKm() != null &&
                     result.getDistanceKm().compareTo(BigDecimal.ZERO) > 0) {
                     return result.getDistanceKm();
                 }
-    
+
                 if (attempt < MAX_RETRIES) {
                     Thread.sleep(RETRY_DELAY_MS * attempt);
                 }
-    
+
             } catch (Exception e) {
                 log.warn("⚠️ Attempt {} failed for Trip {}: {}", attempt, tripId, e.getMessage());
                 if (attempt == MAX_RETRIES) {
@@ -460,20 +311,6 @@ public long getPendingDistanceCount() {
         }
         return null;
     }
-    
-    private void updateTripErrorStatus(Long tripId, String error) {
-        try {
-            Trip trip = tripRepository.findById(tripId).orElse(null);
-            if (trip != null) {
-                trip.setDistanceCalculated(false);
-                trip.setDistanceCalculationError(error);
-                trip.setDistanceCalculatedAt(LocalDateTime.now());
-                tripRepository.save(trip);
-            }
-        } catch (Exception e) {
-            log.error("Failed to update trip error status: {}", e.getMessage());
-        }
-    }
 
     private void updateTripErrorStatus(Long tripId, String error) {
         try {
@@ -488,33 +325,20 @@ public long getPendingDistanceCount() {
             log.error("Failed to update trip error status: {}", e.getMessage());
         }
     }
-}
 
-    private String generateReferenceNumber() {
-        try {
-            String year = String.valueOf(java.time.Year.now().getValue());
-            String prefix = "REF-" + year + "-";
-            
-            Long nextNumber = jdbcTemplate.queryForObject(
-                "INSERT INTO sequence (table_name, year, next_number, created_at, updated_at) " +
-                "VALUES (?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) " +
-                "ON CONFLICT (table_name, year) DO UPDATE SET next_number = sequence.next_number + 1 " +
-                "RETURNING next_number - 1",
-                new Object[]{LOAD_REF_SEQUENCE_NAME, year},
-                Long.class
-            );
-            
-            String referenceNumber = prefix + String.format("%03d", nextNumber);
-            log.info("✅ Generated reference number: {}", referenceNumber);
-            return referenceNumber;
-            
-        } catch (Exception e) {
-            log.error("❌ Error generating reference number: {}", e.getMessage());
-            String fallback = "REF-" + System.currentTimeMillis();
-            log.warn("⚠️ Using fallback reference number: {}", fallback);
-            return fallback;
+    private boolean hasAddressChanged(Trip existing, UpdateTripRequest request) {
+        if (request.getOriginLocation() != null && !request.getOriginLocation().equals(existing.getOriginLocation())) {
+            return true;
         }
+        if (request.getDestinationLocation() != null && !request.getDestinationLocation().equals(existing.getDestinationLocation())) {
+            return true;
+        }
+        return false;
     }
+
+    // ============================================================
+    // GENERATE TRIP NUMBER
+    // ============================================================
 
     private String generateTripNumberDirect() {
         try {
@@ -538,6 +362,32 @@ public long getPendingDistanceCount() {
             log.error("❌ Error generating trip number: {}", e.getMessage());
             String fallback = "TRP-" + System.currentTimeMillis();
             log.warn("⚠️ Using fallback trip number: {}", fallback);
+            return fallback;
+        }
+    }
+
+    private String generateReferenceNumber() {
+        try {
+            String year = String.valueOf(java.time.Year.now().getValue());
+            String prefix = "REF-" + year + "-";
+            
+            Long nextNumber = jdbcTemplate.queryForObject(
+                "INSERT INTO sequence (table_name, year, next_number, created_at, updated_at) " +
+                "VALUES (?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) " +
+                "ON CONFLICT (table_name, year) DO UPDATE SET next_number = sequence.next_number + 1 " +
+                "RETURNING next_number - 1",
+                new Object[]{LOAD_REF_SEQUENCE_NAME, year},
+                Long.class
+            );
+            
+            String referenceNumber = prefix + String.format("%03d", nextNumber);
+            log.info("✅ Generated reference number: {}", referenceNumber);
+            return referenceNumber;
+            
+        } catch (Exception e) {
+            log.error("❌ Error generating reference number: {}", e.getMessage());
+            String fallback = "REF-" + System.currentTimeMillis();
+            log.warn("⚠️ Using fallback reference number: {}", fallback);
             return fallback;
         }
     }
@@ -570,8 +420,9 @@ public long getPendingDistanceCount() {
     }
 
     // ============================================================
-    // HANDLE LOAD - FIXED to use String status
+    // HANDLE LOAD
     // ============================================================
+
     private Load handleLoad(CreateTripRequest request, Customer customer, Trip trip, Long userId) {
         String referenceNumber = getOrGenerateReferenceNumber(request);
         trip.setReferenceNumber(referenceNumber);
@@ -676,8 +527,9 @@ public long getPendingDistanceCount() {
     }
 
     // ============================================================
-    // CREATE TRIP - FIXED to use String status
+    // CREATE TRIP
     // ============================================================
+
     @Transactional
     public TripResponse createTrip(CreateTripRequest request, Long userId) {
         log.debug("Creating trip for vehicle: {}, user: {}", request.getVehicleId(), userId);
@@ -731,7 +583,6 @@ public long getPendingDistanceCount() {
 
         Load load = handleLoad(request, customer, trip, userId);
 
-        // Use String status instead of enum
         String status = request.getStatus() != null ? request.getStatus() : STATUS_DRAFT;
         trip.setStatus(status);
         trip.setCreatedBy(userId);
@@ -790,18 +641,20 @@ public long getPendingDistanceCount() {
 
         tripMetricsService.initializeMetrics(saved.getId());
 
-        // Use String comparison instead of enum
         if (STATUS_PLANNED.equals(saved.getStatus())) {
             eventPublisher.publishEvent(new TripPlannedEvent(saved.getId()));
         }
 
-        return tripResponseMapper.toResponse(saved);
+        // ✅ Trigger distance calculation
         calculateTripDistance(saved.getId());
+
+        return tripResponseMapper.toResponse(saved);
     }
 
     // ============================================================
-    // START TRIP - FIXED to use String status
+    // START TRIP
     // ============================================================
+
     @Transactional
     public TripResponse startTrip(Long tripId, BigDecimal actualStartOdometer, Long userId) {
         log.debug("Starting trip ID: {} with odometer: {}", tripId, actualStartOdometer);
@@ -824,8 +677,9 @@ public long getPendingDistanceCount() {
     }
 
     // ============================================================
-    // END TRIP - FIXED to use String status
+    // END TRIP
     // ============================================================
+
     @Transactional
     public TripResponse endTrip(Long tripId, BigDecimal actualEndOdometer, Long userId) {
         log.debug("Ending trip ID: {} with odometer: {}", tripId, actualEndOdometer);
@@ -856,8 +710,9 @@ public long getPendingDistanceCount() {
     }
 
     // ============================================================
-    // READ METHODS - FIXED to use String status
+    // READ METHODS
     // ============================================================
+
     @Transactional(readOnly = true)
     public TripResponse getTrip(Long id) {
         Trip trip = tripRepository.findByIdWithAllRelations(id)
@@ -935,8 +790,9 @@ public long getPendingDistanceCount() {
     }
 
     // ============================================================
-    // STATUS UPDATE - FIXED to use String status
+    // STATUS UPDATE
     // ============================================================
+
     @Transactional
     public TripResponse updateTripStatus(Long tripId, String newStatus, Long userId) {
         log.debug("Updating trip {} status to: {}", tripId, newStatus);
@@ -961,11 +817,6 @@ public long getPendingDistanceCount() {
             }
         }
 
-        if (addressChanged) {
-            trip.setDistanceCalculated(false);
-            calculateTripDistance(tripId);
-        }
-
         Trip saved = tripRepository.save(trip);
 
         if (STATUS_PLANNED.equals(newStatus)) {
@@ -984,6 +835,7 @@ public long getPendingDistanceCount() {
     // ============================================================
     // CUSTOMER & LOAD MANAGEMENT
     // ============================================================
+
     @Transactional
     public TripResponse assignCustomerToTrip(Long tripId, Long customerId, Long userId) {
         log.debug("Assigning customer {} to trip {}", customerId, tripId);
@@ -1041,8 +893,9 @@ public long getPendingDistanceCount() {
     }
 
     // ============================================================
-    // INCIDENT RULE - FIXED to use String status
+    // INCIDENT RULE
     // ============================================================
+
     public boolean canReportIncident(Trip trip) {
         return trip.isActive();
     }
@@ -1050,13 +903,13 @@ public long getPendingDistanceCount() {
     // ============================================================
     // DELETE
     // ============================================================
+
     @Transactional
     public void deleteTrip(Long id) {
         log.debug("Deleting trip ID: {}", id);
         
         Trip trip = findTripOrThrow(id);
         
-        // Check if status is terminal using String comparison
         String status = trip.getStatus();
         if (STATUS_COMPLETED.equals(status) || STATUS_FINALIZED.equals(status) || STATUS_CANCELLED.equals(status)) {
             throw new TripValidationException("Cannot delete trip with terminal status: " + status);
@@ -1071,8 +924,9 @@ public long getPendingDistanceCount() {
     }
 
     // ============================================================
-    // UPDATE (PATCH SAFE) - FIXED to use String status
+    // UPDATE
     // ============================================================
+
     @Transactional
     public TripResponse updateTrip(Long tripId, UpdateTripRequest request, Long userId) {
         log.debug("Updating trip ID: {} with request", tripId);
@@ -1185,6 +1039,12 @@ public long getPendingDistanceCount() {
         trip.updateOriginLocationFromComponents();
         trip.updateDestinationLocationFromComponents();
 
+        // ✅ Check if address changed and recalculate distance
+        if (hasAddressChanged(trip, request)) {
+            trip.setDistanceCalculated(false);
+            calculateTripDistance(tripId);
+        }
+
         if (trip.getLoad() != null) {
             trip.getLoad().recalculateDepotTotals();
             loadRepository.save(trip.getLoad());
@@ -1197,8 +1057,9 @@ public long getPendingDistanceCount() {
     }
 
     // ============================================================
-    // SEARCH METHODS - FIXED to use String status
+    // SEARCH METHODS
     // ============================================================
+
     @Transactional(readOnly = true)
     public Page<TripResponse> searchTrips(String searchTerm, Pageable pageable) {
         log.debug("Searching trips with term: {}", searchTerm);
@@ -1215,7 +1076,7 @@ public long getPendingDistanceCount() {
     @Transactional(readOnly = true)
     public Page<TripResponse> searchTripsWithFilters(
             String searchTerm, 
-            String status,  // Changed from TripStatus to String
+            String status, 
             String city, 
             String customer,
             Pageable pageable) {
@@ -1259,14 +1120,4 @@ public long getPendingDistanceCount() {
                 .map(tripResponseMapper::toResponse)
                 .collect(Collectors.toList());
     }
-
-private boolean hasAddressChanged(Trip existing, UpdateTripRequest request) {
-    if (request.getOriginLocation() != null && !request.getOriginLocation().equals(existing.getOriginLocation())) {
-        return true;
-    }
-    if (request.getDestinationLocation() != null && !request.getDestinationLocation().equals(existing.getDestinationLocation())) {
-        return true;
-    }
-    return false;
-}
 }

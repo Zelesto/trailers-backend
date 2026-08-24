@@ -157,6 +157,33 @@ public class Load extends BaseEntity {
     @OneToMany(mappedBy = "load", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Trip> trips = new ArrayList<>();
 
+
+
+        // ============================================================
+        // DISTANCE FIELDS
+        // ============================================================
+        
+        @Column(name = "total_calculated_distance_km", precision = 10, scale = 2)
+        private BigDecimal totalCalculatedDistanceKm;
+        
+        @Column(name = "total_actual_distance_km", precision = 10, scale = 2)
+        private BigDecimal totalActualDistanceKm;
+        
+        @Column(name = "total_calculated_distance", precision = 10, scale = 2)
+        private BigDecimal totalCalculatedDistance;
+        
+        @Column(name = "total_actual_distance", precision = 10, scale = 2)
+        private BigDecimal totalActualDistance;
+        
+        @Column(name = "total_estimated_distance", precision = 10, scale = 2)
+        private BigDecimal totalEstimatedDistance;
+        
+        @Column(name = "distance_calculated")
+        private Boolean distanceCalculated = false;
+        
+        @Column(name = "distance_calculated_at")
+        private LocalDateTime distanceCalculatedAt;
+
     // ======================== HELPER METHODS ========================
     
     public void addTrip(Trip trip) {
@@ -343,6 +370,31 @@ public class Load extends BaseEntity {
         log.info("✅ Load pre-update complete: {} | Trips: {} | Depot KM: {}", 
             this.loadNumber, this.tripsCount, this.totalDepotKm);
     }
+
+        // ============================================================
+        // GETTERS AND SETTERS FOR DISTANCE FIELDS
+        // ============================================================
+        
+        public BigDecimal getTotalCalculatedDistanceKm() { return totalCalculatedDistanceKm; }
+        public void setTotalCalculatedDistanceKm(BigDecimal totalCalculatedDistanceKm) { this.totalCalculatedDistanceKm = totalCalculatedDistanceKm; }
+        
+        public BigDecimal getTotalActualDistanceKm() { return totalActualDistanceKm; }
+        public void setTotalActualDistanceKm(BigDecimal totalActualDistanceKm) { this.totalActualDistanceKm = totalActualDistanceKm; }
+        
+        public BigDecimal getTotalCalculatedDistance() { return totalCalculatedDistance; }
+        public void setTotalCalculatedDistance(BigDecimal totalCalculatedDistance) { this.totalCalculatedDistance = totalCalculatedDistance; }
+        
+        public BigDecimal getTotalActualDistance() { return totalActualDistance; }
+        public void setTotalActualDistance(BigDecimal totalActualDistance) { this.totalActualDistance = totalActualDistance; }
+        
+        public BigDecimal getTotalEstimatedDistance() { return totalEstimatedDistance; }
+        public void setTotalEstimatedDistance(BigDecimal totalEstimatedDistance) { this.totalEstimatedDistance = totalEstimatedDistance; }
+        
+        public Boolean getDistanceCalculated() { return distanceCalculated; }
+        public void setDistanceCalculated(Boolean distanceCalculated) { this.distanceCalculated = distanceCalculated; }
+        
+        public LocalDateTime getDistanceCalculatedAt() { return distanceCalculatedAt; }
+        public void setDistanceCalculatedAt(LocalDateTime distanceCalculatedAt) { this.distanceCalculatedAt = distanceCalculatedAt; }
 
     public String getType() {
         if (commodityType != null && !commodityType.isEmpty()) {

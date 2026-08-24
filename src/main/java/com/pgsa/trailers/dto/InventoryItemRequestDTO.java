@@ -14,6 +14,7 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 public class InventoryItemRequestDTO {
+    private String sku;
     private String name;
     private String category;
     private String unitOfMeasure;

@@ -57,6 +57,7 @@ public class DistanceController {
             ));
         }
     }
+
     @PostMapping("/recalculate-all-loads")
     public ResponseEntity<Map<String, Object>> recalculateAllLoads() {
         log.info("📡 Manual trigger: Recalculating all load distances");
@@ -68,13 +69,14 @@ public class DistanceController {
                     "message", "All load distances recalculated successfully"
             ));
         } catch (Exception e) {
+            log.error("❌ Failed to recalculate load distances: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
                     "error", e.getMessage()
             ));
         }
     }
-
+    
     @PostMapping("/pending")
     public ResponseEntity<Map<String, Object>> processPending() {
         log.info("📡 Manual trigger: Process pending distance calculations");

@@ -2,13 +2,12 @@
 package com.pgsa.trailers.controller;
 
 import com.pgsa.trailers.service.LoadService;
-import com.pgsa.trailers.service.TripService;
+import com.pgsa.trailers.service.TripService;  // ← Change this import
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -18,7 +17,7 @@ import java.util.Map;
 @CrossOrigin(origins = "*")
 public class DistanceController {
 
-    private final TripService tripService; 
+    private final TripService tripService;  // ← Change from TripDistanceService
     private final LoadService loadService;
 
     @PostMapping("/trip/{tripId}")
@@ -26,7 +25,7 @@ public class DistanceController {
         log.info("📡 Manual trigger: Calculate trip distance for ID: {}", tripId);
         
         try {
-            tripService.calculateTripDistance(tripId); 
+            tripService.calculateTripDistance(tripId);
             return ResponseEntity.ok(Map.of(
                     "success", true,
                     "message", "Distance calculation triggered for trip " + tripId,
@@ -41,7 +40,7 @@ public class DistanceController {
     }
 
     @PostMapping("/load/{loadId}")
-    public ResponseEntity<Map<String, Object>> calculateLoadDistances(@PathVariable Long loadId) {
+    public ResponseEntity<Map<String, Object>> calculateLoadDistances(@PathVariable String loadId) {
         log.info("📡 Manual trigger: Calculate load distances for ID: {}", loadId);
         
         try {
@@ -80,7 +79,6 @@ public class DistanceController {
     @GetMapping("/pending/count")
     public ResponseEntity<Map<String, Object>> getPendingCount() {
         try {
-            // You'll need to add this method to TripRepository
             long count = tripService.getPendingDistanceCount();
             return ResponseEntity.ok(Map.of(
                     "count", count

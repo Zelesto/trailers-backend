@@ -150,44 +150,118 @@ public class InventoryItemService {
     }
 
     public InventoryItemResponseDTO createItem(InventoryItemRequestDTO request) {
-        log.info("Creating inventory item: {}", request.getName());
-        
-        String currentUser = getCurrentUser();
-        
-        // Convert LocalDate to LocalDateTime for holdDate if needed
-        LocalDateTime holdDateTime = null;
-        if (request.getHoldDate() != null) {
-            holdDateTime = request.getHoldDate().atStartOfDay();
-        }
-        
-        InventoryItem item = InventoryItem.builder()
-                .name(request.getName())
-                .category(request.getCategory())
-                .unitOfMeasure(request.getUnitOfMeasure())
-                .isConsumable(request.getIsConsumable() != null ? request.getIsConsumable() : true)
-                .reorderLevel(request.getReorderLevel())
-                .locationId(request.getLocationId())
-                .quantity(request.getQuantity() != null ? request.getQuantity() : 0)
-                .unitCost(request.getUnitCost())
-                .minLevel(request.getMinLevel() != null ? request.getMinLevel() : 0)
-                .notes(request.getNotes())
-                // New fields with defaults - USE setIsHeld NOT isHeld
-                .isActive(request.getIsActive() != null ? request.getIsActive() : true)
-                .isDriverIssuable(request.getIsDriverIssuable() != null ? request.getIsDriverIssuable() : true)
-                .isVehicleIssuable(request.getIsVehicleIssuable() != null ? request.getIsVehicleIssuable() : true)
-                .returnByDate(request.getReturnByDate())
-                .isHeld(request.getIsHeld() != null ? request.getIsHeld() : false)
-                .holdCode(request.getHoldCode())
-                .holdDate(holdDateTime)
-                .holdReason(request.getHoldReason())
-                .heldBy(request.getHeldBy())
-                .createdBy(currentUser)
-                .build();
-
-        InventoryItem saved = inventoryItemRepository.save(item);
-        log.info("Created inventory item with ID: {}", saved.getId());
-        return mapToResponseDTO(saved);
+    log.info("Creating inventory item: {}", request.getName());
+    
+    String currentUser = getCurrentUser();
+    
+    // Generate SKU if not provided
+    String sku = request.getSku();
+    if (sku == null || sku.trim().isEmpty()) {
+        sku = generateSku(request.getCategory());
     }
+    
+    // Check for duplicate SKU
+    if (inventoryItemRepository.existsBySku(sku)) {
+        throw new RuntimeException("SKU already exists: " + sku);
+    }
+    
+    LocalDateTime holdDateTime = null;
+    if (request.getHoldDate() != null) {
+        holdDateTime = request.getHoldDate().atStartOfDay();
+    }
+    
+    InventoryItem item = InventoryItem.builder()
+            .sku(sku)
+            .name(request.getName())
+            .category(request.getCategory())
+            .unitOfMeasure(request.getUnitOfMeasure())
+            .isConsumable(request.getIsConsumable() != null ? request.getIsConsumable() : true)
+            .reorderLevel(request.getReorderLevel())
+            .locationId(request.getLocationId())
+            .quantity(request.getQuantity() != null ? request.getQuantity() : 0)
+            .unitCost(request.getUnitCost())
+            .minLevel(request.getMinLevel() != null ? request.getMinLevel() : 0)
+            .notes(request.getNotes())
+            .isActive(request.getIsActive() != null ? request.getIsActive() : true)
+            .isDriverIssuable(request.getIsDriverIssuable() != null ? request.getIsDriverIssuable() : true)
+            .isVehicleIssuable(request.getIsVehicleIssuable() != null ? request.getIsVehicleIssuable() : true)
+            .returnByDate(request.getReturnByDate())
+            .isHeld(request.getIsHeld() != null ? request.getIsHeld() : false)
+            .holdCode(request.getHoldCode())
+            .holdDate(holdDateTime)
+            .holdReason(request.getHoldReason())
+            .heldBy(request.getHeldBy())
+            .createdBy(currentUser)
+            .build();
+
+    InventoryItem saved = inventoryItemRepository.save(item);
+    log.info("Created inventory item with ID: {} and SKU: {}", saved.getId(), saved.getSku());
+    return mapToResponseDTO(saved);
+}
+
+// Add SKU generation helper
+private String generateSku(String category) {
+    String prefix = category != null && !category.isEmpty() 
+            ? category.substring(0, Math.min(3, category.length())).toUpperCase()
+            : "GEN";
+    
+    // Find the next number
+    Long count = inventoryItemRepository.countBySkuStartingWith(prefix);
+    return String.format("%s-%05d", prefix, count + 1);
+}
+
+// Add to mapToResponseDTO
+public InventoryItemResponseDTO mapToResponseDTO(InventoryItem item) {
+    String locationName = null;
+    if (item.getLocationId() != null) {
+        Optional<InventoryLocation> optionalLocation = 
+                inventoryLocationRepository.findById(item.getLocationId());
+        if (optionalLocation.isPresent()) {
+            locationName = optionalLocation.get().getName();
+        }
+    }
+
+    String status = "Unknown";
+    if (item.getQuantity() != null) {
+        if (item.getQuantity() <= 0) {
+            status = "Out of Stock";
+        } else if (item.getMinLevel() != null && item.getQuantity() <= item.getMinLevel()) {
+            status = "Low Stock";
+        } else {
+            status = "In Stock";
+        }
+    }
+
+    return InventoryItemResponseDTO.builder()
+            .id(item.getId())
+            .sku(item.getSku())  // NEW
+            .name(item.getName())
+            .category(item.getCategory())
+            .unitOfMeasure(item.getUnitOfMeasure())
+            .isConsumable(item.getIsConsumable())
+            .reorderLevel(item.getReorderLevel())
+            .locationId(item.getLocationId())
+            .locationName(locationName)
+            .quantity(item.getQuantity())
+            .unitCost(item.getUnitCost())
+            .minLevel(item.getMinLevel())
+            .status(status)
+            .notes(item.getNotes())
+            .createdAt(item.getCreatedAt())
+            .updatedAt(item.getUpdatedAt())
+            .isActive(item.getIsActive())
+            .isDriverIssuable(item.getIsDriverIssuable())
+            .isVehicleIssuable(item.getIsVehicleIssuable())
+            .returnByDate(item.getReturnByDate())
+            .isHeld(item.getIsHeld())
+            .holdCode(item.getHoldCode())
+            .holdDate(item.getHoldDate() != null ? item.getHoldDate().toLocalDate() : null)
+            .holdReason(item.getHoldReason())
+            .heldBy(item.getHeldBy())
+            .createdBy(item.getCreatedBy())
+            .updatedBy(item.getUpdatedBy())
+            .build();
+}
 
     public InventoryItemResponseDTO updateItem(Long id, InventoryItemRequestDTO request) {
         log.info("Updating inventory item: {}", id);

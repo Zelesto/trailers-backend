@@ -1,3 +1,4 @@
+// src/main/java/com/pgsa/trailers/service/LoadService.java
 package com.pgsa.trailers.service;
 
 import com.pgsa.trailers.dto.LoadRequestDTO;
@@ -47,24 +48,25 @@ public class LoadService {
     public static final String TRIP_STATUS_COMPLETED = "COMPLETED";
     public static final String TRIP_STATUS_FINALIZED = "FINALIZED";
 
+    // ============================================================
+    // DEPENDENCIES - DECLARED ONCE
+    // ============================================================
     private final LoadRepository loadRepository;
     private final TripRepository tripRepository;
     private final CustomerRepository customerRepository;
     private final SequenceService sequenceService;
     private final JdbcTemplate jdbcTemplate;
 
-
     // =============================================
     // UPDATE LOAD DISTANCES
     // =============================================
 
-
     @Transactional
-    public void updateLoadDistances(Long loadId) {
+    public void updateLoadDistances(String loadId) {
         log.info("📦 Updating distances for Load ID: {}", loadId);
 
         try {
-            Load load = loadRepository.findById(loadId)
+            Load load = loadRepository.findByLoadNumber(loadId)
                     .orElseThrow(() -> new RuntimeException("Load not found: " + loadId));
 
             List<Trip> trips = tripRepository.findByLoadId(loadId);
@@ -115,11 +117,10 @@ public class LoadService {
         log.info("📦 Updating all load distances...");
         List<Load> loads = loadRepository.findAll();
         for (Load load : loads) {
-            updateLoadDistances(load.getId());
+            updateLoadDistances(load.getLoadNumber());
         }
         log.info("✅ All load distances updated");
     }
-}
 
     // =============================================
     // GENERATE REFERENCE NUMBER

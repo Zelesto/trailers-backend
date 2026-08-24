@@ -64,13 +64,15 @@ public class LoadService {
     @Transactional
     public void updateLoadDistances(String loadId) {
         log.info("📦 Updating distances for Load ID: {}", loadId);
-
+    
         try {
             Load load = loadRepository.findByLoadNumber(loadId)
                     .orElseThrow(() -> new RuntimeException("Load not found: " + loadId));
-
+    
             List<Trip> trips = tripRepository.findByLoadId(loadId);
-
+            
+            log.info("📊 Found {} trips for Load {}", trips.size(), loadId);
+    
             if (trips.isEmpty()) {
                 log.warn("⚠️ No trips found for Load {}", loadId);
                 load.setTotalCalculatedDistanceKm(BigDecimal.ZERO);
@@ -80,20 +82,24 @@ public class LoadService {
                 load.setDistanceCalculated(false);
                 load.setDistanceCalculatedAt(LocalDateTime.now());
                 loadRepository.save(load);
+                log.info("✅ Load {} reset to zero distances", loadId);
                 return;
             }
-
+    
             // Calculate totals
             BigDecimal totalCalculated = trips.stream()
                     .map(Trip::getCalculatedDistanceKm)
                     .filter(d -> d != null)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-
+    
             BigDecimal totalActual = trips.stream()
                     .map(Trip::getActualDistanceKm)
                     .filter(d -> d != null)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-
+    
+            log.info("📊 Calculated totals for Load {}: calculated={} km, actual={} km", 
+                loadId, totalCalculated, totalActual);
+    
             // Update load
             load.setTotalCalculatedDistanceKm(totalCalculated);
             load.setTotalActualDistanceKm(totalActual);
@@ -102,11 +108,11 @@ public class LoadService {
             load.setTotalEstimatedDistance(totalCalculated);
             load.setDistanceCalculated(totalCalculated.compareTo(BigDecimal.ZERO) > 0);
             load.setDistanceCalculatedAt(LocalDateTime.now());
-
-            loadRepository.save(load);
+    
+            Load saved = loadRepository.save(load);
             log.info("✅ Load {} distances updated. Calculated: {} km, Actual: {} km",
                     loadId, totalCalculated, totalActual);
-
+    
         } catch (Exception e) {
             log.error("❌ Error updating load distances for {}: {}", loadId, e.getMessage(), e);
         }

@@ -248,9 +248,6 @@ public class Trip {
     @Column(name = "actual_end_odometer", precision = 12, scale = 2)
     private BigDecimal actualEndOdometer;
 
-    @Column(name = "actual_distance_km", precision = 10, scale = 2)
-    private BigDecimal actualDistanceKm;
-
     @Column(name = "actual_duration_hours", precision = 10, scale = 2)
     private BigDecimal actualDurationHours;
 

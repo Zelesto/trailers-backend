@@ -58,6 +58,25 @@ public class DistanceController {
         }
     }
 
+    @PostMapping("/load/{loadNumber}")
+    public ResponseEntity<Map<String, Object>> recalculateLoad(@PathVariable String loadNumber) {
+        log.info("📡 Manual trigger: Recalculating load distances for: {}", loadNumber);
+        
+        try {
+            loadService.updateLoadDistances(loadNumber);
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Load distances recalculated for " + loadNumber
+            ));
+        } catch (Exception e) {
+            log.error("❌ Failed to recalculate load {}: {}", loadNumber, e.getMessage(), e);
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "error", e.getMessage()
+            ));
+        }
+    }
+
     @PostMapping("/recalculate-all-loads")
     public ResponseEntity<Map<String, Object>> recalculateAllLoads() {
         log.info("📡 Manual trigger: Recalculating all load distances");

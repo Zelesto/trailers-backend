@@ -229,16 +229,15 @@ public class TripService {
     }
 
     // ============================================================
-    // HELPER METHODS FOR DISTANCE CALCULATION
+    // HELPER METHODS FOR DISTANCE CALCULATION - FIXED
     // ============================================================
-
+    
     private String getOriginAddress(Trip trip) {
-        if (trip.getActualOriginLocation() != null && !trip.getActualOriginLocation().isEmpty()) {
-            return trip.getActualOriginLocation();
-        }
+        // Use originLocation directly
         if (trip.getOriginLocation() != null && !trip.getOriginLocation().isEmpty()) {
             return trip.getOriginLocation();
         }
+        // Build from components as fallback
         StringBuilder sb = new StringBuilder();
         if (trip.getOriginStreetAddress() != null && !trip.getOriginStreetAddress().isEmpty()) {
             sb.append(trip.getOriginStreetAddress()).append(", ");
@@ -254,14 +253,13 @@ public class TripService {
         }
         return sb.length() > 0 ? sb.toString() : null;
     }
-
+    
     private String getDestinationAddress(Trip trip) {
-        if (trip.getActualDestinationLocation() != null && !trip.getActualDestinationLocation().isEmpty()) {
-            return trip.getActualDestinationLocation();
-        }
+        // Use destinationLocation directly
         if (trip.getDestinationLocation() != null && !trip.getDestinationLocation().isEmpty()) {
             return trip.getDestinationLocation();
         }
+        // Build from components as fallback
         StringBuilder sb = new StringBuilder();
         if (trip.getDestinationStreetAddress() != null && !trip.getDestinationStreetAddress().isEmpty()) {
             sb.append(trip.getDestinationStreetAddress()).append(", ");

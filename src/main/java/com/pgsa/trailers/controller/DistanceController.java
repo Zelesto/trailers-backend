@@ -1,5 +1,16 @@
 // src/main/java/com/pgsa/trailers/controller/DistanceController.java
+package com.pgsa.trailers.controller;
 
+import com.pgsa.trailers.service.BatchDistanceService;
+import com.pgsa.trailers.service.LoadService;
+import com.pgsa.trailers.service.TripService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.*; 
+import org.springframework.http.ResponseEntity;
+import java.util.Map; 
+
+    
 @RestController
 @RequestMapping("/api/distance")
 @RequiredArgsConstructor

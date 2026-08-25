@@ -65,24 +65,42 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
 
 
 // ============================================================
-// DISTANCE CALCULATION QUERIES
+// DISTANCE CALCULATION METHODS - ADD THESE
 // ============================================================
 
-@Query("SELECT t FROM Trip t WHERE t.distanceCalculated = false OR t.distanceCalculated IS NULL")
-List<Trip> findByDistanceCalculatedFalseOrDistanceCalculatedIsNull();
+/**
+ * Find all trips that need distance calculation (NULL or 0)
+ */
+@Query("SELECT t FROM Trip t WHERE t.calculatedDistanceKm IS NULL OR t.calculatedDistanceKm = 0")
+List<Trip> findByCalculatedDistanceKmIsNullOrZero();
 
-@Query("SELECT t FROM Trip t WHERE t.calculatedDistanceKm IS NULL")
-List<Trip> findByCalculatedDistanceKmIsNull();
+/**
+ * Count trips without distance calculated
+ */
+@Query("SELECT COUNT(t) FROM Trip t WHERE t.calculatedDistanceKm IS NULL OR t.calculatedDistanceKm = 0")
+long countTripsWithoutDistance();
 
-@Query("SELECT t FROM Trip t WHERE t.actualDistanceKm IS NULL AND t.originLocation IS NOT NULL AND t.destinationLocation IS NOT NULL")
-List<Trip> findTripsNeedingDistanceCalculation();
-
+/**
+ * Count pending distance calculations
+ */
 @Query("SELECT COUNT(t) FROM Trip t WHERE t.distanceCalculated = false OR t.distanceCalculated IS NULL")
 long countPendingDistanceCalculations();
 
+/**
+ * Find trips with pending distance calculations
+ */
+@Query("SELECT t FROM Trip t WHERE t.distanceCalculated = false OR t.distanceCalculated IS NULL")
+List<Trip> findByDistanceCalculatedFalseOrDistanceCalculatedIsNull();
+
+/**
+ * Find trips with failed distance calculations
+ */
 @Query("SELECT t FROM Trip t WHERE t.distanceCalculated = false AND t.distanceCalculationError IS NOT NULL")
 List<Trip> findFailedDistanceCalculations();
 
+/**
+ * Update trip distance calculation status
+ */
 @Modifying
 @Query("UPDATE Trip t SET t.distanceCalculated = false, t.distanceCalculationError = :error, t.distanceCalculatedAt = :now WHERE t.id = :tripId")
 int markDistanceCalculationFailed(@Param("tripId") Long tripId, 

@@ -1,4 +1,5 @@
 // src/main/java/com/pgsa/trailers/controller/DistanceController.java
+
 package com.pgsa.trailers.controller;
 
 import com.pgsa.trailers.service.BatchDistanceService;
@@ -6,11 +7,11 @@ import com.pgsa.trailers.service.LoadService;
 import com.pgsa.trailers.service.TripService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.*; 
 import org.springframework.http.ResponseEntity;
-import java.util.Map; 
+import org.springframework.web.bind.annotation.*;
 
-    
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/distance")
 @RequiredArgsConstructor
@@ -34,6 +35,7 @@ public class DistanceController {
                     "tripId", tripId
             ));
         } catch (Exception e) {
+            log.error("❌ Error calculating trip distance: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
                     "error", e.getMessage()
@@ -43,7 +45,7 @@ public class DistanceController {
 
     @PostMapping("/load/{loadNumber}")
     public ResponseEntity<Map<String, Object>> calculateLoadDistances(@PathVariable String loadNumber) {
-        log.info("📡 Manual trigger: Calculate load distances for ID: {}", loadNumber);
+        log.info("📡 Manual trigger: Calculate load distances for: {}", loadNumber);
         
         try {
             loadService.updateLoadDistances(loadNumber);
@@ -53,6 +55,7 @@ public class DistanceController {
                     "loadNumber", loadNumber
             ));
         } catch (Exception e) {
+            log.error("❌ Error calculating load distance: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
                     "error", e.getMessage()
@@ -60,26 +63,6 @@ public class DistanceController {
         }
     }
 
-
-    @PostMapping("/load/{loadNumber}")
-    public ResponseEntity<Map<String, Object>> recalculateLoad(@PathVariable String loadNumber) {
-        log.info("📡 Manual trigger: Recalculating load distances for: {}", loadNumber);
-        
-        try {
-            loadService.updateLoadDistances(loadNumber);
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "message", "Load distances recalculated for " + loadNumber
-            ));
-        } catch (Exception e) {
-            log.error("❌ Failed to recalculate load {}: {}", loadNumber, e.getMessage(), e);
-            return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "error", e.getMessage()
-            ));
-        }
-    }
-    
     @PostMapping("/recalculate-all-loads")
     public ResponseEntity<Map<String, Object>> recalculateAllLoads() {
         log.info("📡 Manual trigger: Recalculating all load distances");
@@ -110,6 +93,7 @@ public class DistanceController {
                     "message", "Pending distance processing triggered"
             ));
         } catch (Exception e) {
+            log.error("❌ Error processing pending: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
                     "error", e.getMessage()
@@ -125,6 +109,7 @@ public class DistanceController {
                     "count", count
             ));
         } catch (Exception e) {
+            log.error("❌ Error getting pending count: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of(
                     "error", e.getMessage()
             ));

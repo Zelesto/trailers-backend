@@ -61,72 +61,71 @@ public class LoadService {
     // UPDATE LOAD DISTANCES
     // =============================================
 
-    @Transactional
-    public void updateLoadDistances(String loadId) {
-        log.info("📦 Updating distances for Load ID: {}", loadId);
-    
-        try {
-            Load load = loadRepository.findByLoadNumber(loadId)
-                    .orElseThrow(() -> new RuntimeException("Load not found: " + loadId));
-    
-            List<Trip> trips = tripRepository.findByLoadId(loadId);
-            
-            log.info("📊 Found {} trips for Load {}", trips.size(), loadId);
-    
-            if (trips.isEmpty()) {
-                log.warn("⚠️ No trips found for Load {}", loadId);
-                load.setTotalCalculatedDistanceKm(BigDecimal.ZERO);
-                load.setTotalActualDistanceKm(BigDecimal.ZERO);
-                load.setTotalCalculatedDistance(BigDecimal.ZERO);
-                load.setTotalActualDistance(BigDecimal.ZERO);
-                load.setDistanceCalculated(false);
+        @Transactional
+        public void updateLoadDistances(String loadId) {
+            log.info("📦 Updating distances for Load ID: {}", loadId);
+        
+            try {
+                // ✅ Find load by load number (String)
+                Load load = loadRepository.findByLoadNumber(loadId)
+                        .orElseThrow(() -> new RuntimeException("Load not found: " + loadId));
+        
+                // ✅ Find trips by load ID (String)
+                List<Trip> trips = tripRepository.findByLoadId(loadId);
+                
+                log.info("📊 Found {} trips for Load {}", trips.size(), loadId);
+        
+                // ✅ Calculate depot distances from trips
+                BigDecimal totalFromDepot = trips.stream()
+                        .map(Trip::getFromDepotKm)
+                        .filter(km -> km != null)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+                BigDecimal totalToDepot = trips.stream()
+                        .map(Trip::getToDepotKm)
+                        .filter(km -> km != null)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+                // ✅ Calculate route distances
+                BigDecimal totalCalculated = trips.stream()
+                        .map(Trip::getCalculatedDistanceKm)
+                        .filter(d -> d != null)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+                BigDecimal totalActual = trips.stream()
+                        .map(Trip::getActualDistanceKm)
+                        .filter(d -> d != null)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+                // ✅ Total distance = depot distance + route distance
+                BigDecimal totalDepotDistance = totalFromDepot.add(totalToDepot);
+                BigDecimal totalOverallDistance = totalDepotDistance.add(totalCalculated);
+        
+                log.info("📊 Calculated totals for Load {}: fromDepot={} km, toDepot={} km, route={} km, total={} km", 
+                    loadId, totalFromDepot, totalToDepot, totalCalculated, totalOverallDistance);
+        
+                // ✅ Update all load distance fields
+                load.setTotalFromDepotKm(totalFromDepot);
+                load.setTotalToDepotKm(totalToDepot);
+                load.setTotalDepotKm(totalDepotDistance);
+                load.setTotalCalculatedDistanceKm(totalCalculated);
+                load.setTotalActualDistanceKm(totalActual);
+                load.setTotalCalculatedDistance(totalCalculated);
+                load.setTotalActualDistance(totalActual);
+                load.setTotalEstimatedDistance(totalCalculated);
+                load.setTotalDistanceKm(totalOverallDistance.intValue());
+                load.setDistanceCalculated(totalCalculated.compareTo(BigDecimal.ZERO) > 0 || totalDepotDistance.compareTo(BigDecimal.ZERO) > 0);
                 load.setDistanceCalculatedAt(LocalDateTime.now());
-                loadRepository.save(load);
-                log.info("✅ Load {} reset to zero distances", loadId);
-                return;
+        
+                Load saved = loadRepository.save(load);
+                log.info("✅ Load {} distances updated. From Depot: {} km, To Depot: {} km, Route: {} km, Total: {} km",
+                        loadId, totalFromDepot, totalToDepot, totalCalculated, totalOverallDistance);
+        
+            } catch (Exception e) {
+                log.error("❌ Error updating load distances for {}: {}", loadId, e.getMessage(), e);
+                throw e;
             }
-    
-            // Calculate totals
-            BigDecimal totalCalculated = trips.stream()
-                    .map(Trip::getCalculatedDistanceKm)
-                    .filter(d -> d != null)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-    
-            BigDecimal totalActual = trips.stream()
-                    .map(Trip::getActualDistanceKm)
-                    .filter(d -> d != null)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-    
-            log.info("📊 Calculated totals for Load {}: calculated={} km, actual={} km", 
-                loadId, totalCalculated, totalActual);
-    
-            // Update load
-            load.setTotalCalculatedDistanceKm(totalCalculated);
-            load.setTotalActualDistanceKm(totalActual);
-            load.setTotalCalculatedDistance(totalCalculated);
-            load.setTotalActualDistance(totalActual);
-            load.setTotalEstimatedDistance(totalCalculated);
-            load.setDistanceCalculated(totalCalculated.compareTo(BigDecimal.ZERO) > 0);
-            load.setDistanceCalculatedAt(LocalDateTime.now());
-    
-            Load saved = loadRepository.save(load);
-            log.info("✅ Load {} distances updated. Calculated: {} km, Actual: {} km",
-                    loadId, totalCalculated, totalActual);
-    
-        } catch (Exception e) {
-            log.error("❌ Error updating load distances for {}: {}", loadId, e.getMessage(), e);
         }
-    }
-
-    @Transactional
-    public void updateAllLoadDistances() {
-        log.info("📦 Updating all load distances...");
-        List<Load> loads = loadRepository.findAll();
-        for (Load load : loads) {
-            updateLoadDistances(load.getLoadNumber());
-        }
-        log.info("✅ All load distances updated");
-    }
 
     // =============================================
     // GENERATE REFERENCE NUMBER

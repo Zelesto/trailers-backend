@@ -107,6 +107,19 @@ int markDistanceCalculationSuccess(@Param("tripId") Long tripId,
            "LOWER(t.customer.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
            "LOWER(t.referenceNumber) LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
     Page<Trip> searchTripsWithCustomer(@Param("searchTerm") String searchTerm, Pageable pageable);
+
+
+    // ============================================================
+    // FIND CALCULATE
+    // ============================================================
+
+
+    @Query("SELECT t FROM Trip t WHERE t.calculatedDistanceKm IS NULL OR t.calculatedDistanceKm = 0")
+    List<Trip> findByCalculatedDistanceKmIsNullOrZero();
+    
+    @Query("SELECT COUNT(t) FROM Trip t WHERE t.calculatedDistanceKm IS NULL OR t.calculatedDistanceKm = 0")
+    long countTripsWithoutDistance();
+
     
     // ============================================================
     // FIND BY STATUS - FIXED: Use String

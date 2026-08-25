@@ -1,14 +1,4 @@
 // src/main/java/com/pgsa/trailers/controller/DistanceController.java
-package com.pgsa.trailers.controller;
-
-import com.pgsa.trailers.service.LoadService;
-import com.pgsa.trailers.service.TripService;  // ← Change this import
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/distance")
@@ -17,8 +7,9 @@ import java.util.Map;
 @CrossOrigin(origins = "*")
 public class DistanceController {
 
-    private final TripService tripService;  // ← Change from TripDistanceService
+    private final TripService tripService;
     private final LoadService loadService;
+    private final BatchDistanceService batchDistanceService;
 
     @PostMapping("/trip/{tripId}")
     public ResponseEntity<Map<String, Object>> calculateTripDistance(@PathVariable Long tripId) {
@@ -39,16 +30,16 @@ public class DistanceController {
         }
     }
 
-    @PostMapping("/load/{loadId}")
-    public ResponseEntity<Map<String, Object>> calculateLoadDistances(@PathVariable String loadId) {
-        log.info("📡 Manual trigger: Calculate load distances for ID: {}", loadId);
+    @PostMapping("/load/{loadNumber}")
+    public ResponseEntity<Map<String, Object>> calculateLoadDistances(@PathVariable String loadNumber) {
+        log.info("📡 Manual trigger: Calculate load distances for ID: {}", loadNumber);
         
         try {
-            loadService.updateLoadDistances(loadId);
+            loadService.updateLoadDistances(loadNumber);
             return ResponseEntity.ok(Map.of(
                     "success", true,
-                    "message", "Load distance calculation triggered for " + loadId,
-                    "loadId", loadId
+                    "message", "Load distance calculation triggered for " + loadNumber,
+                    "loadNumber", loadNumber
             ));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -57,6 +48,7 @@ public class DistanceController {
             ));
         }
     }
+
 
     @PostMapping("/load/{loadNumber}")
     public ResponseEntity<Map<String, Object>> recalculateLoad(@PathVariable String loadNumber) {
@@ -76,7 +68,7 @@ public class DistanceController {
             ));
         }
     }
-
+    
     @PostMapping("/recalculate-all-loads")
     public ResponseEntity<Map<String, Object>> recalculateAllLoads() {
         log.info("📡 Manual trigger: Recalculating all load distances");
@@ -95,7 +87,7 @@ public class DistanceController {
             ));
         }
     }
-    
+
     @PostMapping("/pending")
     public ResponseEntity<Map<String, Object>> processPending() {
         log.info("📡 Manual trigger: Process pending distance calculations");
@@ -126,5 +118,44 @@ public class DistanceController {
                     "error", e.getMessage()
             ));
         }
+    }
+
+    @PostMapping("/recalculate-all")
+    public ResponseEntity<Map<String, Object>> recalculateAllDistances() {
+        log.info("📡 Manual trigger: Recalculating all trip distances");
+        
+        try {
+            var result = batchDistanceService.recalculateAllTripDistances();
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Batch distance recalculation started",
+                    "jobId", result.join().getJobId()
+            ));
+        } catch (Exception e) {
+            log.error("❌ Failed to start batch recalculation: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "error", e.getMessage()
+            ));
+        }
+    }
+
+    @GetMapping("/progress/{jobId}")
+    public ResponseEntity<Map<String, Object>> getProgress(@PathVariable String jobId) {
+        var progress = batchDistanceService.getProgress(jobId);
+        if (progress == null) {
+            return ResponseEntity.notFound().build();
+        }
+        
+        return ResponseEntity.ok(Map.of(
+                "jobId", progress.getJobId(),
+                "totalTrips", progress.getTotalTrips(),
+                "processed", progress.getProcessed(),
+                "succeeded", progress.getSucceeded(),
+                "failed", progress.getFailed(),
+                "completed", progress.isCompleted(),
+                "percentage", progress.getProgressPercentage(),
+                "message", progress.getMessage()
+        ));
     }
 }

@@ -2,12 +2,15 @@
 package com.pgsa.trailers.controller;
 
 import com.pgsa.trailers.service.BatchDistanceService;
+import com.pgsa.trailers.service.BatchProgress;
+import com.pgsa.trailers.service.BatchResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -41,7 +44,7 @@ public class BatchDistanceController {
 
     @GetMapping("/progress/{jobId}")
     public ResponseEntity<Map<String, Object>> getProgress(@PathVariable String jobId) {
-        var progress = batchDistanceService.getProgress(jobId);
+        BatchProgress progress = batchDistanceService.getProgress(jobId);
         if (progress == null) {
             return ResponseEntity.notFound().build();
         }
@@ -54,7 +57,16 @@ public class BatchDistanceController {
                 "failed", progress.getFailed(),
                 "completed", progress.isCompleted(),
                 "percentage", progress.getProgressPercentage(),
+                "formattedProgress", progress.getFormattedProgress(),
+                "durationSeconds", progress.getDurationSeconds(),
+                "formattedDuration", progress.getFormattedDuration(),
+                "statusSummary", progress.getStatusSummary(),
                 "message", progress.getMessage()
         ));
+    }
+
+    @GetMapping("/progress/all")
+    public ResponseEntity<List<BatchProgress>> getAllProgress() {
+        return ResponseEntity.ok(batchDistanceService.getAllProgress());
     }
 }

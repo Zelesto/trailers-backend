@@ -155,6 +155,87 @@ public class LoadService {
         }
     }
 
+    @Transactional
+    public void updateAllLoadDistances() {
+        log.info("📦 Updating all load distances...");
+        List<Load> loads = loadRepository.findAll();
+        int updated = 0;
+        int failed = 0;
+        
+        for (Load load : loads) {
+            try {
+                if (load.getLoadNumber() != null && !load.getLoadNumber().isEmpty()) {
+                    updateLoadDistances(load.getLoadNumber());
+                    updated++;
+                }
+            } catch (Exception e) {
+                log.error("❌ Failed to update load {}: {}", load.getLoadNumber(), e.getMessage());
+                failed++;
+            }
+        }
+        
+        log.info("✅ All load distances updated. Updated: {}, Failed: {}", updated, failed);
+    }
+
+    @Transactional
+    public void updateLoadDistances(String loadNumber) {
+        log.info("📦 Updating distances for Load Number: {}", loadNumber);
+    
+        try {
+            Load load = loadRepository.findByLoadNumber(loadNumber)
+                    .orElseThrow(() -> new RuntimeException("Load not found: " + loadNumber));
+    
+            List<Trip> trips = tripRepository.findByLoadId(loadNumber);
+            
+            log.info("📊 Found {} trips for Load {}", trips.size(), loadNumber);
+    
+            // Calculate totals
+            BigDecimal totalCalculated = trips.stream()
+                    .map(Trip::getCalculatedDistanceKm)
+                    .filter(d -> d != null)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+    
+            BigDecimal totalActual = trips.stream()
+                    .map(Trip::getActualDistanceKm)
+                    .filter(d -> d != null)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            BigDecimal totalFromDepot = trips.stream()
+                    .map(Trip::getFromDepotKm)
+                    .filter(km -> km != null)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            BigDecimal totalToDepot = trips.stream()
+                    .map(Trip::getToDepotKm)
+                    .filter(km -> km != null)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            BigDecimal totalDepot = totalFromDepot.add(totalToDepot);
+    
+            log.info("📊 Calculated totals for Load {}: calculated={} km, actual={} km, depot={} km", 
+                loadNumber, totalCalculated, totalActual, totalDepot);
+    
+            // Update load
+            load.setTotalCalculatedDistanceKm(totalCalculated);
+            load.setTotalActualDistanceKm(totalActual);
+            load.setTotalCalculatedDistance(totalCalculated);
+            load.setTotalActualDistance(totalActual);
+            load.setTotalEstimatedDistance(totalCalculated);
+            load.setTotalFromDepotKm(totalFromDepot);
+            load.setTotalToDepotKm(totalToDepot);
+            load.setTotalDepotKm(totalDepot);
+            load.setDistanceCalculated(totalCalculated.compareTo(BigDecimal.ZERO) > 0 || totalDepot.compareTo(BigDecimal.ZERO) > 0);
+            load.setDistanceCalculatedAt(LocalDateTime.now());
+    
+            loadRepository.save(load);
+            log.info("✅ Load {} distances updated. Calculated: {} km, Actual: {} km, Depot: {} km",
+                    loadNumber, totalCalculated, totalActual, totalDepot);
+    
+        } catch (Exception e) {
+            log.error("❌ Error updating load distances for {}: {}", loadNumber, e.getMessage(), e);
+            throw e;
+        }
+    }
     // =============================================
     // CREATE
     // =============================================

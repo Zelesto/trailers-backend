@@ -19,6 +19,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * BatchDistanceService - Handles batch recalculation of trip distances
+ * 
+ * This service processes all trips that need distance calculation in batches,
+ * tracks progress, and updates load distances after completion.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -28,13 +34,24 @@ public class BatchDistanceService {
     private final RoutingEngine routingEngine;
     private final LoadService loadService;
 
+    // Configuration constants
     private static final int BATCH_SIZE = 10;
     private static final int MAX_RETRIES = 3;
     private static final long RETRY_DELAY_MS = 5000;
 
-    // Track progress
+    // Progress tracking
     private final ConcurrentHashMap<String, BatchProgress> progressMap = new ConcurrentHashMap<>();
 
+    // ============================================================
+    // MAIN BATCH PROCESSING METHOD
+    // ============================================================
+
+    /**
+     * Recalculate distances for all trips that need it (NULL or 0)
+     * Runs asynchronously and tracks progress
+     * 
+     * @return CompletableFuture<BatchResult> with job statistics
+     */
     @Async("taskExecutor")
     @Transactional
     public CompletableFuture<BatchResult> recalculateAllTripDistances() {
@@ -73,6 +90,7 @@ public class BatchDistanceService {
                         BigDecimal distance = calculateTripDistanceWithRetry(trip);
                         
                         if (distance != null && distance.compareTo(BigDecimal.ZERO) > 0) {
+                            // Success - save the calculated distance
                             trip.setCalculatedDistanceKm(distance);
                             trip.setActualDistanceKm(distance);
                             trip.setDistanceCalculated(true);
@@ -81,6 +99,7 @@ public class BatchDistanceService {
                             succeeded.incrementAndGet();
                             log.info("✅ Trip {} distance calculated: {} km", trip.getId(), distance);
                         } else {
+                            // Failed - set to 0 with error
                             trip.setCalculatedDistanceKm(BigDecimal.ZERO);
                             trip.setActualDistanceKm(BigDecimal.ZERO);
                             trip.setDistanceCalculated(false);
@@ -113,24 +132,33 @@ public class BatchDistanceService {
 
             // Update all loads after processing
             log.info("📦 Updating all load distances...");
+            int loadUpdates = 0;
+            int loadFailures = 0;
+            
             for (Trip trip : processedTrips) {
                 if (trip.getLoadId() != null && !trip.getLoadId().isEmpty()) {
                     try {
                         loadService.updateLoadDistances(trip.getLoadId());
+                        loadUpdates++;
                     } catch (Exception e) {
                         log.error("❌ Failed to update load {}: {}", trip.getLoadId(), e.getMessage());
+                        loadFailures++;
                     }
                 }
             }
+            
+            log.info("✅ Load updates complete. Updated: {}, Failed: {}", loadUpdates, loadFailures);
 
             progress.setCompleted(true);
-            progress.setMessage(String.format("Completed: %d succeeded, %d failed out of %d trips",
-                    succeeded.get(), failed.get(), trips.size()));
+            progress.setMessage(String.format("Completed: %d succeeded, %d failed out of %d trips. Loads updated: %d",
+                    succeeded.get(), failed.get(), trips.size(), loadUpdates));
 
             log.info("✅ Batch distance recalculation complete. Job ID: {}. Succeeded: {}, Failed: {}",
                     jobId, succeeded.get(), failed.get());
 
-            return CompletableFuture.completedFuture(new BatchResult(jobId, trips.size(), succeeded.get(), failed.get()));
+            return CompletableFuture.completedFuture(
+                new BatchResult(jobId, trips.size(), succeeded.get(), failed.get(), loadUpdates, loadFailures)
+            );
 
         } catch (Exception e) {
             log.error("❌ Batch distance recalculation failed: {}", e.getMessage(), e);
@@ -140,15 +168,25 @@ public class BatchDistanceService {
         }
     }
 
+    // ============================================================
+    // HELPER METHODS
+    // ============================================================
+
+    /**
+     * Calculate distance for a single trip with retry logic
+     */
     private BigDecimal calculateTripDistanceWithRetry(Trip trip) {
         String origin = getOriginAddress(trip);
         String destination = getDestinationAddress(trip);
 
         if (origin == null || destination == null || origin.isEmpty() || destination.isEmpty()) {
+            log.warn("⚠️ Missing address for Trip {}. Origin: {}, Destination: {}", 
+                trip.getId(), origin, destination);
             return BigDecimal.ZERO;
         }
 
         if (origin.equalsIgnoreCase(destination)) {
+            log.warn("⚠️ Origin and destination are the same for Trip {}", trip.getId());
             return BigDecimal.ZERO;
         }
 
@@ -171,11 +209,17 @@ public class BatchDistanceService {
                 
             } catch (Exception e) {
                 log.warn("⚠️ Attempt {} failed for Trip {}: {}", attempt, trip.getId(), e.getMessage());
+                if (attempt == MAX_RETRIES) {
+                    log.error("❌ All attempts failed for Trip {}", trip.getId());
+                }
             }
         }
         return null;
     }
 
+    /**
+     * Get origin address from trip (handles nulls)
+     */
     private String getOriginAddress(Trip trip) {
         if (trip.getOriginLocation() != null && !trip.getOriginLocation().isEmpty()) {
             return trip.getOriginLocation();
@@ -196,6 +240,9 @@ public class BatchDistanceService {
         return sb.length() > 0 ? sb.toString() : null;
     }
 
+    /**
+     * Get destination address from trip (handles nulls)
+     */
     private String getDestinationAddress(Trip trip) {
         if (trip.getDestinationLocation() != null && !trip.getDestinationLocation().isEmpty()) {
             return trip.getDestinationLocation();
@@ -216,6 +263,9 @@ public class BatchDistanceService {
         return sb.length() > 0 ? sb.toString() : null;
     }
 
+    /**
+     * Update trip error status
+     */
     private void updateTripErrorStatus(Long tripId, String error) {
         try {
             Trip trip = tripRepository.findById(tripId).orElse(null);
@@ -230,11 +280,21 @@ public class BatchDistanceService {
         }
     }
 
+    // ============================================================
+    // PROGRESS TRACKING METHODS
+    // ============================================================
+
+    /**
+     * Get progress for a specific job
+     */
     public BatchProgress getProgress(String jobId) {
         return progressMap.get(jobId);
     }
 
+    /**
+     * Get all progress records
+     */
     public List<BatchProgress> getAllProgress() {
         return new ArrayList<>(progressMap.values());
     }
-
+}

@@ -1,343 +1,598 @@
-package com.pgsa.trailers.controller;
+// src/main/java/com/pgsa/trailers/service/AnalyticsService.java
 
-import com.pgsa.trailers.dto.VehicleKpiDTO;
+package com.pgsa.trailers.service;
+
 import com.pgsa.trailers.dto.DriverKpiDTO;
-import com.pgsa.trailers.service.AnalyticsService;
+import com.pgsa.trailers.dto.TripKpiDTO;
+import com.pgsa.trailers.dto.VehicleKpiDTO;
+import com.pgsa.trailers.repository.DriverAnalyticsRepository;
+import com.pgsa.trailers.repository.TripAnalyticsRepository;
+import com.pgsa.trailers.repository.VehicleAnalyticsRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
-@RestController
-@RequestMapping("/api/analytics")
+@Service
 @RequiredArgsConstructor
 @Slf4j
-public class AnalyticsController {
+public class AnalyticsService {
 
-    private final AnalyticsService analyticsService;
+    private final TripAnalyticsRepository tripRepository;
+    private final VehicleAnalyticsRepository vehicleRepository;
+    private final DriverAnalyticsRepository driverRepository;
 
-    /**
-     * Debug endpoint to inspect current authentication
-     */
-    @GetMapping("/test-simple")
-    public ResponseEntity<?> testSimple(Authentication authentication) {
-        Map<String, Object> response = new HashMap<>();
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 
-        if (authentication == null) {
-            response.put("authentication", "NULL");
-        } else {
-            response.put("authentication", "PRESENT");
-            response.put("name", authentication.getName());
-            response.put("authorities", authentication.getAuthorities().toString());
-            response.put("authenticated", authentication.isAuthenticated());
+    // ============================================================
+    // VEHICLE KPIs
+    // ============================================================
+
+    public List<VehicleKpiDTO> getVehicleKpis(LocalDate startDate, LocalDate endDate) {
+        try {
+            String fromStr = startDate.format(DATE_FORMATTER);
+            String toStr = endDate.format(DATE_FORMATTER);
+            
+            log.info("📊 Fetching vehicle KPIs from {} to {}", fromStr, toStr);
+            
+            List<Object[]> results = vehicleRepository.vehicleEfficiencyRaw(fromStr, toStr);
+            log.info("📊 Found {} vehicle records", results.size());
+            
+            return results.stream()
+                    .map(this::mapToVehicleKpiDTO)
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("❌ Error fetching vehicle KPIs: {}", e.getMessage(), e);
+            return Collections.emptyList();
         }
-
-        // Also check SecurityContextHolder
-        Authentication ctxAuth = SecurityContextHolder.getContext().getAuthentication();
-        response.put("securityContextAuth", ctxAuth != null ? ctxAuth.getName() : "null");
-
-        return ResponseEntity.ok(response);
-    }
-    @GetMapping("/debug/auth")
-    @PreAuthorize("hasRole('SUPER_ADMIN')") // Changed from hasAuthority to hasRole
-    public Map<String, Object> debugAuth(Authentication authentication) {
-        log.info("DEBUG: Principal={}", authentication.getName());
-        log.info("DEBUG: Authorities={}", authentication.getAuthorities());
-
-        return Map.of(
-                "username", authentication.getName(),
-                "authorities", authentication.getAuthorities(),
-                "authenticated", authentication.isAuthenticated()
-        );
     }
 
-    /**
-     * Main dashboard endpoint
-     */
-    @GetMapping("/dashboard")
-   @PreAuthorize("permitAll()")
-    public ResponseEntity<Map<String, Object>> getDashboard(
-            Authentication authentication,
-            @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
-    ) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            log.warn("Dashboard accessed without authentication!");
-            log.info("Proceeding with null authentication for debugging");
-        } else {
-            log.info("Dashboard access by user: {}", authentication.getName());
-            log.info("User authorities: {}", authentication.getAuthorities());
+    private VehicleKpiDTO mapToVehicleKpiDTO(Object[] row) {
+        try {
+            String registration = row[0] != null ? row[0].toString() : "Unknown";
+            BigDecimal totalKm = toBigDecimal(row[1]);
+            BigDecimal fuelLiters = toBigDecimal(row[2]);
+            BigDecimal fuelCost = toBigDecimal(row[3]);
+            BigDecimal kmPerLiter = toBigDecimal(row[4]);
+            BigDecimal costPerKm = toBigDecimal(row[5]);
+            
+            return new VehicleKpiDTO(
+                registration,
+                totalKm,
+                fuelLiters,
+                fuelCost,
+                kmPerLiter,
+                costPerKm
+            );
+        } catch (Exception e) {
+            log.error("Error mapping vehicle KPI row: {}", e.getMessage());
+            return new VehicleKpiDTO("Unknown", BigDecimal.ZERO, BigDecimal.ZERO, 
+                                    BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
         }
-        // Default to last 30 days if not specified
-        if (endDate == null) endDate = LocalDate.now();
-        if (startDate == null) startDate = endDate.minusDays(30);
-
-        // Get data from service
-        AnalyticsService.DashboardSummary summary = analyticsService.getDashboardSummary(startDate, endDate);
-        List<VehicleKpiDTO> vehicleKpis = analyticsService.getVehicleKpis(startDate, endDate);
-        List<DriverKpiDTO> driverKpis = analyticsService.getDriverKpis(startDate, endDate);
-
-        // Prepare response
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("period", Map.of("startDate", startDate, "endDate", endDate));
-        response.put("timestamp", System.currentTimeMillis());
-
-        // Summary data
-        Map<String, Object> summaryData = new HashMap<>();
-        summaryData.put("activeVehicles", summary.getActiveVehicles());
-        summaryData.put("activeDrivers", summary.getActiveDrivers());
-        summaryData.put("totalKm", summary.getTotalKm());
-        summaryData.put("totalFuelLiters", summary.getTotalFuelLiters());
-        summaryData.put("totalFuelCost", summary.getTotalFuelCost());
-        summaryData.put("totalRevenue", summary.getTotalDriverRevenue());
-        summaryData.put("totalProfit", summary.getTotalDriverProfit());
-        summaryData.put("avgFuelEfficiency", summary.getAvgFuelEfficiency());
-        summaryData.put("avgDriverEfficiency", summary.getAvgDriverEfficiency());
-        response.put("summary", summaryData);
-
-        // Vehicle KPIs
-        List<Map<String, Object>> vehicleData = vehicleKpis.stream()
-                .map(v -> {
-                    Map<String, Object> map = new HashMap<>();
-                    map.put("registrationNumber", v.registrationNumber());
-                    map.put("totalKm", v.totalKm());
-                    map.put("fuelLiters", v.fuelLiters());
-                    map.put("fuelCost", v.fuelCost());
-                    map.put("kmPerLiter", v.kmPerLiter());
-                    map.put("costPerKm", v.costPerKm());
-                    return map;
-                })
-                .collect(Collectors.toList());
-        response.put("vehicleKpis", vehicleData);
-
-        // Driver KPIs
-        List<Map<String, Object>> driverData = driverKpis.stream()
-                .map(d -> {
-                    Map<String, Object> map = new HashMap<>();
-                    map.put("driverName", d.driver());
-                    map.put("tripsCompleted", d.tripsCompleted());
-                    map.put("totalKm", d.totalKm());
-                    map.put("fuelCost", d.fuelCost());
-                    map.put("totalRevenue", d.totalRevenue());
-                    map.put("totalCost", d.totalCost());
-                    map.put("profit", d.profit());
-                    map.put("efficiencyScore", d.efficiencyScore());
-                    map.put("costPerKm", d.getCostPerKm());
-                    map.put("revenuePerTrip", d.getRevenuePerTrip());
-                    map.put("profitMargin", d.getProfitMargin());
-                    return map;
-                })
-                .collect(Collectors.toList());
-        response.put("driverKpis", driverData);
-
-        // Top performers
-        if (!vehicleKpis.isEmpty()) {
-            VehicleKpiDTO mostEfficientVehicle = vehicleKpis.stream()
-                    .max(Comparator.comparing(VehicleKpiDTO::kmPerLiter))
-                    .orElse(vehicleKpis.get(0));
-
-            response.put("mostEfficientVehicle", Map.of(
-                    "registration", mostEfficientVehicle.registrationNumber(),
-                    "efficiency", mostEfficientVehicle.kmPerLiter()
-            ));
-        }
-
-        if (!driverKpis.isEmpty()) {
-            DriverKpiDTO topDriver = driverKpis.stream()
-                    .max(Comparator.comparing(DriverKpiDTO::profit))
-                    .orElse(driverKpis.get(0));
-
-            response.put("topDriver", Map.of(
-                    "name", topDriver.driver(),
-                    "profit", topDriver.profit(),
-                    "tripsCompleted", topDriver.tripsCompleted()
-            ));
-        }
-
-        return ResponseEntity.ok(response);
     }
 
-    /**
-     * Vehicle analytics endpoint
-     */
-    @GetMapping("/vehicles")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER')")
-    public ResponseEntity<Map<String, Object>> getVehicleAnalytics(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(required = false) String sortBy,
-            @RequestParam(required = false) String order) {
+    // ============================================================
+    // DRIVER KPIs
+    // ============================================================
 
-        // Default to last 30 days if not specified
-        if (to == null) to = LocalDate.now();
-        if (from == null) from = to.minusDays(30);
-
-        List<VehicleKpiDTO> vehicleKpis = analyticsService.getVehicleKpis(from, to);
-
-        // Apply sorting
-        if (sortBy != null) {
-            vehicleKpis = sortVehicleKpis(vehicleKpis, sortBy, order);
+    public List<DriverKpiDTO> getDriverKpis(LocalDate startDate, LocalDate endDate) {
+        try {
+            String fromStr = startDate.format(DATE_FORMATTER);
+            String toStr = endDate.format(DATE_FORMATTER);
+            
+            log.info("👤 Fetching driver KPIs from {} to {}", fromStr, toStr);
+            
+            List<Object[]> results = driverRepository.driverPerformanceRaw(fromStr, toStr);
+            log.info("👤 Found {} driver records", results.size());
+            
+            return results.stream()
+                    .map(this::mapToDriverKpiDTO)
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("❌ Error fetching driver KPIs: {}", e.getMessage(), e);
+            return Collections.emptyList();
         }
+    }
 
-        // Prepare response
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("data", vehicleKpis);
-        response.put("count", vehicleKpis.size());
-        response.put("period", Map.of("from", from, "to", to));
+    private DriverKpiDTO mapToDriverKpiDTO(Object[] row) {
+        try {
+            String driverName = row[0] != null ? row[0].toString() : "Unknown";
+            Integer tripsCompleted = extractInteger(row[1]);
+            BigDecimal totalKm = toBigDecimal(row[2]);
+            BigDecimal fuelCost = toBigDecimal(row[3]);
+            BigDecimal efficiencyScore = toBigDecimal(row[4]);
+            BigDecimal totalRevenue = toBigDecimal(row[5]);
+            BigDecimal totalCost = toBigDecimal(row[6]);
+            BigDecimal profit = toBigDecimal(row[7]);
+            
+            return new DriverKpiDTO(
+                driverName,
+                totalKm,
+                fuelCost,
+                tripsCompleted,
+                totalRevenue,
+                totalCost,
+                profit,
+                efficiencyScore
+            );
+        } catch (Exception e) {
+            log.error("Error mapping driver KPI row: {}", e.getMessage());
+            return new DriverKpiDTO("Unknown", BigDecimal.ZERO, BigDecimal.ZERO, 0,
+                                   BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+        }
+    }
 
-        // Calculate totals
-        Map<String, BigDecimal> totals = new HashMap<>();
-        totals.put("totalKm", vehicleKpis.stream()
+    // ============================================================
+    // TRIP KPIs
+    // ============================================================
+
+    public List<TripKpiDTO> getTripKpis(LocalDate startDate, LocalDate endDate) {
+        try {
+            String fromStr = startDate.format(DATE_FORMATTER);
+            String toStr = endDate.format(DATE_FORMATTER);
+            
+            log.info("📋 Fetching trip KPIs from {} to {}", fromStr, toStr);
+            
+            List<Object[]> results = tripRepository.findTripProfitabilityRaw(fromStr, toStr);
+            log.info("📋 Found {} trip records", results.size());
+            
+            return results.stream()
+                    .map(this::mapToTripKpiDTO)
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("❌ Error fetching trip KPIs: {}", e.getMessage(), e);
+            return Collections.emptyList();
+        }
+    }
+
+    private TripKpiDTO mapToTripKpiDTO(Object[] row) {
+        try {
+            Long tripId = extractLong(row[0]);
+            String tripNumber = row[1] != null ? row[1].toString() : "";
+            String status = row[2] != null ? row[2].toString() : "";
+            LocalDate plannedStartDate = extractLocalDate(row[3]);
+            BigDecimal totalDistance = toBigDecimal(row[4]);
+            BigDecimal revenue = toBigDecimal(row[5]);
+            BigDecimal cost = toBigDecimal(row[6]);
+            BigDecimal profit = toBigDecimal(row[7]);
+            BigDecimal fuelUsed = toBigDecimal(row[8]);
+            
+            BigDecimal profitMargin = revenue.compareTo(BigDecimal.ZERO) > 0 
+                ? profit.divide(revenue, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
+                : BigDecimal.ZERO;
+            
+            return new TripKpiDTO(
+                tripId,
+                tripNumber,
+                status,
+                plannedStartDate,
+                totalDistance,
+                fuelUsed,
+                revenue,
+                cost,
+                profit,
+                profitMargin
+            );
+        } catch (Exception e) {
+            log.error("Error mapping trip KPI row: {}", e.getMessage());
+            return new TripKpiDTO(0L, "", "", LocalDate.now(),
+                                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+        }
+    }
+
+    // ============================================================
+    // DASHBOARD SUMMARY - ENHANCED
+    // ============================================================
+
+    public DashboardSummary getDashboardSummary(LocalDate startDate, LocalDate endDate) {
+        log.info("📊 Building dashboard summary from {} to {}", startDate, endDate);
+        
+        List<VehicleKpiDTO> vehicleKpis = getVehicleKpis(startDate, endDate);
+        List<DriverKpiDTO> driverKpis = getDriverKpis(startDate, endDate);
+        List<TripKpiDTO> tripKpis = getTripKpis(startDate, endDate);
+        
+        log.info("✅ Dashboard summary: {} vehicles, {} drivers, {} trips", 
+                vehicleKpis.size(), driverKpis.size(), tripKpis.size());
+
+        return new DashboardSummary(vehicleKpis, driverKpis, tripKpis);
+    }
+
+    // ============================================================
+    // VEHICLE STATS - ACTIVE VEHICLES DETAILS
+    // ============================================================
+
+    public Map<String, Object> getVehicleStats(LocalDate startDate, LocalDate endDate) {
+        Map<String, Object> stats = new HashMap<>();
+        
+        // Get all vehicles - you may need to inject VehicleRepository for this
+        // For now, we'll use the KPIs as a proxy
+        List<VehicleKpiDTO> vehicleKpis = getVehicleKpis(startDate, endDate);
+        
+        // Total vehicles
+        int totalVehicles = vehicleKpis.size();
+        
+        // Active vehicles (those with trips in the period)
+        long activeVehicles = vehicleKpis.stream()
+                .filter(v -> v.totalKm().compareTo(BigDecimal.ZERO) > 0)
+                .count();
+        
+        // Vehicles with planned trips
+        long vehiclesWithPlanned = vehicleKpis.stream()
+                .filter(v -> v.totalKm().compareTo(BigDecimal.ZERO) == 0)
+                .count();
+        
+        stats.put("totalVehicles", totalVehicles);
+        stats.put("activeVehicles", activeVehicles);
+        stats.put("vehiclesInTrip", activeVehicles);
+        stats.put("vehiclesNotAvailable", totalVehicles - activeVehicles);
+        stats.put("vehiclesWithPlanned", vehiclesWithPlanned);
+        
+        // Planned and travelled KMs
+        BigDecimal plannedKm = vehicleKpis.stream()
                 .map(VehicleKpiDTO::totalKm)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-
-        totals.put("totalFuelLiters", vehicleKpis.stream()
-                .map(VehicleKpiDTO::fuelLiters)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-
-        totals.put("totalFuelCost", vehicleKpis.stream()
-                .map(VehicleKpiDTO::fuelCost)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-
-        response.put("totals", totals);
-
-        return ResponseEntity.ok(response);
+                .filter(km -> km != null && km.compareTo(BigDecimal.ZERO) > 0)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        BigDecimal travelledKm = vehicleKpis.stream()
+                .map(VehicleKpiDTO::totalKm)
+                .filter(km -> km != null && km.compareTo(BigDecimal.ZERO) > 0)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        stats.put("plannedKm", plannedKm);
+        stats.put("travelledKm", travelledKm);
+        
+        return stats;
     }
 
-    /**
-     * Driver analytics endpoint
-     */
-    @GetMapping("/drivers")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER')")
-    public ResponseEntity<Map<String, Object>> getDriverAnalytics(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(required = false) String sortBy,
-            @RequestParam(required = false) String order) {
+    // ============================================================
+    // DRIVER STATS - ACTIVE DRIVERS DETAILS
+    // ============================================================
 
-        // Default to last 30 days if not specified
-        if (to == null) to = LocalDate.now();
-        if (from == null) from = to.minusDays(30);
+    public Map<String, Object> getDriverStats(LocalDate startDate, LocalDate endDate) {
+        Map<String, Object> stats = new HashMap<>();
+        
+        List<DriverKpiDTO> driverKpis = getDriverKpis(startDate, endDate);
+        
+        int totalDrivers = driverKpis.size();
+        long activeDrivers = driverKpis.stream()
+                .filter(d -> d.tripsCompleted() > 0)
+                .count();
+        long driversWithPlanned = driverKpis.stream()
+                .filter(d -> d.tripsCompleted() == 0)
+                .count();
+        
+        stats.put("totalDrivers", totalDrivers);
+        stats.put("activeDrivers", activeDrivers);
+        stats.put("driversInTrip", activeDrivers);
+        stats.put("driversNotAvailable", totalDrivers - activeDrivers);
+        stats.put("driversWithPlanned", driversWithPlanned);
+        
+        // Trip count per driver
+        Map<String, Integer> tripCountByDriver = driverKpis.stream()
+                .collect(Collectors.toMap(
+                        DriverKpiDTO::driver,
+                        DriverKpiDTO::tripsCompleted,
+                        (a, b) -> a
+                ));
+        stats.put("tripCountByDriver", tripCountByDriver);
+        
+        // Total trips
+        int totalTrips = driverKpis.stream()
+                .mapToInt(DriverKpiDTO::tripsCompleted)
+                .sum();
+        stats.put("totalTrips", totalTrips);
+        
+        return stats;
+    }
 
-        List<DriverKpiDTO> driverKpis = analyticsService.getDriverKpis(from, to);
+    // ============================================================
+    // FUEL EFFICIENCY STATS
+    // ============================================================
 
-        // Apply sorting
-        if (sortBy != null) {
-            driverKpis = sortDriverKpis(driverKpis, sortBy, order);
+    public Map<String, Object> getFuelStats(LocalDate startDate, LocalDate endDate) {
+        Map<String, Object> stats = new HashMap<>();
+        
+        List<VehicleKpiDTO> vehicleKpis = getVehicleKpis(startDate, endDate);
+        List<DriverKpiDTO> driverKpis = getDriverKpis(startDate, endDate);
+        
+        // Total KM and Fuel
+        BigDecimal totalKm = vehicleKpis.stream()
+                .map(VehicleKpiDTO::totalKm)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        BigDecimal totalFuel = vehicleKpis.stream()
+                .map(VehicleKpiDTO::fuelLiters)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        BigDecimal totalFuelCost = vehicleKpis.stream()
+                .map(VehicleKpiDTO::fuelCost)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        // Average efficiency (km/L)
+        BigDecimal avgEfficiency = BigDecimal.ZERO;
+        if (totalFuel.compareTo(BigDecimal.ZERO) > 0 && totalKm.compareTo(BigDecimal.ZERO) > 0) {
+            avgEfficiency = totalKm.divide(totalFuel, 2, RoundingMode.HALF_UP);
         }
+        
+        // Average cost per km
+        BigDecimal avgCostPerKm = BigDecimal.ZERO;
+        if (totalKm.compareTo(BigDecimal.ZERO) > 0 && totalFuelCost.compareTo(BigDecimal.ZERO) > 0) {
+            avgCostPerKm = totalFuelCost.divide(totalKm, 2, RoundingMode.HALF_UP);
+        }
+        
+        // Per vehicle efficiency
+        Map<String, BigDecimal> vehicleEfficiency = vehicleKpis.stream()
+                .filter(v -> v.kmPerLiter() != null && v.kmPerLiter().compareTo(BigDecimal.ZERO) > 0)
+                .collect(Collectors.toMap(
+                        VehicleKpiDTO::registrationNumber,
+                        VehicleKpiDTO::kmPerLiter,
+                        (a, b) -> a
+                ));
+        
+        // Per driver efficiency
+        Map<String, BigDecimal> driverEfficiency = driverKpis.stream()
+                .filter(d -> d.efficiencyScore() != null && d.efficiencyScore().compareTo(BigDecimal.ZERO) > 0)
+                .collect(Collectors.toMap(
+                        DriverKpiDTO::driver,
+                        DriverKpiDTO::efficiencyScore,
+                        (a, b) -> a
+                ));
+        
+        // Per driver cost per km
+        Map<String, BigDecimal> driverCostPerKm = driverKpis.stream()
+                .filter(d -> d.getCostPerKm() != null && d.getCostPerKm().compareTo(BigDecimal.ZERO) > 0)
+                .collect(Collectors.toMap(
+                        DriverKpiDTO::driver,
+                        DriverKpiDTO::getCostPerKm,
+                        (a, b) -> a
+                ));
+        
+        stats.put("totalKm", totalKm);
+        stats.put("totalFuel", totalFuel);
+        stats.put("totalFuelCost", totalFuelCost);
+        stats.put("avgEfficiency", avgEfficiency);
+        stats.put("avgCostPerKm", avgCostPerKm);
+        stats.put("vehicleEfficiency", vehicleEfficiency);
+        stats.put("driverEfficiency", driverEfficiency);
+        stats.put("driverCostPerKm", driverCostPerKm);
+        stats.put("tripsWithFuelData", vehicleKpis.stream()
+                .filter(v -> v.fuelLiters() != null && v.fuelLiters().compareTo(BigDecimal.ZERO) > 0)
+                .count());
+        
+        return stats;
+    }
 
-        // Prepare response
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("data", driverKpis.stream()
+    // ============================================================
+    // DISTANCE STATS
+    // ============================================================
+
+    public Map<String, Object> getDistanceStats(LocalDate startDate, LocalDate endDate) {
+        Map<String, Object> stats = new HashMap<>();
+        
+        List<VehicleKpiDTO> vehicleKpis = getVehicleKpis(startDate, endDate);
+        List<TripKpiDTO> tripKpis = getTripKpis(startDate, endDate);
+        
+        // Total KM travelled
+        BigDecimal totalKm = vehicleKpis.stream()
+                .map(VehicleKpiDTO::totalKm)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        // Total trips
+        int totalTrips = tripKpis.size();
+        long completedTrips = tripKpis.stream()
+                .filter(t -> "COMPLETED".equals(t.status()) || "FINALIZED".equals(t.status()))
+                .count();
+        
+        // Average km per trip
+        BigDecimal avgKmPerTrip = BigDecimal.ZERO;
+        if (totalTrips > 0) {
+            avgKmPerTrip = totalKm.divide(BigDecimal.valueOf(totalTrips), 2, RoundingMode.HALF_UP);
+        }
+        
+        stats.put("totalKm", totalKm);
+        stats.put("totalTrips", totalTrips);
+        stats.put("completedTrips", completedTrips);
+        stats.put("avgKmPerTrip", avgKmPerTrip);
+        
+        return stats;
+    }
+
+    // ============================================================
+    // TOP PERFORMING DRIVERS
+    // ============================================================
+
+    public List<Map<String, Object>> getTopDrivers(LocalDate startDate, LocalDate endDate, int limit) {
+        List<DriverKpiDTO> driverKpis = getDriverKpis(startDate, endDate);
+        
+        return driverKpis.stream()
+                .filter(d -> d.tripsCompleted() > 0)
                 .map(d -> {
-                    Map<String, Object> map = new HashMap<>();
-                    map.put("driverName", d.driver());
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("name", d.driver());
                     map.put("tripsCompleted", d.tripsCompleted());
-                    map.put("totalKm", d.totalKm());
-                    map.put("fuelCost", d.fuelCost());
-                    map.put("totalRevenue", d.totalRevenue());
-                    map.put("totalCost", d.totalCost());
+                    map.put("efficiency", d.efficiencyScore());
+                    map.put("costPerKm", d.getCostPerKm());
+                    map.put("rating", calculateRating(d));
                     map.put("profit", d.profit());
-                    map.put("efficiencyScore", d.efficiencyScore());
+                    map.put("totalKm", d.totalKm());
                     return map;
                 })
-                .collect(Collectors.toList()));
-        response.put("count", driverKpis.size());
-        response.put("period", Map.of("from", from, "to", to));
-
-        return ResponseEntity.ok(response);
-    }
-
-    /**
-     * Status endpoint - open to all authenticated users
-     */
-    @GetMapping("/status")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Map<String, Object>> getStatus() {
-        Map<String, Object> response = new HashMap<>();
-        response.put("status", "OK");
-        response.put("service", "Analytics Service");
-        response.put("timestamp", System.currentTimeMillis());
-        return ResponseEntity.ok(response);
-    }
-
-    // Helper methods for sorting
-    private List<VehicleKpiDTO> sortVehicleKpis(List<VehicleKpiDTO> kpis, String sortBy, String order) {
-        boolean descending = "desc".equalsIgnoreCase(order);
-
-        Comparator<VehicleKpiDTO> comparator;
-        switch (sortBy.toLowerCase()) {
-            case "efficiency":
-            case "kmperliter":
-                comparator = Comparator.comparing(VehicleKpiDTO::kmPerLiter);
-                break;
-            case "costperkm":
-                comparator = Comparator.comparing(VehicleKpiDTO::costPerKm);
-                break;
-            case "totalkm":
-                comparator = Comparator.comparing(VehicleKpiDTO::totalKm);
-                break;
-            case "fuelcost":
-                comparator = Comparator.comparing(VehicleKpiDTO::fuelCost);
-                break;
-            case "registration":
-            default:
-                comparator = Comparator.comparing(VehicleKpiDTO::registrationNumber);
-                break;
-        }
-
-        if (descending) {
-            comparator = comparator.reversed();
-        }
-
-        return kpis.stream()
-                .sorted(comparator)
+                .sorted((a, b) -> {
+                    // Sort by rating descending
+                    Double ratingA = (Double) a.get("rating");
+                    Double ratingB = (Double) b.get("rating");
+                    return ratingB.compareTo(ratingA);
+                })
+                .limit(limit)
                 .collect(Collectors.toList());
     }
 
-    private List<DriverKpiDTO> sortDriverKpis(List<DriverKpiDTO> kpis, String sortBy, String order) {
-        boolean descending = "desc".equalsIgnoreCase(order);
+    private double calculateRating(DriverKpiDTO d) {
+        double rating = 3.0; // Base
+        
+        // Efficiency factor (0-1.5 points)
+        if (d.efficiencyScore() != null && d.efficiencyScore().compareTo(BigDecimal.ZERO) > 0) {
+            double eff = d.efficiencyScore().doubleValue();
+            rating += Math.min(eff / 10.0, 1.5);
+        }
+        
+        // Trip count factor (0-0.5 points)
+        rating += Math.min(d.tripsCompleted() / 20.0, 0.5);
+        
+        // Profit factor (0-0.5 points)
+        if (d.profit() != null && d.profit().compareTo(BigDecimal.ZERO) > 0) {
+            rating += Math.min(d.profit().doubleValue() / 10000.0, 0.5);
+        }
+        
+        return Math.min(rating, 5.0);
+    }
 
-        Comparator<DriverKpiDTO> comparator;
-        switch (sortBy.toLowerCase()) {
-            case "profit":
-                comparator = Comparator.comparing(DriverKpiDTO::profit);
-                break;
-            case "efficiency":
-                comparator = Comparator.comparing(DriverKpiDTO::efficiencyScore);
-                break;
-            case "revenue":
-                comparator = Comparator.comparing(DriverKpiDTO::totalRevenue);
-                break;
-            case "trips":
-                comparator = Comparator.comparing(DriverKpiDTO::tripsCompleted);
-                break;
-            case "name":
-            default:
-                comparator = Comparator.comparing(DriverKpiDTO::driver);
-                break;
+    // ============================================================
+    // HELPER METHODS
+    // ============================================================
+
+    private BigDecimal toBigDecimal(Object value) {
+        if (value == null) return BigDecimal.ZERO;
+        try {
+            if (value instanceof BigDecimal) return (BigDecimal) value;
+            if (value instanceof Number) return BigDecimal.valueOf(((Number) value).doubleValue());
+            if (value instanceof String && !((String) value).trim().isEmpty()) {
+                return new BigDecimal(((String) value).trim());
+            }
+        } catch (Exception e) {
+            log.warn("Could not convert '{}' to BigDecimal", value);
+        }
+        return BigDecimal.ZERO;
+    }
+
+    private Integer extractInteger(Object value) {
+        if (value == null) return 0;
+        if (value instanceof Number) return ((Number) value).intValue();
+        try {
+            return Integer.parseInt(value.toString().trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private Long extractLong(Object value) {
+        if (value == null) return 0L;
+        if (value instanceof Number) return ((Number) value).longValue();
+        try {
+            return Long.parseLong(value.toString().trim());
+        } catch (NumberFormatException e) {
+            return 0L;
+        }
+    }
+
+    private LocalDate extractLocalDate(Object value) {
+        if (value == null) return LocalDate.now();
+        try {
+            if (value instanceof java.sql.Timestamp timestamp) {
+                return timestamp.toLocalDateTime().toLocalDate();
+            } else if (value instanceof java.sql.Date date) {
+                return date.toLocalDate();
+            } else if (value instanceof LocalDate date) {
+                return date;
+            } else if (value instanceof String str) {
+                return LocalDate.parse(str);
+            }
+        } catch (Exception e) {
+            log.warn("Could not convert '{}' to LocalDate", value);
+        }
+        return LocalDate.now();
+    }
+
+    // ============================================================
+    // DASHBOARD SUMMARY MODEL
+    // ============================================================
+
+    @lombok.Getter
+    @lombok.RequiredArgsConstructor
+    public static class DashboardSummary {
+        private final List<VehicleKpiDTO> vehicleKpis;
+        private final List<DriverKpiDTO> driverKpis;
+        private final List<TripKpiDTO> tripKpis;
+
+        public long getActiveVehicles() {
+            return vehicleKpis != null ? vehicleKpis.size() : 0L;
         }
 
-        if (descending) {
-            comparator = comparator.reversed();
+        public long getActiveDrivers() {
+            return driverKpis != null ? driverKpis.size() : 0L;
         }
 
-        return kpis.stream()
-                .sorted(comparator)
-                .collect(Collectors.toList());
+        public BigDecimal getTotalKm() {
+            return sumValues(vehicleKpis, VehicleKpiDTO::totalKm);
+        }
+
+        public BigDecimal getTotalFuelLiters() {
+            return sumValues(vehicleKpis, VehicleKpiDTO::fuelLiters);
+        }
+
+        public BigDecimal getTotalFuelCost() {
+            return sumValues(vehicleKpis, VehicleKpiDTO::fuelCost);
+        }
+
+        public BigDecimal getTotalDriverRevenue() {
+            return sumValues(driverKpis, DriverKpiDTO::totalRevenue);
+        }
+
+        public BigDecimal getTotalDriverProfit() {
+            return sumValues(driverKpis, DriverKpiDTO::profit);
+        }
+
+        public BigDecimal getAvgFuelEfficiency() {
+            return calculateAverage(vehicleKpis, VehicleKpiDTO::kmPerLiter);
+        }
+
+        public BigDecimal getAvgDriverEfficiency() {
+            return calculateAverage(driverKpis, DriverKpiDTO::efficiencyScore);
+        }
+
+        public int getTotalTrips() {
+            return tripKpis != null ? tripKpis.size() : 0;
+        }
+
+        public long getCompletedTrips() {
+            if (tripKpis == null) return 0;
+            return tripKpis.stream()
+                    .filter(t -> "COMPLETED".equals(t.status()) || "FINALIZED".equals(t.status()))
+                    .count();
+        }
+
+        public BigDecimal getAvgCostPerKm() {
+            BigDecimal totalKm = getTotalKm();
+            BigDecimal totalCost = getTotalDriverCost();
+            if (totalKm.compareTo(BigDecimal.ZERO) > 0 && totalCost.compareTo(BigDecimal.ZERO) > 0) {
+                return totalCost.divide(totalKm, 2, RoundingMode.HALF_UP);
+            }
+            return BigDecimal.ZERO;
+        }
+
+        public BigDecimal getTotalDriverCost() {
+            return sumValues(driverKpis, DriverKpiDTO::totalCost);
+        }
+
+        private <T> BigDecimal sumValues(List<T> items, java.util.function.Function<T, BigDecimal> extractor) {
+            if (items == null || items.isEmpty()) return BigDecimal.ZERO;
+            return items.stream()
+                    .map(extractor)
+                    .filter(v -> v != null)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+        }
+
+        private <T> BigDecimal calculateAverage(List<T> items, java.util.function.Function<T, BigDecimal> extractor) {
+            if (items == null || items.isEmpty()) return BigDecimal.ZERO;
+            BigDecimal total = sumValues(items, extractor);
+            return total.divide(BigDecimal.valueOf(items.size()), 2, RoundingMode.HALF_UP);
+        }
     }
 }

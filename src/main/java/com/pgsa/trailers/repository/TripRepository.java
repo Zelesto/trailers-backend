@@ -160,6 +160,17 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     @Query("SELECT t FROM Trip t WHERE t.vehicle.id = :vehicleId AND t.status IN :statuses ORDER BY t.actualEndDate DESC")
     Trip findTopByVehicleIdAndStatusInOrderByActualEndDateDesc(@Param("vehicleId") Long vehicleId, 
                                                                 @Param("statuses") List<String> statuses);
+
+    /**
+     * Find the latest completed or finalized trip for a vehicle using updatedAt
+     * This is the recommended approach - no new columns needed
+     */
+    @Query("SELECT t FROM Trip t WHERE t.vehicle.id = :vehicleId AND t.status IN :statuses ORDER BY t.updatedAt DESC")
+    Trip findTopByVehicleIdAndStatusInOrderByUpdatedAtDesc(
+        @Param("vehicleId") Long vehicleId, 
+        @Param("statuses") List<String> statuses
+    );
+
     
     /**
      * Alternative: Find latest trip by vehicle regardless of status

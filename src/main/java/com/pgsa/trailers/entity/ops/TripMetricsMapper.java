@@ -1,3 +1,4 @@
+// src/main/java/com/pgsa/trailers/entity/ops/TripMetricsMapper.java
 package com.pgsa.trailers.entity.ops;
 
 import com.pgsa.trailers.dto.TripMetricsDTO;
@@ -30,9 +31,10 @@ public class TripMetricsMapper {
         if (trip != null) {
             dto.setTripId(trip.getId());
             dto.setTripNumber(trip.getTripNumber());
+            // ✅ Use getOriginLocation() - exists in Trip entity
             dto.setOriginLocation(trip.getOriginLocation());
+            // ✅ Use getDestinationLocation() - exists in Trip entity
             dto.setDestinationLocation(trip.getDestinationLocation());
-            // FIXED: Removed .name() call - vehicleType is String
             if (trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null) {
                 dto.setVehicleType(trip.getVehicle().getVehicleType());
             }
@@ -58,10 +60,10 @@ public class TripMetricsMapper {
         dto.setPlannedVsActualDurationVarianceHours(metrics.getPlannedVsActualDurationVarianceHours());
         dto.setGeocodingConfidenceScore(metrics.getGeocodingConfidenceScore());
 
-        // Audit fields - use getFinalized() for Boolean type
+        // Audit fields
         dto.setCreatedAt(metrics.getCreatedAt());
         dto.setUpdatedAt(metrics.getUpdatedAt());
-        dto.setFinalized(metrics.isFinalized());  // metrics.isFinalized() is correct (entity uses primitive boolean)
+        dto.setFinalized(metrics.isFinalized());
         dto.setFinalizedAt(metrics.getFinalizedAt());
 
         // Calculate fuel efficiency
@@ -88,14 +90,12 @@ public class TripMetricsMapper {
 
         TripMetrics metrics = new TripMetrics();
         
-        // Set the trip relationship
         if (trip != null) {
             metrics.setTrip(trip);
         } else {
             log.warn("⚠️ Creating metrics without associated Trip");
         }
         
-        // Set all metrics
         metrics.setTotalDistanceKm(dto.getTotalDistanceKm());
         metrics.setTotalDurationHours(dto.getTotalDurationHours());
         metrics.setFuelUsedLiters(dto.getFuelUsedLiters());
@@ -106,15 +106,13 @@ public class TripMetricsMapper {
         metrics.setRevenueAmount(dto.getRevenueAmount());
         metrics.setCostAmount(dto.getCostAmount());
         
-        // Location-based metrics
         metrics.setOriginCityTravelTimeHours(dto.getOriginCityTravelTimeHours());
         metrics.setDestinationCityTravelTimeHours(dto.getDestinationCityTravelTimeHours());
         metrics.setPlannedVsActualDistanceVarianceKm(dto.getPlannedVsActualDistanceVarianceKm());
         metrics.setPlannedVsActualDurationVarianceHours(dto.getPlannedVsActualDurationVarianceHours());
         metrics.setGeocodingConfidenceScore(dto.getGeocodingConfidenceScore());
 
-        // Audit fields - DTO uses Boolean, so use getFinalized()
-        Boolean finalized = dto.getFinalized();  // ✅ Use getFinalized() not isFinalized()
+        Boolean finalized = dto.getFinalized();
         metrics.setFinalized(finalized != null ? finalized : false);
         metrics.setFinalizedAt(dto.getFinalizedAt());
 
@@ -126,17 +124,11 @@ public class TripMetricsMapper {
      * Update existing TripMetrics entity with DTO values
      */
     public void updateEntity(TripMetrics metrics, TripMetricsDTO dto) {
-        if (metrics == null) {
-            log.warn("⚠️ Cannot update null metrics entity");
-            return;
-        }
-        
-        if (dto == null) {
-            log.warn("⚠️ Cannot update metrics with null DTO");
+        if (metrics == null || dto == null) {
+            log.warn("⚠️ Cannot update null metrics or DTO");
             return;
         }
 
-        // Update all metrics
         if (dto.getTotalDistanceKm() != null) {
             metrics.setTotalDistanceKm(dto.getTotalDistanceKm());
         }
@@ -165,7 +157,6 @@ public class TripMetricsMapper {
             metrics.setCostAmount(dto.getCostAmount());
         }
         
-        // Location-based metrics
         if (dto.getOriginCityTravelTimeHours() != null) {
             metrics.setOriginCityTravelTimeHours(dto.getOriginCityTravelTimeHours());
         }
@@ -182,8 +173,7 @@ public class TripMetricsMapper {
             metrics.setGeocodingConfidenceScore(dto.getGeocodingConfidenceScore());
         }
 
-        // Audit fields - DTO uses Boolean, so use getFinalized()
-        Boolean finalized = dto.getFinalized();  // ✅ Use getFinalized() not isFinalized()
+        Boolean finalized = dto.getFinalized();
         if (finalized != null) {
             metrics.setFinalized(finalized);
         }

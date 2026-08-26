@@ -132,7 +132,7 @@ public class BatchDistanceService {
                 }
             }
 
-            // Step 4: Update vehicle mileage based on latest trips
+            // Step 4: Update vehicle mileage based on latest completed trips
             log.info("🚗 Updating vehicle mileage...");
             int vehicleUpdates = 0;
             Set<Long> processedVehicleIds = new HashSet<>();
@@ -177,7 +177,7 @@ public class BatchDistanceService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void processSingleTrip(Trip trip) {
-        // Build addresses if missing
+        // Get origin and destination addresses
         String origin = getOriginAddress(trip);
         String destination = getDestinationAddress(trip);
         
@@ -216,7 +216,10 @@ public class BatchDistanceService {
             return;
         }
 
+        // Get vehicle type for routing
         String vehicleType = trip.getVehicle() != null ? trip.getVehicle().getVehicleType() : "TRUCK";
+        
+        // Calculate distance with retry
         BigDecimal distance = calculateTripDistanceWithRetry(origin, destination, vehicleType, trip.getId());
         
         if (distance != null && distance.compareTo(BigDecimal.ZERO) > 0) {
@@ -254,15 +257,19 @@ public class BatchDistanceService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void processSingleLoad(String loadId) {
-        Load load = loadRepository.findByLoadNumber(loadId)
-                .orElseThrow(() -> new RuntimeException("Load not found: " + loadId));
+        Optional<Load> loadOpt = loadRepository.findByLoadNumber(loadId);
+        if (loadOpt.isEmpty()) {
+            log.warn("Load not found: {}", loadId);
+            return;
+        }
+        
+        Load load = loadOpt.get();
         
         // Get all trips for this load
         List<Trip> trips = tripRepository.findByLoadId(loadId);
         
         if (trips.isEmpty()) {
             log.warn("No trips found for load {}", loadId);
-            // Mark load as having no trips but still calculated
             load.setDistanceCalculated(true);
             load.setDistanceCalculatedAt(LocalDateTime.now());
             loadRepository.save(load);
@@ -323,7 +330,7 @@ public class BatchDistanceService {
             return BigDecimal.ZERO;
         }
         
-        // Find the first pickup trip (stop sequence 1) or first trip
+        // Find the first pickup trip (stop sequence 1 or isFromDepot = true)
         Trip firstTrip = trips.stream()
                 .filter(t -> t.getStopSequence() != null && t.getStopSequence() == 1)
                 .findFirst()
@@ -373,7 +380,7 @@ public class BatchDistanceService {
         
         Vehicle vehicle = vehicleOpt.get();
         
-        // Find the latest completed/finalized trip for this vehicle
+        // Find the latest completed or finalized trip for this vehicle
         Trip latestTrip = tripRepository.findTopByVehicleIdAndStatusInOrderByActualEndDateDesc(
                 vehicleId, 
                 List.of("COMPLETED", "FINALIZED")
@@ -437,6 +444,9 @@ public class BatchDistanceService {
     // ADDRESS HELPER METHODS
     // ============================================================
 
+    /**
+     * Get origin address from trip, using buildOriginAddress() if needed
+     */
     private String getOriginAddress(Trip trip) {
         // First try originLocation
         if (trip.getOriginLocation() != null && !trip.getOriginLocation().isEmpty()) {
@@ -447,6 +457,9 @@ public class BatchDistanceService {
         return trip.buildOriginAddress();
     }
 
+    /**
+     * Get destination address from trip, using buildDestinationAddress() if needed
+     */
     private String getDestinationAddress(Trip trip) {
         // First try destinationLocation
         if (trip.getDestinationLocation() != null && !trip.getDestinationLocation().isEmpty()) {

@@ -46,127 +46,106 @@ public class BatchDistanceService {
     // MAIN BATCH PROCESSING METHOD
     // ============================================================
 
-    /**
-     * Recalculate distances for all trips that need it (NULL or 0)
-     * Runs asynchronously and tracks progress
-     * 
-     * @return CompletableFuture<BatchResult> with job statistics
-     */
-    @Async("taskExecutor")
-    @Transactional
-    public CompletableFuture<BatchResult> recalculateAllTripDistances() {
-        String jobId = "batch-" + System.currentTimeMillis();
-        BatchProgress progress = new BatchProgress(jobId);
-        progressMap.put(jobId, progress);
-
-        log.info("🚀 Starting batch distance recalculation for all trips. Job ID: {}", jobId);
-
-        try {
-            // Get all trips that need distance calculation (NULL or 0)
-            List<Trip> trips = tripRepository.findByCalculatedDistanceKmIsNullOrZero();
+        /**
+         * Start batch recalculation asynchronously (non-blocking)
+         */
+        @Async("taskExecutor")
+        public void recalculateAllTripDistancesAsync(String jobId) {
+            log.info("🚀 Starting async batch distance recalculation for all trips. Job ID: {}", jobId);
             
-            if (trips.isEmpty()) {
-                log.info("✅ No trips need distance calculation");
-                progress.setCompleted(true);
-                progress.setTotalTrips(0);
-                progress.setMessage("No trips need distance calculation");
-                return CompletableFuture.completedFuture(new BatchResult(jobId, 0, 0, 0));
-            }
-
-            progress.setTotalTrips(trips.size());
-            log.info("📊 Found {} trips needing distance calculation", trips.size());
-
-            List<Trip> processedTrips = new ArrayList<>();
-            AtomicInteger succeeded = new AtomicInteger(0);
-            AtomicInteger failed = new AtomicInteger(0);
-
-            // Process in batches
-            for (int i = 0; i < trips.size(); i += BATCH_SIZE) {
-                int end = Math.min(i + BATCH_SIZE, trips.size());
-                List<Trip> batch = trips.subList(i, end);
-
-                for (Trip trip : batch) {
-                    try {
-                        BigDecimal distance = calculateTripDistanceWithRetry(trip);
-                        
-                        if (distance != null && distance.compareTo(BigDecimal.ZERO) > 0) {
-                            // Success - save the calculated distance
-                            trip.setCalculatedDistanceKm(distance);
-                            trip.setActualDistanceKm(distance);
-                            trip.setDistanceCalculated(true);
-                            trip.setDistanceCalculatedAt(LocalDateTime.now());
-                            trip.setDistanceCalculationError(null);
-                            succeeded.incrementAndGet();
-                            log.info("✅ Trip {} distance calculated: {} km", trip.getId(), distance);
-                        } else {
-                            // Failed - set to 0 with error
-                            trip.setCalculatedDistanceKm(BigDecimal.ZERO);
-                            trip.setActualDistanceKm(BigDecimal.ZERO);
-                            trip.setDistanceCalculated(false);
-                            trip.setDistanceCalculationError("Failed to calculate distance");
-                            trip.setDistanceCalculatedAt(LocalDateTime.now());
+            BatchProgress progress = new BatchProgress(jobId);
+            progressMap.put(jobId, progress);
+        
+            try {
+                // Get all trips that need distance calculation
+                List<Trip> trips = tripRepository.findByCalculatedDistanceKmIsNullOrZero();
+                
+                if (trips.isEmpty()) {
+                    log.info("✅ No trips need distance calculation");
+                    progress.setCompleted(true);
+                    progress.setTotalTrips(0);
+                    progress.setMessage("No trips need distance calculation");
+                    return;
+                }
+        
+                progress.setTotalTrips(trips.size());
+                log.info("📊 Found {} trips needing distance calculation", trips.size());
+        
+                List<Trip> processedTrips = new ArrayList<>();
+                AtomicInteger succeeded = new AtomicInteger(0);
+                AtomicInteger failed = new AtomicInteger(0);
+        
+                // Process in batches
+                for (int i = 0; i < trips.size(); i += BATCH_SIZE) {
+                    int end = Math.min(i + BATCH_SIZE, trips.size());
+                    List<Trip> batch = trips.subList(i, end);
+        
+                    for (Trip trip : batch) {
+                        try {
+                            BigDecimal distance = calculateTripDistanceWithRetry(trip);
+                            
+                            if (distance != null && distance.compareTo(BigDecimal.ZERO) > 0) {
+                                trip.setCalculatedDistanceKm(distance);
+                                trip.setActualDistanceKm(distance);
+                                trip.setDistanceCalculated(true);
+                                trip.setDistanceCalculatedAt(LocalDateTime.now());
+                                trip.setDistanceCalculationError(null);
+                                succeeded.incrementAndGet();
+                                log.info("✅ Trip {} distance calculated: {} km", trip.getId(), distance);
+                            } else {
+                                trip.setCalculatedDistanceKm(BigDecimal.ZERO);
+                                trip.setActualDistanceKm(BigDecimal.ZERO);
+                                trip.setDistanceCalculated(false);
+                                trip.setDistanceCalculationError("Failed to calculate distance");
+                                trip.setDistanceCalculatedAt(LocalDateTime.now());
+                                failed.incrementAndGet();
+                                log.warn("⚠️ Trip {} distance calculation failed", trip.getId());
+                            }
+                            
+                            tripRepository.save(trip);
+                            processedTrips.add(trip);
+                            
+                            progress.setProcessed(processedTrips.size());
+                            progress.setSucceeded(succeeded.get());
+                            progress.setFailed(failed.get());
+        
+                        } catch (Exception e) {
+                            log.error("❌ Error processing trip {}: {}", trip.getId(), e.getMessage());
                             failed.incrementAndGet();
-                            log.warn("⚠️ Trip {} distance calculation failed", trip.getId());
+                            updateTripErrorStatus(trip.getId(), e.getMessage());
                         }
-                        
-                        tripRepository.save(trip);
-                        processedTrips.add(trip);
-                        
-                        // Update progress
-                        progress.setProcessed(processedTrips.size());
-                        progress.setSucceeded(succeeded.get());
-                        progress.setFailed(failed.get());
-
-                    } catch (Exception e) {
-                        log.error("❌ Error processing trip {}: {}", trip.getId(), e.getMessage());
-                        failed.incrementAndGet();
-                        updateTripErrorStatus(trip.getId(), e.getMessage());
+                    }
+        
+                    if (i + BATCH_SIZE < trips.size()) {
+                        Thread.sleep(500);
                     }
                 }
-
-                // Small delay between batches to avoid rate limiting
-                if (i + BATCH_SIZE < trips.size()) {
-                    Thread.sleep(500);
-                }
-            }
-
-            // Update all loads after processing
-            log.info("📦 Updating all load distances...");
-            int loadUpdates = 0;
-            int loadFailures = 0;
-            
-            for (Trip trip : processedTrips) {
-                if (trip.getLoadId() != null && !trip.getLoadId().isEmpty()) {
-                    try {
-                        loadService.updateLoadDistances(trip.getLoadId());
-                        loadUpdates++;
-                    } catch (Exception e) {
-                        log.error("❌ Failed to update load {}: {}", trip.getLoadId(), e.getMessage());
-                        loadFailures++;
+        
+                // Update all loads after processing
+                log.info("📦 Updating all load distances...");
+                for (Trip trip : processedTrips) {
+                    if (trip.getLoadId() != null && !trip.getLoadId().isEmpty()) {
+                        try {
+                            loadService.updateLoadDistances(trip.getLoadId());
+                        } catch (Exception e) {
+                            log.error("❌ Failed to update load {}: {}", trip.getLoadId(), e.getMessage());
+                        }
                     }
                 }
+        
+                progress.setCompleted(true);
+                progress.setMessage(String.format("Completed: %d succeeded, %d failed out of %d trips",
+                        succeeded.get(), failed.get(), trips.size()));
+        
+                log.info("✅ Batch distance recalculation complete. Job ID: {}. Succeeded: {}, Failed: {}",
+                        jobId, succeeded.get(), failed.get());
+        
+            } catch (Exception e) {
+                log.error("❌ Batch distance recalculation failed: {}", e.getMessage(), e);
+                progress.setCompleted(true);
+                progress.setMessage("Failed: " + e.getMessage());
             }
-            
-            log.info("✅ Load updates complete. Updated: {}, Failed: {}", loadUpdates, loadFailures);
-
-            progress.setCompleted(true);
-            progress.setMessage(String.format("Completed: %d succeeded, %d failed out of %d trips. Loads updated: %d",
-                    succeeded.get(), failed.get(), trips.size(), loadUpdates));
-
-            log.info("✅ Batch distance recalculation complete. Job ID: {}. Succeeded: {}, Failed: {}",
-                    jobId, succeeded.get(), failed.get());
-
-            return CompletableFuture.completedFuture(
-                new BatchResult(jobId, trips.size(), succeeded.get(), failed.get(), loadUpdates, loadFailures)
-            );
-
-        } catch (Exception e) {
-            log.error("❌ Batch distance recalculation failed: {}", e.getMessage(), e);
-            progress.setCompleted(true);
-            progress.setMessage("Failed: " + e.getMessage());
-            return CompletableFuture.failedFuture(e);
         }
-    }
 
     // ============================================================
     // HELPER METHODS

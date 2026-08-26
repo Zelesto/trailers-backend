@@ -89,6 +89,13 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
         Pageable pageable
     );
 
+    /**
+     * Find trips that need distance calculation with vehicle eagerly loaded
+     */
+    @Query("SELECT t FROM Trip t JOIN FETCH t.vehicle WHERE t.calculatedDistanceKm IS NULL OR t.calculatedDistanceKm = 0")
+    List<Trip> findByCalculatedDistanceKmIsNullOrZeroWithVehicle();
+    
+
 
     // Alternative: Limit to 1 result
     @Query("SELECT t FROM Trip t JOIN FETCH t.vehicle WHERE t.vehicle.id = :vehicleId AND t.status IN :statuses ORDER BY t.updatedAt DESC LIMIT 1")

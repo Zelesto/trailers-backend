@@ -1,3 +1,5 @@
+// src/main/java/com/pgsa/trailers/service/AnalyticsService.java
+
 package com.pgsa.trailers.service;
 
 import com.pgsa.trailers.dto.DriverKpiDTO;
@@ -14,8 +16,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,7 +30,9 @@ public class AnalyticsService {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 
-    // ==================== VEHICLE KPIs ====================
+    // ============================================================
+    // VEHICLE KPIs
+    // ============================================================
 
     public List<VehicleKpiDTO> getVehicleKpis(LocalDate startDate, LocalDate endDate) {
         try {
@@ -59,7 +62,6 @@ public class AnalyticsService {
             BigDecimal kmPerLiter = toBigDecimal(row[4]);
             BigDecimal costPerKm = toBigDecimal(row[5]);
             
-            // Use the 6-parameter constructor (record has 6 fields)
             return new VehicleKpiDTO(
                 registration,
                 totalKm,
@@ -75,7 +77,9 @@ public class AnalyticsService {
         }
     }
 
-    // ==================== DRIVER KPIs ====================
+    // ============================================================
+    // DRIVER KPIs
+    // ============================================================
 
     public List<DriverKpiDTO> getDriverKpis(LocalDate startDate, LocalDate endDate) {
         try {
@@ -124,7 +128,9 @@ public class AnalyticsService {
         }
     }
 
-    // ==================== TRIP KPIs ====================
+    // ============================================================
+    // TRIP KPIs
+    // ============================================================
 
     public List<TripKpiDTO> getTripKpis(LocalDate startDate, LocalDate endDate) {
         try {
@@ -181,21 +187,276 @@ public class AnalyticsService {
         }
     }
 
-    // ==================== DASHBOARD SUMMARY ====================
+    // ============================================================
+    // DASHBOARD SUMMARY - ENHANCED
+    // ============================================================
 
     public DashboardSummary getDashboardSummary(LocalDate startDate, LocalDate endDate) {
         log.info("📊 Building dashboard summary from {} to {}", startDate, endDate);
         
         List<VehicleKpiDTO> vehicleKpis = getVehicleKpis(startDate, endDate);
         List<DriverKpiDTO> driverKpis = getDriverKpis(startDate, endDate);
+        List<TripKpiDTO> tripKpis = getTripKpis(startDate, endDate);
         
-        log.info("✅ Dashboard summary: {} vehicles, {} drivers", 
-                vehicleKpis.size(), driverKpis.size());
+        log.info("✅ Dashboard summary: {} vehicles, {} drivers, {} trips", 
+                vehicleKpis.size(), driverKpis.size(), tripKpis.size());
 
-        return new DashboardSummary(vehicleKpis, driverKpis);
+        return new DashboardSummary(vehicleKpis, driverKpis, tripKpis);
     }
 
-    // ==================== HELPER METHODS ====================
+    // ============================================================
+    // VEHICLE STATS - ACTIVE VEHICLES DETAILS
+    // ============================================================
+
+    public Map<String, Object> getVehicleStats(LocalDate startDate, LocalDate endDate) {
+        Map<String, Object> stats = new HashMap<>();
+        
+        // Get all vehicles - you may need to inject VehicleRepository for this
+        // For now, we'll use the KPIs as a proxy
+        List<VehicleKpiDTO> vehicleKpis = getVehicleKpis(startDate, endDate);
+        
+        // Total vehicles
+        int totalVehicles = vehicleKpis.size();
+        
+        // Active vehicles (those with trips in the period)
+        long activeVehicles = vehicleKpis.stream()
+                .filter(v -> v.totalKm().compareTo(BigDecimal.ZERO) > 0)
+                .count();
+        
+        // Vehicles with planned trips
+        long vehiclesWithPlanned = vehicleKpis.stream()
+                .filter(v -> v.totalKm().compareTo(BigDecimal.ZERO) == 0)
+                .count();
+        
+        stats.put("totalVehicles", totalVehicles);
+        stats.put("activeVehicles", activeVehicles);
+        stats.put("vehiclesInTrip", activeVehicles);
+        stats.put("vehiclesNotAvailable", totalVehicles - activeVehicles);
+        stats.put("vehiclesWithPlanned", vehiclesWithPlanned);
+        
+        // Planned and travelled KMs
+        BigDecimal plannedKm = vehicleKpis.stream()
+                .map(VehicleKpiDTO::totalKm)
+                .filter(km -> km != null && km.compareTo(BigDecimal.ZERO) > 0)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        BigDecimal travelledKm = vehicleKpis.stream()
+                .map(VehicleKpiDTO::totalKm)
+                .filter(km -> km != null && km.compareTo(BigDecimal.ZERO) > 0)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        stats.put("plannedKm", plannedKm);
+        stats.put("travelledKm", travelledKm);
+        
+        return stats;
+    }
+
+    // ============================================================
+    // DRIVER STATS - ACTIVE DRIVERS DETAILS
+    // ============================================================
+
+    public Map<String, Object> getDriverStats(LocalDate startDate, LocalDate endDate) {
+        Map<String, Object> stats = new HashMap<>();
+        
+        List<DriverKpiDTO> driverKpis = getDriverKpis(startDate, endDate);
+        
+        int totalDrivers = driverKpis.size();
+        long activeDrivers = driverKpis.stream()
+                .filter(d -> d.tripsCompleted() > 0)
+                .count();
+        long driversWithPlanned = driverKpis.stream()
+                .filter(d -> d.tripsCompleted() == 0)
+                .count();
+        
+        stats.put("totalDrivers", totalDrivers);
+        stats.put("activeDrivers", activeDrivers);
+        stats.put("driversInTrip", activeDrivers);
+        stats.put("driversNotAvailable", totalDrivers - activeDrivers);
+        stats.put("driversWithPlanned", driversWithPlanned);
+        
+        // Trip count per driver
+        Map<String, Integer> tripCountByDriver = driverKpis.stream()
+                .collect(Collectors.toMap(
+                        DriverKpiDTO::driver,
+                        DriverKpiDTO::tripsCompleted,
+                        (a, b) -> a
+                ));
+        stats.put("tripCountByDriver", tripCountByDriver);
+        
+        // Total trips
+        int totalTrips = driverKpis.stream()
+                .mapToInt(DriverKpiDTO::tripsCompleted)
+                .sum();
+        stats.put("totalTrips", totalTrips);
+        
+        return stats;
+    }
+
+    // ============================================================
+    // FUEL EFFICIENCY STATS
+    // ============================================================
+
+    public Map<String, Object> getFuelStats(LocalDate startDate, LocalDate endDate) {
+        Map<String, Object> stats = new HashMap<>();
+        
+        List<VehicleKpiDTO> vehicleKpis = getVehicleKpis(startDate, endDate);
+        List<DriverKpiDTO> driverKpis = getDriverKpis(startDate, endDate);
+        
+        // Total KM and Fuel
+        BigDecimal totalKm = vehicleKpis.stream()
+                .map(VehicleKpiDTO::totalKm)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        BigDecimal totalFuel = vehicleKpis.stream()
+                .map(VehicleKpiDTO::fuelLiters)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        BigDecimal totalFuelCost = vehicleKpis.stream()
+                .map(VehicleKpiDTO::fuelCost)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        // Average efficiency (km/L)
+        BigDecimal avgEfficiency = BigDecimal.ZERO;
+        if (totalFuel.compareTo(BigDecimal.ZERO) > 0 && totalKm.compareTo(BigDecimal.ZERO) > 0) {
+            avgEfficiency = totalKm.divide(totalFuel, 2, RoundingMode.HALF_UP);
+        }
+        
+        // Average cost per km
+        BigDecimal avgCostPerKm = BigDecimal.ZERO;
+        if (totalKm.compareTo(BigDecimal.ZERO) > 0 && totalFuelCost.compareTo(BigDecimal.ZERO) > 0) {
+            avgCostPerKm = totalFuelCost.divide(totalKm, 2, RoundingMode.HALF_UP);
+        }
+        
+        // Per vehicle efficiency
+        Map<String, BigDecimal> vehicleEfficiency = vehicleKpis.stream()
+                .filter(v -> v.kmPerLiter() != null && v.kmPerLiter().compareTo(BigDecimal.ZERO) > 0)
+                .collect(Collectors.toMap(
+                        VehicleKpiDTO::registrationNumber,
+                        VehicleKpiDTO::kmPerLiter,
+                        (a, b) -> a
+                ));
+        
+        // Per driver efficiency
+        Map<String, BigDecimal> driverEfficiency = driverKpis.stream()
+                .filter(d -> d.efficiencyScore() != null && d.efficiencyScore().compareTo(BigDecimal.ZERO) > 0)
+                .collect(Collectors.toMap(
+                        DriverKpiDTO::driver,
+                        DriverKpiDTO::efficiencyScore,
+                        (a, b) -> a
+                ));
+        
+        // Per driver cost per km
+        Map<String, BigDecimal> driverCostPerKm = driverKpis.stream()
+                .filter(d -> d.getCostPerKm() != null && d.getCostPerKm().compareTo(BigDecimal.ZERO) > 0)
+                .collect(Collectors.toMap(
+                        DriverKpiDTO::driver,
+                        DriverKpiDTO::getCostPerKm,
+                        (a, b) -> a
+                ));
+        
+        stats.put("totalKm", totalKm);
+        stats.put("totalFuel", totalFuel);
+        stats.put("totalFuelCost", totalFuelCost);
+        stats.put("avgEfficiency", avgEfficiency);
+        stats.put("avgCostPerKm", avgCostPerKm);
+        stats.put("vehicleEfficiency", vehicleEfficiency);
+        stats.put("driverEfficiency", driverEfficiency);
+        stats.put("driverCostPerKm", driverCostPerKm);
+        stats.put("tripsWithFuelData", vehicleKpis.stream()
+                .filter(v -> v.fuelLiters() != null && v.fuelLiters().compareTo(BigDecimal.ZERO) > 0)
+                .count());
+        
+        return stats;
+    }
+
+    // ============================================================
+    // DISTANCE STATS
+    // ============================================================
+
+    public Map<String, Object> getDistanceStats(LocalDate startDate, LocalDate endDate) {
+        Map<String, Object> stats = new HashMap<>();
+        
+        List<VehicleKpiDTO> vehicleKpis = getVehicleKpis(startDate, endDate);
+        List<TripKpiDTO> tripKpis = getTripKpis(startDate, endDate);
+        
+        // Total KM travelled
+        BigDecimal totalKm = vehicleKpis.stream()
+                .map(VehicleKpiDTO::totalKm)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        // Total trips
+        int totalTrips = tripKpis.size();
+        long completedTrips = tripKpis.stream()
+                .filter(t -> "COMPLETED".equals(t.status()) || "FINALIZED".equals(t.status()))
+                .count();
+        
+        // Average km per trip
+        BigDecimal avgKmPerTrip = BigDecimal.ZERO;
+        if (totalTrips > 0) {
+            avgKmPerTrip = totalKm.divide(BigDecimal.valueOf(totalTrips), 2, RoundingMode.HALF_UP);
+        }
+        
+        stats.put("totalKm", totalKm);
+        stats.put("totalTrips", totalTrips);
+        stats.put("completedTrips", completedTrips);
+        stats.put("avgKmPerTrip", avgKmPerTrip);
+        
+        return stats;
+    }
+
+    // ============================================================
+    // TOP PERFORMING DRIVERS
+    // ============================================================
+
+    public List<Map<String, Object>> getTopDrivers(LocalDate startDate, LocalDate endDate, int limit) {
+        List<DriverKpiDTO> driverKpis = getDriverKpis(startDate, endDate);
+        
+        return driverKpis.stream()
+                .filter(d -> d.tripsCompleted() > 0)
+                .map(d -> {
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("name", d.driver());
+                    map.put("tripsCompleted", d.tripsCompleted());
+                    map.put("efficiency", d.efficiencyScore());
+                    map.put("costPerKm", d.getCostPerKm());
+                    map.put("rating", calculateRating(d));
+                    map.put("profit", d.profit());
+                    map.put("totalKm", d.totalKm());
+                    return map;
+                })
+                .sorted((a, b) -> {
+                    // Sort by rating descending
+                    Double ratingA = (Double) a.get("rating");
+                    Double ratingB = (Double) b.get("rating");
+                    return ratingB.compareTo(ratingA);
+                })
+                .limit(limit)
+                .collect(Collectors.toList());
+    }
+
+    private double calculateRating(DriverKpiDTO d) {
+        double rating = 3.0; // Base
+        
+        // Efficiency factor (0-1.5 points)
+        if (d.efficiencyScore() != null && d.efficiencyScore().compareTo(BigDecimal.ZERO) > 0) {
+            double eff = d.efficiencyScore().doubleValue();
+            rating += Math.min(eff / 10.0, 1.5);
+        }
+        
+        // Trip count factor (0-0.5 points)
+        rating += Math.min(d.tripsCompleted() / 20.0, 0.5);
+        
+        // Profit factor (0-0.5 points)
+        if (d.profit() != null && d.profit().compareTo(BigDecimal.ZERO) > 0) {
+            rating += Math.min(d.profit().doubleValue() / 10000.0, 0.5);
+        }
+        
+        return Math.min(rating, 5.0);
+    }
+
+    // ============================================================
+    // HELPER METHODS
+    // ============================================================
 
     private BigDecimal toBigDecimal(Object value) {
         if (value == null) return BigDecimal.ZERO;
@@ -249,13 +510,16 @@ public class AnalyticsService {
         return LocalDate.now();
     }
 
-    // ==================== DASHBOARD SUMMARY MODEL ====================
+    // ============================================================
+    // DASHBOARD SUMMARY MODEL
+    // ============================================================
 
     @lombok.Getter
     @lombok.RequiredArgsConstructor
     public static class DashboardSummary {
         private final List<VehicleKpiDTO> vehicleKpis;
         private final List<DriverKpiDTO> driverKpis;
+        private final List<TripKpiDTO> tripKpis;
 
         public long getActiveVehicles() {
             return vehicleKpis != null ? vehicleKpis.size() : 0L;
@@ -291,6 +555,30 @@ public class AnalyticsService {
 
         public BigDecimal getAvgDriverEfficiency() {
             return calculateAverage(driverKpis, DriverKpiDTO::efficiencyScore);
+        }
+
+        public int getTotalTrips() {
+            return tripKpis != null ? tripKpis.size() : 0;
+        }
+
+        public long getCompletedTrips() {
+            if (tripKpis == null) return 0;
+            return tripKpis.stream()
+                    .filter(t -> "COMPLETED".equals(t.status()) || "FINALIZED".equals(t.status()))
+                    .count();
+        }
+
+        public BigDecimal getAvgCostPerKm() {
+            BigDecimal totalKm = getTotalKm();
+            BigDecimal totalCost = getTotalDriverCost();
+            if (totalKm.compareTo(BigDecimal.ZERO) > 0 && totalCost.compareTo(BigDecimal.ZERO) > 0) {
+                return totalCost.divide(totalKm, 2, RoundingMode.HALF_UP);
+            }
+            return BigDecimal.ZERO;
+        }
+
+        public BigDecimal getTotalDriverCost() {
+            return sumValues(driverKpis, DriverKpiDTO::totalCost);
         }
 
         private <T> BigDecimal sumValues(List<T> items, java.util.function.Function<T, BigDecimal> extractor) {

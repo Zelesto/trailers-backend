@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/distance")
@@ -27,18 +27,13 @@ public class BatchDistanceController {
         log.info("📡 Manual trigger: Recalculating all trip distances");
         
         try {
-            // ✅ Start the job asynchronously WITHOUT blocking
-            CompletableFuture<BatchDistanceService.BatchResult> future = batchDistanceService.recalculateAllTripDistances();
+            // Generate a job ID immediately
+            String jobId = UUID.randomUUID().toString();
             
-            // Get the job ID without waiting for completion
-            // We need to get the jobId from the progress map
-            // The jobId is generated in the service, so we need to get it differently
+            // ✅ Start the job asynchronously - don't wait
+            batchDistanceService.recalculateAllTripDistancesAsync(jobId);
             
-            // Return immediately with a job ID
-            // The job is running in the background
-            String jobId = "batch-" + System.currentTimeMillis();
-            
-            // ✅ Return immediately - don't wait for completion
+            // Return immediately with the job ID
             return ResponseEntity.ok(Map.of(
                     "success", true,
                     "message", "Batch distance recalculation started",
@@ -58,7 +53,6 @@ public class BatchDistanceController {
     public ResponseEntity<Map<String, Object>> getProgress(@PathVariable String jobId) {
         BatchProgress progress = batchDistanceService.getProgress(jobId);
         if (progress == null) {
-            // Return a default response for non-existent job
             return ResponseEntity.ok(Map.of(
                     "jobId", jobId,
                     "totalTrips", 0,
@@ -67,7 +61,7 @@ public class BatchDistanceController {
                     "failed", 0,
                     "completed", false,
                     "percentage", 0,
-                    "message", "Job not found or not yet started"
+                    "message", "Job not found"
             ));
         }
         

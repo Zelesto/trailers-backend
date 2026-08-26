@@ -3,13 +3,11 @@ package com.pgsa.trailers.controller;
 
 import com.pgsa.trailers.service.BatchDistanceService;
 import com.pgsa.trailers.service.BatchProgress;
-import com.pgsa.trailers.service.BatchResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 

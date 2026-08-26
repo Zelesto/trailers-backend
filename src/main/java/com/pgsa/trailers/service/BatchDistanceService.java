@@ -58,10 +58,11 @@ public class BatchDistanceService {
         
         BatchProgress progress = new BatchProgress(jobId);
         progressMap.put(jobId, progress);
-
+    
         try {
             // Step 1: Get all trips that need distance calculation
-            List<Trip> trips = tripRepository.findByCalculatedDistanceKmIsNullOrZero();
+            // Use a query that fetches vehicle eagerly
+            List<Trip> trips = tripRepository.findByCalculatedDistanceKmIsNullOrZeroWithVehicle();
             
             if (trips.isEmpty()) {
                 log.info("✅ No trips need distance calculation");
@@ -70,22 +71,22 @@ public class BatchDistanceService {
                 progress.setMessage("No trips need distance calculation");
                 return CompletableFuture.completedFuture(null);
             }
-
+    
             progress.setTotalTrips(trips.size());
             log.info("📊 Found {} trips needing distance calculation", trips.size());
-
+    
             List<Trip> processedTrips = new ArrayList<>();
             AtomicInteger succeeded = new AtomicInteger(0);
             AtomicInteger failed = new AtomicInteger(0);
-
+    
             // Step 2: Process trips in batches
             for (int i = 0; i < trips.size(); i += BATCH_SIZE) {
                 int end = Math.min(i + BATCH_SIZE, trips.size());
                 List<Trip> batch = trips.subList(i, end);
-
+    
                 for (Trip trip : batch) {
                     try {
-                        // Process each trip in its own transaction
+                        // The vehicle is already loaded, so no lazy loading issue
                         self.processSingleTrip(trip);
                         succeeded.incrementAndGet();
                         processedTrips.add(trip);
@@ -100,7 +101,7 @@ public class BatchDistanceService {
                     progress.setSucceeded(succeeded.get());
                     progress.setFailed(failed.get());
                 }
-
+    
                 if (i + BATCH_SIZE < trips.size()) {
                     Thread.sleep(500);
                 }

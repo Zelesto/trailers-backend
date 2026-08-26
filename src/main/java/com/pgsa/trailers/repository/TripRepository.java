@@ -169,6 +169,20 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     Trip findTopByVehicleIdAndStatusInOrderByActualEndDateDesc(@Param("vehicleId") Long vehicleId, 
                                                                 @Param("statuses") List<String> statuses);
 
+
+    /**
+     * Find the latest completed or finalized trip for a vehicle using native query
+     * This avoids Hibernate lazy loading issues
+     */
+    @Query(value = """
+        SELECT * FROM trip 
+        WHERE vehicle_id = :vehicleId 
+        AND status IN ('COMPLETED', 'FINALIZED') 
+        ORDER BY updated_at DESC 
+        LIMIT 1
+    """, nativeQuery = true)
+    Trip findLatestCompletedTripByVehicleIdNative(@Param("vehicleId") Long vehicleId);
+
     /**
      * Find the latest completed or finalized trip for a vehicle using updatedAt
      * This is the recommended approach - no new columns needed

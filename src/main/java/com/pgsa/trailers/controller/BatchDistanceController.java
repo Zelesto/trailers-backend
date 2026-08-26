@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -47,20 +48,22 @@ public class BatchDistanceController {
             return ResponseEntity.notFound().build();
         }
         
-        return ResponseEntity.ok(Map.of(
-                "jobId", progress.getJobId(),
-                "totalTrips", progress.getTotalTrips(),
-                "processed", progress.getProcessed(),
-                "succeeded", progress.getSucceeded(),
-                "failed", progress.getFailed(),
-                "completed", progress.isCompleted(),
-                "percentage", progress.getProgressPercentage(),
-                "formattedProgress", progress.getFormattedProgress(),
-                "durationSeconds", progress.getDurationSeconds(),
-                "formattedDuration", progress.getFormattedDuration(),
-                "statusSummary", progress.getStatusSummary(),
-                "message", progress.getMessage()
-        ));
+        // ✅ Use HashMap to avoid Map.of() 10-key limit
+        Map<String, Object> response = new HashMap<>();
+        response.put("jobId", progress.getJobId());
+        response.put("totalTrips", progress.getTotalTrips());
+        response.put("processed", progress.getProcessed());
+        response.put("succeeded", progress.getSucceeded());
+        response.put("failed", progress.getFailed());
+        response.put("completed", progress.isCompleted());
+        response.put("percentage", progress.getProgressPercentage());
+        response.put("formattedProgress", progress.getFormattedProgress());
+        response.put("durationSeconds", progress.getDurationSeconds());
+        response.put("formattedDuration", progress.getFormattedDuration());
+        response.put("statusSummary", progress.getStatusSummary());
+        response.put("message", progress.getMessage());
+        
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/progress/all")

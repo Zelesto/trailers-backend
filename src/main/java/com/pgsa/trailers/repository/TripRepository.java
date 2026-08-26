@@ -88,6 +88,14 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
         @Param("statuses") List<String> statuses,
         Pageable pageable
     );
+
+
+    // Alternative: Limit to 1 result
+    @Query("SELECT t FROM Trip t JOIN FETCH t.vehicle WHERE t.vehicle.id = :vehicleId AND t.status IN :statuses ORDER BY t.updatedAt DESC LIMIT 1")
+    Trip findLatestTripByVehicleIdAndStatus(
+        @Param("vehicleId") Long vehicleId, 
+        @Param("statuses") List<String> statuses
+    );
     
     /**
      * Find trips by driver ID with pagination (native query)

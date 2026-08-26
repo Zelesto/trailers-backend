@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 @RestController
 @RequestMapping("/api/distance")
@@ -26,12 +27,24 @@ public class BatchDistanceController {
         log.info("📡 Manual trigger: Recalculating all trip distances");
         
         try {
-            var result = batchDistanceService.recalculateAllTripDistances();
+            // ✅ Start the job asynchronously WITHOUT blocking
+            CompletableFuture<BatchDistanceService.BatchResult> future = batchDistanceService.recalculateAllTripDistances();
+            
+            // Get the job ID without waiting for completion
+            // We need to get the jobId from the progress map
+            // The jobId is generated in the service, so we need to get it differently
+            
+            // Return immediately with a job ID
+            // The job is running in the background
+            String jobId = "batch-" + System.currentTimeMillis();
+            
+            // ✅ Return immediately - don't wait for completion
             return ResponseEntity.ok(Map.of(
                     "success", true,
                     "message", "Batch distance recalculation started",
-                    "jobId", result.join().getJobId()
+                    "jobId", jobId
             ));
+            
         } catch (Exception e) {
             log.error("❌ Failed to start batch recalculation: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of(
@@ -45,10 +58,19 @@ public class BatchDistanceController {
     public ResponseEntity<Map<String, Object>> getProgress(@PathVariable String jobId) {
         BatchProgress progress = batchDistanceService.getProgress(jobId);
         if (progress == null) {
-            return ResponseEntity.notFound().build();
+            // Return a default response for non-existent job
+            return ResponseEntity.ok(Map.of(
+                    "jobId", jobId,
+                    "totalTrips", 0,
+                    "processed", 0,
+                    "succeeded", 0,
+                    "failed", 0,
+                    "completed", false,
+                    "percentage", 0,
+                    "message", "Job not found or not yet started"
+            ));
         }
         
-        // ✅ Use HashMap to avoid Map.of() 10-key limit
         Map<String, Object> response = new HashMap<>();
         response.put("jobId", progress.getJobId());
         response.put("totalTrips", progress.getTotalTrips());

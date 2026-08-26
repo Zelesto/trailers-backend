@@ -2,11 +2,11 @@
 
 package com.pgsa.trailers.service;
 
-import com.pgsa.trailers.entity.ops.Trip;
+import com.pgsa.trailers.entity.assets.Vehicle;
 import com.pgsa.trailers.entity.ops.Load;
-import com.pgsa.trailers.entity.ops.Vehicle;
-import com.pgsa.trailers.repository.TripRepository;
+import com.pgsa.trailers.entity.ops.Trip;
 import com.pgsa.trailers.repository.LoadRepository;
+import com.pgsa.trailers.repository.TripRepository;
 import com.pgsa.trailers.repository.VehicleRepository;
 import com.pgsa.trailers.service.routing.RoutingEngine;
 import com.pgsa.trailers.service.routing.RoutingResult;
@@ -20,7 +20,6 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -48,9 +47,10 @@ public class BatchDistanceService {
 
     private final ConcurrentHashMap<String, BatchProgress> progressMap = new ConcurrentHashMap<>();
 
-    /**
-     * Start batch recalculation asynchronously
-     */
+    // ============================================================
+    // MAIN BATCH PROCESSING
+    // ============================================================
+
     @Async("taskExecutor")
     public CompletableFuture<Void> recalculateAllTripDistancesAsync(String jobId) {
         log.info("🚀 Starting batch distance recalculation. Job ID: {}, Thread: {}", 
@@ -60,7 +60,7 @@ public class BatchDistanceService {
         progressMap.put(jobId, progress);
 
         try {
-            // Step 1: Process all trips without a transaction
+            // Step 1: Get all trips that need distance calculation
             List<Trip> trips = tripRepository.findByCalculatedDistanceKmIsNullOrZero();
             
             if (trips.isEmpty()) {
@@ -78,7 +78,7 @@ public class BatchDistanceService {
             AtomicInteger succeeded = new AtomicInteger(0);
             AtomicInteger failed = new AtomicInteger(0);
 
-            // Process trips in batches
+            // Step 2: Process trips in batches
             for (int i = 0; i < trips.size(); i += BATCH_SIZE) {
                 int end = Math.min(i + BATCH_SIZE, trips.size());
                 List<Trip> batch = trips.subList(i, end);
@@ -93,7 +93,6 @@ public class BatchDistanceService {
                     } catch (Exception e) {
                         log.error("❌ Error processing trip {}: {}", trip.getId(), e.getMessage());
                         failed.incrementAndGet();
-                        // Update error status in its own transaction
                         self.updateTripError(trip.getId(), e.getMessage());
                     }
                     
@@ -107,7 +106,7 @@ public class BatchDistanceService {
                 }
             }
 
-            // Step 2: After all trips are processed, update ALL loads
+            // Step 3: Update all loads with calculated distances
             log.info("📦 Starting load updates...");
             int loadSuccess = 0;
             int loadFailures = 0;
@@ -133,16 +132,23 @@ public class BatchDistanceService {
                 }
             }
 
-            // Step 3: Update vehicle mileage
+            // Step 4: Update vehicle mileage based on latest trips
             log.info("🚗 Updating vehicle mileage...");
             int vehicleUpdates = 0;
+            Set<Long> processedVehicleIds = new HashSet<>();
+            
             for (Trip trip : processedTrips) {
-                if (trip.getVehicle() != null && trip.getVehicle().getId() != null) {
-                    try {
-                        self.updateVehicleMileage(trip.getVehicle().getId());
-                        vehicleUpdates++;
-                    } catch (Exception e) {
-                        log.error("❌ Failed to update vehicle {}: {}", trip.getVehicle().getId(), e.getMessage());
+                Vehicle vehicle = trip.getVehicle();
+                if (vehicle != null && vehicle.getId() != null) {
+                    Long vehicleId = vehicle.getId();
+                    if (!processedVehicleIds.contains(vehicleId)) {
+                        try {
+                            self.updateVehicleMileage(vehicleId);
+                            processedVehicleIds.add(vehicleId);
+                            vehicleUpdates++;
+                        } catch (Exception e) {
+                            log.error("❌ Failed to update vehicle {}: {}", vehicleId, e.getMessage());
+                        }
                     }
                 }
             }
@@ -165,12 +171,53 @@ public class BatchDistanceService {
         return CompletableFuture.completedFuture(null);
     }
 
-    /**
-     * Process a single trip - each in its own transaction
-     */
+    // ============================================================
+    // SINGLE TRIP PROCESSING (Each in its own transaction)
+    // ============================================================
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void processSingleTrip(Trip trip) {
-        BigDecimal distance = calculateTripDistanceWithRetry(trip);
+        // Build addresses if missing
+        String origin = getOriginAddress(trip);
+        String destination = getDestinationAddress(trip);
+        
+        // If addresses are missing, try to build from components
+        if ((origin == null || origin.isEmpty()) && trip.getOriginLocation() == null) {
+            trip.updateOriginLocationFromComponents();
+        }
+        if ((destination == null || destination.isEmpty()) && trip.getDestinationLocation() == null) {
+            trip.updateDestinationLocationFromComponents();
+        }
+        
+        // Re-get addresses after potential update
+        origin = getOriginAddress(trip);
+        destination = getDestinationAddress(trip);
+
+        if (origin == null || destination == null || origin.isEmpty() || destination.isEmpty()) {
+            log.warn("⚠️ Missing address for Trip {}. Origin: {}, Destination: {}", 
+                trip.getId(), origin, destination);
+            trip.setCalculatedDistanceKm(BigDecimal.ZERO);
+            trip.setActualDistanceKm(BigDecimal.ZERO);
+            trip.setDistanceCalculated(false);
+            trip.setDistanceCalculationError("Missing origin or destination address");
+            trip.setDistanceCalculatedAt(LocalDateTime.now());
+            tripRepository.save(trip);
+            return;
+        }
+
+        if (origin.equalsIgnoreCase(destination)) {
+            log.warn("⚠️ Origin and destination are the same for Trip {}", trip.getId());
+            trip.setCalculatedDistanceKm(BigDecimal.ZERO);
+            trip.setActualDistanceKm(BigDecimal.ZERO);
+            trip.setDistanceCalculated(true);
+            trip.setDistanceCalculationError(null);
+            trip.setDistanceCalculatedAt(LocalDateTime.now());
+            tripRepository.save(trip);
+            return;
+        }
+
+        String vehicleType = trip.getVehicle() != null ? trip.getVehicle().getVehicleType() : "TRUCK";
+        BigDecimal distance = calculateTripDistanceWithRetry(origin, destination, vehicleType, trip.getId());
         
         if (distance != null && distance.compareTo(BigDecimal.ZERO) > 0) {
             trip.setCalculatedDistanceKm(distance);
@@ -183,7 +230,7 @@ public class BatchDistanceService {
             trip.setCalculatedDistanceKm(BigDecimal.ZERO);
             trip.setActualDistanceKm(BigDecimal.ZERO);
             trip.setDistanceCalculated(false);
-            trip.setDistanceCalculationError("Failed to calculate distance");
+            trip.setDistanceCalculationError("Failed to calculate distance after " + MAX_RETRIES + " attempts");
             trip.setDistanceCalculatedAt(LocalDateTime.now());
             log.warn("⚠️ Trip {} distance calculation failed", trip.getId());
         }
@@ -191,9 +238,6 @@ public class BatchDistanceService {
         tripRepository.save(trip);
     }
 
-    /**
-     * Update trip error status - each in its own transaction
-     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void updateTripError(Long tripId, String error) {
         tripRepository.findById(tripId).ifPresent(trip -> {
@@ -204,13 +248,13 @@ public class BatchDistanceService {
         });
     }
 
-    /**
-     * Process a single load - each in its own transaction
-     * Updates load with trip distances and calculates depot to first pickup
-     */
+    // ============================================================
+    // SINGLE LOAD PROCESSING (Each in its own transaction)
+    // ============================================================
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void processSingleLoad(String loadId) {
-        Load load = loadRepository.findById(loadId)
+        Load load = loadRepository.findByLoadNumber(loadId)
                 .orElseThrow(() -> new RuntimeException("Load not found: " + loadId));
         
         // Get all trips for this load
@@ -218,12 +262,16 @@ public class BatchDistanceService {
         
         if (trips.isEmpty()) {
             log.warn("No trips found for load {}", loadId);
+            // Mark load as having no trips but still calculated
+            load.setDistanceCalculated(true);
+            load.setDistanceCalculatedAt(LocalDateTime.now());
+            loadRepository.save(load);
             return;
         }
         
-        // Calculate total distance from all trips
+        // Calculate total distance from all trips that have been calculated
         BigDecimal totalTripDistance = trips.stream()
-                .filter(Trip::isDistanceCalculated)
+                .filter(t -> t.getDistanceCalculated() != null && t.getDistanceCalculated())
                 .map(Trip::getCalculatedDistanceKm)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -234,38 +282,64 @@ public class BatchDistanceService {
         // Total load distance = depot to pickup + all trip distances
         BigDecimal totalLoadDistance = depotToPickupDistance.add(totalTripDistance);
         
-        // Update load
-        load.setTotalDistanceKm(totalLoadDistance);
-        load.setTripDistanceKm(totalTripDistance);
-        load.setDepotToPickupDistanceKm(depotToPickupDistance);
+        // Calculate individual trip distances for the load
+        BigDecimal tripCalculated = trips.stream()
+                .filter(t -> t.getDistanceCalculated() != null && t.getDistanceCalculated())
+                .map(Trip::getCalculatedDistanceKm)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        BigDecimal tripActual = trips.stream()
+                .map(Trip::getActualDistanceKm)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        // Update load with all distance fields
+        load.setTotalCalculatedDistanceKm(totalLoadDistance);
+        load.setTotalActualDistanceKm(tripActual);
+        load.setTotalCalculatedDistance(totalLoadDistance);
+        load.setTotalActualDistance(tripActual);
+        load.setTotalEstimatedDistance(tripCalculated);
         load.setDistanceCalculated(true);
         load.setDistanceCalculatedAt(LocalDateTime.now());
+        
+        // Also update total distance field if it exists
+        load.setTotalDistanceKm(totalLoadDistance.intValue());
         
         loadRepository.save(load);
         log.info("✅ Load {} updated: total={} km, trips={} km, depotToPickup={} km", 
                  loadId, totalLoadDistance, totalTripDistance, depotToPickupDistance);
     }
 
-    /**
-     * Calculate distance from depot to first pickup point
-     */
+    // ============================================================
+    // DEPOT TO PICKUP DISTANCE CALCULATION
+    // ============================================================
+
     private BigDecimal calculateDepotToPickupDistance(Load load, List<Trip> trips) {
-        // Get depot location
-        String depotAddress = load.getDepotLocation() != null ? load.getDepotLocation() : null;
+        // Get depot location from load's origin
+        String depotAddress = load.getOriginLocation();
         if (depotAddress == null || depotAddress.isEmpty()) {
-            log.warn("No depot location for load {}", load.getId());
+            log.warn("No depot location (origin) for load {}", load.getId());
             return BigDecimal.ZERO;
         }
         
-        // Find the first pickup trip
+        // Find the first pickup trip (stop sequence 1) or first trip
         Trip firstTrip = trips.stream()
                 .filter(t -> t.getStopSequence() != null && t.getStopSequence() == 1)
                 .findFirst()
-                .orElse(trips.get(0)); // Fallback to first trip
+                .orElse(trips.stream()
+                        .filter(t -> t.getIsFromDepot() != null && t.getIsFromDepot())
+                        .findFirst()
+                        .orElse(trips.get(0)));
         
         String pickupAddress = getOriginAddress(firstTrip);
         if (pickupAddress == null || pickupAddress.isEmpty()) {
             log.warn("No pickup address for trip {}", firstTrip.getId());
+            return BigDecimal.ZERO;
+        }
+        
+        // If depot and pickup are the same, return 0
+        if (depotAddress.equalsIgnoreCase(pickupAddress)) {
             return BigDecimal.ZERO;
         }
         
@@ -285,26 +359,37 @@ public class BatchDistanceService {
         return BigDecimal.ZERO;
     }
 
-    /**
-     * Update vehicle mileage based on latest completed trip
-     */
+    // ============================================================
+    // VEHICLE MILEAGE UPDATE
+    // ============================================================
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void updateVehicleMileage(Long vehicleId) {
-        Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new RuntimeException("Vehicle not found: " + vehicleId));
+        Optional<Vehicle> vehicleOpt = vehicleRepository.findById(vehicleId);
+        if (vehicleOpt.isEmpty()) {
+            log.warn("Vehicle not found: {}", vehicleId);
+            return;
+        }
         
-        // Find the latest completed trip for this vehicle
-        Trip latestTrip = tripRepository.findTopByVehicleIdAndStatusOrderByEndDateDesc(
-                vehicleId, "COMPLETED");
+        Vehicle vehicle = vehicleOpt.get();
+        
+        // Find the latest completed/finalized trip for this vehicle
+        Trip latestTrip = tripRepository.findTopByVehicleIdAndStatusInOrderByActualEndDateDesc(
+                vehicleId, 
+                List.of("COMPLETED", "FINALIZED")
+        );
         
         if (latestTrip != null && latestTrip.getActualDistanceKm() != null) {
+            // Get current mileage from vehicle
+            BigDecimal currentMileage = vehicle.getCurrentMileage() != null ? 
+                    vehicle.getCurrentMileage() : BigDecimal.ZERO;
+            
             // Calculate new total mileage
-            BigDecimal currentMileage = vehicle.getMileage() != null ? vehicle.getMileage() : BigDecimal.ZERO;
             BigDecimal newMileage = currentMileage.add(latestTrip.getActualDistanceKm());
             
-            vehicle.setMileage(newMileage);
-            vehicle.setLastMileageUpdate(LocalDateTime.now());
-            vehicle.setLastTripId(latestTrip.getId());
+            vehicle.setCurrentMileage(newMileage);
+            vehicle.setCurrentOdometer(newMileage);
+            vehicle.setLastFuelUpdate(LocalDateTime.now());
             
             vehicleRepository.save(vehicle);
             log.info("🚗 Vehicle {} mileage updated: {} -> {} km (trip {})", 
@@ -314,29 +399,15 @@ public class BatchDistanceService {
         }
     }
 
-    /**
-     * Calculate distance for a single trip with retry logic
-     */
-    private BigDecimal calculateTripDistanceWithRetry(Trip trip) {
-        String origin = getOriginAddress(trip);
-        String destination = getDestinationAddress(trip);
+    // ============================================================
+    // DISTANCE CALCULATION WITH RETRY
+    // ============================================================
 
-        if (origin == null || destination == null || origin.isEmpty() || destination.isEmpty()) {
-            log.warn("⚠️ Missing address for Trip {}. Origin: {}, Destination: {}", 
-                trip.getId(), origin, destination);
-            return BigDecimal.ZERO;
-        }
-
-        if (origin.equalsIgnoreCase(destination)) {
-            log.warn("⚠️ Origin and destination are the same for Trip {}", trip.getId());
-            return BigDecimal.ZERO;
-        }
-
-        String vehicleType = trip.getVehicle() != null ? trip.getVehicle().getVehicleType() : "TRUCK";
-
+    private BigDecimal calculateTripDistanceWithRetry(String origin, String destination, 
+                                                       String vehicleType, Long tripId) {
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
-                log.debug("🔄 Attempt {}/{} for Trip {}", attempt, MAX_RETRIES, trip.getId());
+                log.debug("🔄 Attempt {}/{} for Trip {}", attempt, MAX_RETRIES, tripId);
                 
                 RoutingResult result = routingEngine.calculateRoute(origin, destination, vehicleType);
                 
@@ -353,62 +424,43 @@ public class BatchDistanceService {
                 Thread.currentThread().interrupt();
                 break;
             } catch (Exception e) {
-                log.warn("⚠️ Attempt {} failed for Trip {}: {}", attempt, trip.getId(), e.getMessage());
+                log.warn("⚠️ Attempt {} failed for Trip {}: {}", attempt, tripId, e.getMessage());
                 if (attempt == MAX_RETRIES) {
-                    log.error("❌ All attempts failed for Trip {}", trip.getId());
+                    log.error("❌ All attempts failed for Trip {}", tripId);
                 }
             }
         }
         return null;
     }
 
-    /**
-     * Get origin address from trip (handles nulls)
-     */
+    // ============================================================
+    // ADDRESS HELPER METHODS
+    // ============================================================
+
     private String getOriginAddress(Trip trip) {
+        // First try originLocation
         if (trip.getOriginLocation() != null && !trip.getOriginLocation().isEmpty()) {
             return trip.getOriginLocation();
         }
-        StringBuilder sb = new StringBuilder();
-        if (trip.getOriginStreetAddress() != null && !trip.getOriginStreetAddress().isEmpty()) {
-            sb.append(trip.getOriginStreetAddress()).append(", ");
-        }
-        if (trip.getOriginCity() != null && !trip.getOriginCity().isEmpty()) {
-            sb.append(trip.getOriginCity());
-        }
-        if (trip.getOriginProvince() != null && !trip.getOriginProvince().isEmpty()) {
-            sb.append(", ").append(trip.getOriginProvince());
-        }
-        if (trip.getOriginZipCode() != null && !trip.getOriginZipCode().isEmpty()) {
-            sb.append(" ").append(trip.getOriginZipCode());
-        }
-        return sb.length() > 0 ? sb.toString() : null;
+        
+        // Build from components using the entity's method
+        return trip.buildOriginAddress();
     }
 
-    /**
-     * Get destination address from trip (handles nulls)
-     */
     private String getDestinationAddress(Trip trip) {
+        // First try destinationLocation
         if (trip.getDestinationLocation() != null && !trip.getDestinationLocation().isEmpty()) {
             return trip.getDestinationLocation();
         }
-        StringBuilder sb = new StringBuilder();
-        if (trip.getDestinationStreetAddress() != null && !trip.getDestinationStreetAddress().isEmpty()) {
-            sb.append(trip.getDestinationStreetAddress()).append(", ");
-        }
-        if (trip.getDestinationCity() != null && !trip.getDestinationCity().isEmpty()) {
-            sb.append(trip.getDestinationCity());
-        }
-        if (trip.getDestinationProvince() != null && !trip.getDestinationProvince().isEmpty()) {
-            sb.append(", ").append(trip.getDestinationProvince());
-        }
-        if (trip.getDestinationZipCode() != null && !trip.getDestinationZipCode().isEmpty()) {
-            sb.append(" ").append(trip.getDestinationZipCode());
-        }
-        return sb.length() > 0 ? sb.toString() : null;
+        
+        // Build from components using the entity's method
+        return trip.buildDestinationAddress();
     }
 
-    // Progress tracking methods
+    // ============================================================
+    // PROGRESS TRACKING
+    // ============================================================
+
     public BatchProgress getProgress(String jobId) {
         return progressMap.get(jobId);
     }

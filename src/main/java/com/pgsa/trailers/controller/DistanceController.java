@@ -2,7 +2,6 @@
 
 package com.pgsa.trailers.controller;
 
-import com.pgsa.trailers.service.BatchDistanceService;
 import com.pgsa.trailers.service.LoadService;
 import com.pgsa.trailers.service.TripService;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +20,6 @@ public class DistanceController {
 
     private final TripService tripService;
     private final LoadService loadService;
-    private final BatchDistanceService batchDistanceService;
 
     @PostMapping("/trip/{tripId}")
     public ResponseEntity<Map<String, Object>> calculateTripDistance(@PathVariable Long tripId) {
@@ -114,44 +112,5 @@ public class DistanceController {
                     "error", e.getMessage()
             ));
         }
-    }
-
-    @PostMapping("/recalculate-all")
-    public ResponseEntity<Map<String, Object>> recalculateAllDistances() {
-        log.info("📡 Manual trigger: Recalculating all trip distances");
-        
-        try {
-            var result = batchDistanceService.recalculateAllTripDistances();
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "message", "Batch distance recalculation started",
-                    "jobId", result.join().getJobId()
-            ));
-        } catch (Exception e) {
-            log.error("❌ Failed to start batch recalculation: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "error", e.getMessage()
-            ));
-        }
-    }
-
-    @GetMapping("/progress/{jobId}")
-    public ResponseEntity<Map<String, Object>> getProgress(@PathVariable String jobId) {
-        var progress = batchDistanceService.getProgress(jobId);
-        if (progress == null) {
-            return ResponseEntity.notFound().build();
-        }
-        
-        return ResponseEntity.ok(Map.of(
-                "jobId", progress.getJobId(),
-                "totalTrips", progress.getTotalTrips(),
-                "processed", progress.getProcessed(),
-                "succeeded", progress.getSucceeded(),
-                "failed", progress.getFailed(),
-                "completed", progress.isCompleted(),
-                "percentage", progress.getProgressPercentage(),
-                "message", progress.getMessage()
-        ));
     }
 }

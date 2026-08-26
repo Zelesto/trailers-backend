@@ -19,15 +19,94 @@ import java.math.BigDecimal;
 public interface TripRepository extends JpaRepository<Trip, Long> {
 
     // ============================================================
-    // COUNT QUERIES
+    // DISTANCE CALCULATION METHODS
     // ============================================================
 
+    /**
+     * Find all trips that need distance calculation
+     * (calculatedDistanceKm is null or 0)
+     */
+    @Query("SELECT t FROM Trip t WHERE t.calculatedDistanceKm IS NULL OR t.calculatedDistanceKm = 0")
+    List<Trip> findByCalculatedDistanceKmIsNullOrZero();
+    
+    /**
+     * Count trips without distance calculated
+     */
+    @Query("SELECT COUNT(t) FROM Trip t WHERE t.calculatedDistanceKm IS NULL OR t.calculatedDistanceKm = 0")
+    long countTripsWithoutDistance();
+    
+    /**
+     * Count pending distance calculations
+     */
+    @Query("SELECT COUNT(t) FROM Trip t WHERE t.distanceCalculated = false OR t.distanceCalculated IS NULL")
+    long countPendingDistanceCalculations();
+    
+    /**
+     * Find trips with distance not calculated
+     */
+    @Query("SELECT t FROM Trip t WHERE t.distanceCalculated = false OR t.distanceCalculated IS NULL")
+    List<Trip> findByDistanceCalculatedFalseOrDistanceCalculatedIsNull();
+    
+    /**
+     * Find failed distance calculations
+     */
+    @Query("SELECT t FROM Trip t WHERE t.distanceCalculated = false AND t.distanceCalculationError IS NOT NULL")
+    List<Trip> findFailedDistanceCalculations();
+    
+    /**
+     * Mark distance calculation as failed
+     */
+    @Modifying
+    @Query("UPDATE Trip t SET t.distanceCalculated = false, t.distanceCalculationError = :error, t.distanceCalculatedAt = :now WHERE t.id = :tripId")
+    int markDistanceCalculationFailed(@Param("tripId") Long tripId, 
+                                      @Param("error") String error, 
+                                      @Param("now") LocalDateTime now);
 
-    // Find latest completed trip for a vehicle
+    /**
+     * Mark distance calculation as successful
+     */
+    @Modifying
+    @Query("UPDATE Trip t SET t.distanceCalculated = true, t.calculatedDistanceKm = :distance, t.actualDistanceKm = :distance, t.distanceCalculatedAt = :now, t.distanceCalculationError = null WHERE t.id = :tripId")
+    int markDistanceCalculationSuccess(@Param("tripId") Long tripId,
+                                       @Param("distance") BigDecimal distance,
+                                       @Param("now") LocalDateTime now);
+    
+    // ============================================================
+    // TRIP BY LOAD ID - CRITICAL FOR BATCH PROCESSING
+    // ============================================================
+    
+    /**
+     * Find all trips for a specific load
+     */
+    List<Trip> findByLoadId(String loadId);
+    
+    /**
+     * Count trips for a specific load
+     */
+    @Query("SELECT COUNT(t) FROM Trip t WHERE t.loadId = :loadId")
+    long countByLoadId(@Param("loadId") String loadId);
+    
+    // ============================================================
+    // FIND LATEST TRIP BY VEHICLE - CRITICAL FOR MILEAGE UPDATE
+    // ============================================================
+    
+    /**
+     * Find the latest completed or finalized trip for a vehicle
+     * Used for updating vehicle mileage
+     */
     @Query("SELECT t FROM Trip t WHERE t.vehicle.id = :vehicleId AND t.status IN :statuses ORDER BY t.actualEndDate DESC")
     Trip findTopByVehicleIdAndStatusInOrderByActualEndDateDesc(@Param("vehicleId") Long vehicleId, 
                                                                 @Param("statuses") List<String> statuses);
-}
+    
+    /**
+     * Alternative: Find latest trip by vehicle regardless of status
+     */
+    @Query("SELECT t FROM Trip t WHERE t.vehicle.id = :vehicleId AND t.actualEndDate IS NOT NULL ORDER BY t.actualEndDate DESC")
+    Trip findTopByVehicleIdOrderByActualEndDateDesc(@Param("vehicleId") Long vehicleId);
+    
+    // ============================================================
+    // COUNT QUERIES
+    // ============================================================
 
     @Query("SELECT t.status, COUNT(t) FROM Trip t GROUP BY t.status")
     List<Object[]> countByStatusGrouped();
@@ -42,37 +121,6 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     long countByStatusAndDateRange(@Param("status") String status,
                                    @Param("startDate") LocalDateTime startDate,
                                    @Param("endDate") LocalDateTime endDate);
-    
-    // ============================================================
-    // DISTANCE CALCULATION METHODS (KEEP ONLY ONE COPY)
-    // ============================================================
-
-    @Query("SELECT t FROM Trip t WHERE t.calculatedDistanceKm IS NULL OR t.calculatedDistanceKm = 0")
-    List<Trip> findByCalculatedDistanceKmIsNullOrZero();
-    
-    @Query("SELECT COUNT(t) FROM Trip t WHERE t.calculatedDistanceKm IS NULL OR t.calculatedDistanceKm = 0")
-    long countTripsWithoutDistance();
-    
-    @Query("SELECT COUNT(t) FROM Trip t WHERE t.distanceCalculated = false OR t.distanceCalculated IS NULL")
-    long countPendingDistanceCalculations();
-    
-    @Query("SELECT t FROM Trip t WHERE t.distanceCalculated = false OR t.distanceCalculated IS NULL")
-    List<Trip> findByDistanceCalculatedFalseOrDistanceCalculatedIsNull();
-    
-    @Query("SELECT t FROM Trip t WHERE t.distanceCalculated = false AND t.distanceCalculationError IS NOT NULL")
-    List<Trip> findFailedDistanceCalculations();
-    
-    @Modifying
-    @Query("UPDATE Trip t SET t.distanceCalculated = false, t.distanceCalculationError = :error, t.distanceCalculatedAt = :now WHERE t.id = :tripId")
-    int markDistanceCalculationFailed(@Param("tripId") Long tripId, 
-                                      @Param("error") String error, 
-                                      @Param("now") LocalDateTime now);
-
-    @Modifying
-    @Query("UPDATE Trip t SET t.distanceCalculated = true, t.calculatedDistanceKm = :distance, t.actualDistanceKm = :distance, t.distanceCalculatedAt = :now, t.distanceCalculationError = null WHERE t.id = :tripId")
-    int markDistanceCalculationSuccess(@Param("tripId") Long tripId,
-                                       @Param("distance") BigDecimal distance,
-                                       @Param("now") LocalDateTime now);
     
     // ============================================================
     // JOIN FETCH QUERIES
@@ -156,8 +204,6 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     
     List<Trip> findByVehicleIdOrderByIdDesc(Long vehicleId);
     
-    List<Trip> findByLoadId(String loadId);
-    
     List<Trip> findByDriverIdAndVehicleId(Long driverId, Long vehicleId);
     
     List<Trip> findByDriverIdAndStatus(Long driverId, String status);
@@ -200,18 +246,13 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
         @Param("startDate") LocalDateTime startDate,
         @Param("endDate") LocalDateTime endDate);
 
-    List<Trip> findByLoadNumber(String loadNumber);
-
-    Long countByCustomerId(Long customerId);
-
     @Query("SELECT t FROM Trip t WHERE t.loadId IS NULL OR t.loadId = ''")
     List<Trip> findTripsWithoutLoad();
 
     @Query("SELECT t FROM Trip t WHERE t.loadId IS NULL OR t.loadId = ''")
     Page<Trip> findTripsWithoutLoad(Pageable pageable);
 
-    @Query("SELECT COUNT(t) FROM Trip t WHERE t.loadId = :loadId")
-    long countByLoadId(@Param("loadId") String loadId);
+    Long countByCustomerId(Long customerId);
     
     // ============================================================
     // SEARCH QUERIES
@@ -273,23 +314,6 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
                                @Param("customer") String customer,
                                Pageable pageable);
     
-    @Query("SELECT t FROM Trip t WHERE " +
-           "(:searchTerm IS NULL OR " +
-           "LOWER(t.tripNumber) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
-           "LOWER(t.originCity) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
-           "LOWER(t.destinationCity) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
-           "LOWER(t.customer.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
-           "LOWER(t.referenceNumber) LIKE LOWER(CONCAT('%', :searchTerm, '%'))) " +
-           "AND (:status IS NULL OR t.status = :status) " +
-           "AND (:city IS NULL OR LOWER(t.originCity) = LOWER(:city) OR LOWER(t.destinationCity) = LOWER(:city)) " +
-           "AND (:customer IS NULL OR LOWER(t.customer.name) = LOWER(:customer)) " +
-           "ORDER BY t.id DESC")
-    Page<Trip> findWithFiltersOrderByIdDesc(@Param("searchTerm") String searchTerm,
-                                            @Param("status") String status,
-                                            @Param("city") String city,
-                                            @Param("customer") String customer,
-                                            Pageable pageable);
-    
     // ============================================================
     // ADVANCED QUERIES
     // ============================================================
@@ -316,27 +340,14 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     List<Trip> findByPlannedStartDateBetween(@Param("startDate") LocalDateTime startDate,
                                               @Param("endDate") LocalDateTime endDate);
     
-    @Query("SELECT t FROM Trip t WHERE t.plannedStartDate BETWEEN :startDate AND :endDate ORDER BY t.id DESC")
-    List<Trip> findByPlannedStartDateBetweenOrderByIdDesc(@Param("startDate") LocalDateTime startDate,
-                                                          @Param("endDate") LocalDateTime endDate);
-    
     @Query("SELECT t FROM Trip t WHERE t.actualStartDate BETWEEN :startDate AND :endDate")
     List<Trip> findByActualStartDateBetween(@Param("startDate") LocalDateTime startDate,
                                              @Param("endDate") LocalDateTime endDate);
-    
-    @Query("SELECT t FROM Trip t WHERE t.actualStartDate BETWEEN :startDate AND :endDate ORDER BY t.id DESC")
-    List<Trip> findByActualStartDateBetweenOrderByIdDesc(@Param("startDate") LocalDateTime startDate,
-                                                         @Param("endDate") LocalDateTime endDate);
     
     @Query("SELECT t FROM Trip t WHERE t.driver.id = :driverId AND t.plannedStartDate BETWEEN :startDate AND :endDate")
     List<Trip> findDriverTripsBetweenDates(@Param("driverId") Long driverId,
                                            @Param("startDate") LocalDateTime startDate,
                                            @Param("endDate") LocalDateTime endDate);
-    
-    @Query("SELECT t FROM Trip t WHERE t.driver.id = :driverId AND t.plannedStartDate BETWEEN :startDate AND :endDate ORDER BY t.id DESC")
-    List<Trip> findDriverTripsBetweenDatesOrderByIdDesc(@Param("driverId") Long driverId,
-                                                        @Param("startDate") LocalDateTime startDate,
-                                                        @Param("endDate") LocalDateTime endDate);
 
     // ============================================================
     // DRIVER QUERIES WITH PAGINATION
@@ -352,20 +363,6 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
         Pageable pageable
     );
     
-    @Query(value = "SELECT * FROM trip WHERE driver_id = :driverId ORDER BY id DESC", 
-           countQuery = "SELECT COUNT(*) FROM trip WHERE driver_id = :driverId",
-           nativeQuery = true)
-    Page<Trip> findTripsByDriverIdNative(@Param("driverId") Long driverId, Pageable pageable);
-    
-    @Query(value = "SELECT * FROM trip WHERE driver_id = :driverId AND status IN :statuses ORDER BY id DESC",
-           countQuery = "SELECT COUNT(*) FROM trip WHERE driver_id = :driverId AND status IN :statuses",
-           nativeQuery = true)
-    Page<Trip> findTripsByDriverIdAndStatusInNative(
-        @Param("driverId") Long driverId,
-        @Param("statuses") List<String> statuses,
-        Pageable pageable
-    );
-
     // ============================================================
     // VEHICLE QUERIES WITH PAGINATION
     // ============================================================
@@ -379,20 +376,6 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
         @Param("statuses") List<String> statuses,
         Pageable pageable
     );
-
-    @Query(value = "SELECT * FROM trip WHERE vehicle_id = :vehicleId ORDER BY id DESC", 
-           countQuery = "SELECT COUNT(*) FROM trip WHERE vehicle_id = :vehicleId",
-           nativeQuery = true)
-    Page<Trip> findTripsByVehicleIdNative(@Param("vehicleId") Long vehicleId, Pageable pageable);
-
-    @Query(value = "SELECT * FROM trip WHERE vehicle_id = :vehicleId AND status IN :statuses ORDER BY id DESC",
-           countQuery = "SELECT COUNT(*) FROM trip WHERE vehicle_id = :vehicleId AND status IN :statuses",
-           nativeQuery = true)
-    Page<Trip> findTripsByVehicleIdAndStatusInNative(
-        @Param("vehicleId") Long vehicleId,
-        @Param("statuses") List<String> statuses,
-        Pageable pageable
-    );
     
     // ============================================================
     // ACTIVE TRIPS
@@ -401,14 +384,8 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     @Query("SELECT t FROM Trip t WHERE t.status IN ('PLANNED', 'ASSIGNED', 'IN_PROGRESS', 'ACTIVE')")
     List<Trip> findActiveTrips();
     
-    @Query("SELECT t FROM Trip t WHERE t.status IN ('PLANNED', 'ASSIGNED', 'IN_PROGRESS', 'ACTIVE') ORDER BY t.id DESC")
-    List<Trip> findActiveTripsOrderByIdDesc();
-    
     @Query("SELECT t FROM Trip t WHERE t.status = 'IN_PROGRESS' OR t.status = 'ACTIVE'")
     List<Trip> findCurrentlyRunningTrips();
-    
-    @Query("SELECT t FROM Trip t WHERE t.status = 'IN_PROGRESS' OR t.status = 'ACTIVE' ORDER BY t.id DESC")
-    List<Trip> findCurrentlyRunningTripsOrderByIdDesc();
     
     // ============================================================
     // UPDATE QUERIES

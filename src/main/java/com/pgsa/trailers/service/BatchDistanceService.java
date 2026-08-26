@@ -382,29 +382,46 @@ public class BatchDistanceService {
         
         Vehicle vehicle = vehicleOpt.get();
         
-        // Find the latest completed or finalized trip for this vehicle using updatedAt
-        Trip latestTrip = tripRepository.findTopByVehicleIdAndStatusInOrderByUpdatedAtDesc(
-                vehicleId, 
-                List.of("COMPLETED", "FINALIZED")
-        );
-        
-        if (latestTrip != null && latestTrip.getActualDistanceKm() != null) {
-            // Get current mileage from vehicle
-            BigDecimal currentMileage = vehicle.getCurrentMileage() != null ? 
-                    vehicle.getCurrentMileage() : BigDecimal.ZERO;
+        try {
+            // Method 1: Use the list version and get the first result
+            List<Trip> latestTrips = tripRepository.findTopByVehicleIdAndStatusInOrderByUpdatedAtDesc(
+                    vehicleId, 
+                    List.of("COMPLETED", "FINALIZED")
+            );
             
-            // Calculate new total mileage
-            BigDecimal newMileage = currentMileage.add(latestTrip.getActualDistanceKm());
+            Trip latestTrip = null;
+            if (latestTrips != null && !latestTrips.isEmpty()) {
+                latestTrip = latestTrips.get(0); // Get the most recent one
+            }
             
-            vehicle.setCurrentMileage(newMileage);
-            vehicle.setCurrentOdometer(newMileage);
-            vehicle.setLastFuelUpdate(LocalDateTime.now());
+            // Alternative: Use the native query approach
+            if (latestTrip == null) {
+                // Fallback: Use a native query
+                latestTrip = tripRepository.findLatestCompletedTripByVehicleIdNative(vehicleId);
+            }
             
-            vehicleRepository.save(vehicle);
-            log.info("🚗 Vehicle {} mileage updated: {} -> {} km (trip {}, updated at {})", 
-                     vehicleId, currentMileage, newMileage, latestTrip.getId(), latestTrip.getUpdatedAt());
-        } else {
-            log.debug("No completed trips found for vehicle {}", vehicleId);
+            if (latestTrip != null && latestTrip.getActualDistanceKm() != null) {
+                // Get current mileage from vehicle
+                BigDecimal currentMileage = vehicle.getCurrentMileage() != null ? 
+                        vehicle.getCurrentMileage() : BigDecimal.ZERO;
+                
+                // Calculate new total mileage
+                BigDecimal newMileage = currentMileage.add(latestTrip.getActualDistanceKm());
+                
+                vehicle.setCurrentMileage(newMileage);
+                vehicle.setCurrentOdometer(newMileage);
+                vehicle.setLastFuelUpdate(LocalDateTime.now());
+                
+                vehicleRepository.save(vehicle);
+                log.info("🚗 Vehicle {} mileage updated: {} -> {} km (trip {}, updated at {})", 
+                         vehicleId, currentMileage, newMileage, latestTrip.getId(), latestTrip.getUpdatedAt());
+            } else {
+                log.debug("No completed trips found for vehicle {}", vehicleId);
+            }
+            
+        } catch (Exception e) {
+            log.error("Failed to update vehicle {}: {}", vehicleId, e.getMessage());
+            // Continue with next vehicle - don't fail the whole batch
         }
     }
 

@@ -21,7 +21,14 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     // ============================================================
     // COUNT QUERIES
     // ============================================================
-    
+
+
+    // Find latest completed trip for a vehicle
+    @Query("SELECT t FROM Trip t WHERE t.vehicle.id = :vehicleId AND t.status IN :statuses ORDER BY t.actualEndDate DESC")
+    Trip findTopByVehicleIdAndStatusInOrderByActualEndDateDesc(@Param("vehicleId") Long vehicleId, 
+                                                                @Param("statuses") List<String> statuses);
+}
+
     @Query("SELECT t.status, COUNT(t) FROM Trip t GROUP BY t.status")
     List<Object[]> countByStatusGrouped();
     

@@ -311,7 +311,9 @@ public class BatchDistanceService {
         load.setDistanceCalculatedAt(LocalDateTime.now());
         
         // Also update total distance field if it exists
-        load.setTotalDistanceKm(totalLoadDistance.intValue());
+        if (load.getTotalDistanceKm() != null) {
+            load.setTotalDistanceKm(totalLoadDistance.intValue());
+        }
         
         loadRepository.save(load);
         log.info("✅ Load {} updated: total={} km, trips={} km, depotToPickup={} km", 
@@ -330,14 +332,11 @@ public class BatchDistanceService {
             return BigDecimal.ZERO;
         }
         
-        // Find the first pickup trip (stop sequence 1 or isFromDepot = true)
+        // Find the first pickup trip (isFromDepot = false since it's a pickup)
         Trip firstTrip = trips.stream()
-                .filter(t -> t.getStopSequence() != null && t.getStopSequence() == 1)
+                .filter(t -> t.getIsFromDepot() != null && !t.getIsFromDepot())
                 .findFirst()
-                .orElse(trips.stream()
-                        .filter(t -> t.getIsFromDepot() != null && t.getIsFromDepot())
-                        .findFirst()
-                        .orElse(trips.get(0)));
+                .orElse(trips.get(0));
         
         String pickupAddress = getOriginAddress(firstTrip);
         if (pickupAddress == null || pickupAddress.isEmpty()) {
@@ -444,29 +443,17 @@ public class BatchDistanceService {
     // ADDRESS HELPER METHODS
     // ============================================================
 
-    /**
-     * Get origin address from trip, using buildOriginAddress() if needed
-     */
     private String getOriginAddress(Trip trip) {
-        // First try originLocation
         if (trip.getOriginLocation() != null && !trip.getOriginLocation().isEmpty()) {
             return trip.getOriginLocation();
         }
-        
-        // Build from components using the entity's method
         return trip.buildOriginAddress();
     }
 
-    /**
-     * Get destination address from trip, using buildDestinationAddress() if needed
-     */
     private String getDestinationAddress(Trip trip) {
-        // First try destinationLocation
         if (trip.getDestinationLocation() != null && !trip.getDestinationLocation().isEmpty()) {
             return trip.getDestinationLocation();
         }
-        
-        // Build from components using the entity's method
         return trip.buildDestinationAddress();
     }
 

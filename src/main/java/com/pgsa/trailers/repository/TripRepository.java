@@ -1,3 +1,4 @@
+// src/main/java/com/pgsa/trailers/repository/TripRepository.java
 package com.pgsa.trailers.repository;
 
 import com.pgsa.trailers.entity.ops.Trip;
@@ -18,7 +19,7 @@ import java.math.BigDecimal;
 public interface TripRepository extends JpaRepository<Trip, Long> {
 
     // ============================================================
-    // COUNT QUERIES - FIXED: Use String for status
+    // COUNT QUERIES
     // ============================================================
     
     @Query("SELECT t.status, COUNT(t) FROM Trip t GROUP BY t.status")
@@ -34,6 +35,37 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     long countByStatusAndDateRange(@Param("status") String status,
                                    @Param("startDate") LocalDateTime startDate,
                                    @Param("endDate") LocalDateTime endDate);
+    
+    // ============================================================
+    // DISTANCE CALCULATION METHODS (KEEP ONLY ONE COPY)
+    // ============================================================
+
+    @Query("SELECT t FROM Trip t WHERE t.calculatedDistanceKm IS NULL OR t.calculatedDistanceKm = 0")
+    List<Trip> findByCalculatedDistanceKmIsNullOrZero();
+    
+    @Query("SELECT COUNT(t) FROM Trip t WHERE t.calculatedDistanceKm IS NULL OR t.calculatedDistanceKm = 0")
+    long countTripsWithoutDistance();
+    
+    @Query("SELECT COUNT(t) FROM Trip t WHERE t.distanceCalculated = false OR t.distanceCalculated IS NULL")
+    long countPendingDistanceCalculations();
+    
+    @Query("SELECT t FROM Trip t WHERE t.distanceCalculated = false OR t.distanceCalculated IS NULL")
+    List<Trip> findByDistanceCalculatedFalseOrDistanceCalculatedIsNull();
+    
+    @Query("SELECT t FROM Trip t WHERE t.distanceCalculated = false AND t.distanceCalculationError IS NOT NULL")
+    List<Trip> findFailedDistanceCalculations();
+    
+    @Modifying
+    @Query("UPDATE Trip t SET t.distanceCalculated = false, t.distanceCalculationError = :error, t.distanceCalculatedAt = :now WHERE t.id = :tripId")
+    int markDistanceCalculationFailed(@Param("tripId") Long tripId, 
+                                      @Param("error") String error, 
+                                      @Param("now") LocalDateTime now);
+
+    @Modifying
+    @Query("UPDATE Trip t SET t.distanceCalculated = true, t.calculatedDistanceKm = :distance, t.actualDistanceKm = :distance, t.distanceCalculatedAt = :now, t.distanceCalculationError = null WHERE t.id = :tripId")
+    int markDistanceCalculationSuccess(@Param("tripId") Long tripId,
+                                       @Param("distance") BigDecimal distance,
+                                       @Param("now") LocalDateTime now);
     
     // ============================================================
     // JOIN FETCH QUERIES
@@ -62,56 +94,6 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
            "LEFT JOIN FETCH t.metrics m " +
            "WHERE t.id = :id")
     Optional<Trip> findByIdWithAllRelations(@Param("id") Long id);
-
-
-// ============================================================
-// DISTANCE CALCULATION METHODS - ADD THESE
-// ============================================================
-
-/**
- * Find all trips that need distance calculation (NULL or 0)
- */
-@Query("SELECT t FROM Trip t WHERE t.calculatedDistanceKm IS NULL OR t.calculatedDistanceKm = 0")
-List<Trip> findByCalculatedDistanceKmIsNullOrZero();
-
-/**
- * Count trips without distance calculated
- */
-@Query("SELECT COUNT(t) FROM Trip t WHERE t.calculatedDistanceKm IS NULL OR t.calculatedDistanceKm = 0")
-long countTripsWithoutDistance();
-
-/**
- * Count pending distance calculations
- */
-@Query("SELECT COUNT(t) FROM Trip t WHERE t.distanceCalculated = false OR t.distanceCalculated IS NULL")
-long countPendingDistanceCalculations();
-
-/**
- * Find trips with pending distance calculations
- */
-@Query("SELECT t FROM Trip t WHERE t.distanceCalculated = false OR t.distanceCalculated IS NULL")
-List<Trip> findByDistanceCalculatedFalseOrDistanceCalculatedIsNull();
-
-/**
- * Find trips with failed distance calculations
- */
-@Query("SELECT t FROM Trip t WHERE t.distanceCalculated = false AND t.distanceCalculationError IS NOT NULL")
-List<Trip> findFailedDistanceCalculations();
-
-/**
- * Update trip distance calculation status
- */
-@Modifying
-@Query("UPDATE Trip t SET t.distanceCalculated = false, t.distanceCalculationError = :error, t.distanceCalculatedAt = :now WHERE t.id = :tripId")
-int markDistanceCalculationFailed(@Param("tripId") Long tripId, 
-                                  @Param("error") String error, 
-                                  @Param("now") LocalDateTime now);
-
-@Modifying
-@Query("UPDATE Trip t SET t.distanceCalculated = true, t.calculatedDistanceKm = :distance, t.actualDistanceKm = :distance, t.distanceCalculatedAt = :now, t.distanceCalculationError = null WHERE t.id = :tripId")
-int markDistanceCalculationSuccess(@Param("tripId") Long tripId,
-                                   @Param("distance") BigDecimal distance,
-                                   @Param("now") LocalDateTime now);
     
     // ============================================================
     // SEARCH WITH JOIN FETCH
@@ -125,22 +107,9 @@ int markDistanceCalculationSuccess(@Param("tripId") Long tripId,
            "LOWER(t.customer.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
            "LOWER(t.referenceNumber) LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
     Page<Trip> searchTripsWithCustomer(@Param("searchTerm") String searchTerm, Pageable pageable);
-
-
-    // ============================================================
-    // FIND CALCULATE
-    // ============================================================
-
-
-    @Query("SELECT t FROM Trip t WHERE t.calculatedDistanceKm IS NULL OR t.calculatedDistanceKm = 0")
-    List<Trip> findByCalculatedDistanceKmIsNullOrZero();
-    
-    @Query("SELECT COUNT(t) FROM Trip t WHERE t.calculatedDistanceKm IS NULL OR t.calculatedDistanceKm = 0")
-    long countTripsWithoutDistance();
-
     
     // ============================================================
-    // FIND BY STATUS - FIXED: Use String
+    // FIND BY STATUS
     // ============================================================
     
     List<Trip> findByStatus(String status);
@@ -169,7 +138,7 @@ int markDistanceCalculationSuccess(@Param("tripId") Long tripId,
     Page<Trip> findAllTrips(Pageable pageable);
     
     // ============================================================
-    // FIND BY RELATIONSHIPS - FIXED: Use String for status
+    // FIND BY RELATIONSHIPS
     // ============================================================
     
     List<Trip> findByDriverId(Long driverId);
@@ -202,7 +171,7 @@ int markDistanceCalculationSuccess(@Param("tripId") Long tripId,
     boolean existsByTripNumber(String tripNumber);
     
     // ============================================================
-    // LOAD QUERIES - FIXED: Use String for status
+    // LOAD QUERIES
     // ============================================================
     
     Page<Trip> findByLoadIdIsNull(Pageable pageable);
@@ -269,7 +238,7 @@ int markDistanceCalculationSuccess(@Param("tripId") Long tripId,
     List<Trip> searchTripsOrderByIdDesc(@Param("searchTerm") String searchTerm);
     
     // ============================================================
-    // FILTER QUERIES - FIXED: Use String for status
+    // FILTER QUERIES
     // ============================================================
     
     @Query("SELECT t FROM Trip t WHERE " +
@@ -315,7 +284,7 @@ int markDistanceCalculationSuccess(@Param("tripId") Long tripId,
                                             Pageable pageable);
     
     // ============================================================
-    // ADVANCED QUERIES - FIXED: Use String for status
+    // ADVANCED QUERIES
     // ============================================================
     
     @Query("SELECT t FROM Trip t WHERE " +
@@ -363,7 +332,7 @@ int markDistanceCalculationSuccess(@Param("tripId") Long tripId,
                                                         @Param("endDate") LocalDateTime endDate);
 
     // ============================================================
-    // DRIVER QUERIES WITH PAGINATION - FIXED: Use String for status
+    // DRIVER QUERIES WITH PAGINATION
     // ============================================================
     
     @Query("SELECT t FROM Trip t WHERE t.driver.id = :driverId")
@@ -391,7 +360,7 @@ int markDistanceCalculationSuccess(@Param("tripId") Long tripId,
     );
 
     // ============================================================
-    // VEHICLE QUERIES WITH PAGINATION - FIXED: Use String for status
+    // VEHICLE QUERIES WITH PAGINATION
     // ============================================================
 
     @Query("SELECT t FROM Trip t WHERE t.vehicle.id = :vehicleId")
@@ -419,7 +388,7 @@ int markDistanceCalculationSuccess(@Param("tripId") Long tripId,
     );
     
     // ============================================================
-    // ACTIVE TRIPS - FIXED: Use String constants
+    // ACTIVE TRIPS
     // ============================================================
     
     @Query("SELECT t FROM Trip t WHERE t.status IN ('PLANNED', 'ASSIGNED', 'IN_PROGRESS', 'ACTIVE')")
@@ -435,7 +404,7 @@ int markDistanceCalculationSuccess(@Param("tripId") Long tripId,
     List<Trip> findCurrentlyRunningTripsOrderByIdDesc();
     
     // ============================================================
-    // UPDATE QUERIES - FIXED: Use String for status
+    // UPDATE QUERIES
     // ============================================================
     
     @Modifying
@@ -465,7 +434,7 @@ int markDistanceCalculationSuccess(@Param("tripId") Long tripId,
     Optional<BigDecimal> getTotalDistanceForDriver(@Param("driverId") Long driverId);
 
     // ============================================================
-    // EXISTS QUERIES - FIXED: Use String for status
+    // EXISTS QUERIES
     // ============================================================
     
     boolean existsByDriverIdAndStatus(Long driverId, String status);

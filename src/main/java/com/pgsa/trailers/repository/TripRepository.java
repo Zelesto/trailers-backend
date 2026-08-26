@@ -70,6 +70,69 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     int markDistanceCalculationSuccess(@Param("tripId") Long tripId,
                                        @Param("distance") BigDecimal distance,
                                        @Param("now") LocalDateTime now);
+
+
+
+    // ============================================================
+    // ADDITIONAL METHODS FOR TRIP SERVICE
+    // ============================================================
+        
+    /**
+     * Find trips by driver ID and status in with pagination (native query)
+     */
+    @Query(value = "SELECT * FROM trip WHERE driver_id = :driverId AND status IN :statuses ORDER BY id DESC",
+           countQuery = "SELECT COUNT(*) FROM trip WHERE driver_id = :driverId AND status IN :statuses",
+           nativeQuery = true)
+    Page<Trip> findTripsByDriverIdAndStatusInNative(
+        @Param("driverId") Long driverId,
+        @Param("statuses") List<String> statuses,
+        Pageable pageable
+    );
+    
+    /**
+     * Find trips by driver ID with pagination (native query)
+     */
+    @Query(value = "SELECT * FROM trip WHERE driver_id = :driverId ORDER BY id DESC",
+           countQuery = "SELECT COUNT(*) FROM trip WHERE driver_id = :driverId",
+           nativeQuery = true)
+    Page<Trip> findTripsByDriverIdNative(
+        @Param("driverId") Long driverId,
+        Pageable pageable
+    );
+    
+    /**
+     * Find trips with filters, ordered by id descending
+     */
+    @Query("SELECT t FROM Trip t WHERE " +
+           "(:searchTerm IS NULL OR " +
+           "LOWER(t.tripNumber) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+           "LOWER(t.originCity) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+           "LOWER(t.destinationCity) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+           "LOWER(t.customer.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+           "LOWER(t.referenceNumber) LIKE LOWER(CONCAT('%', :searchTerm, '%'))) " +
+           "AND (:status IS NULL OR t.status = :status) " +
+           "AND (:city IS NULL OR LOWER(t.originCity) = LOWER(:city) OR LOWER(t.destinationCity) = LOWER(:city)) " +
+           "AND (:customer IS NULL OR LOWER(t.customer.name) = LOWER(:customer)) " +
+           "ORDER BY t.id DESC")
+    Page<Trip> findWithFiltersOrderByIdDesc(
+        @Param("searchTerm") String searchTerm,
+        @Param("status") String status,
+        @Param("city") String city,
+        @Param("customer") String customer,
+        Pageable pageable
+    );
+    
+    /**
+     * Find active trips ordered by id descending
+     */
+    @Query("SELECT t FROM Trip t WHERE t.status IN ('PLANNED', 'ASSIGNED', 'IN_PROGRESS', 'ACTIVE') ORDER BY t.id DESC")
+    List<Trip> findActiveTripsOrderByIdDesc();
+    
+    /**
+     * Find currently running trips ordered by id descending
+     */
+    @Query("SELECT t FROM Trip t WHERE t.status = 'IN_PROGRESS' OR t.status = 'ACTIVE' ORDER BY t.id DESC")
+    List<Trip> findCurrentlyRunningTripsOrderByIdDesc();
     
     // ============================================================
     // TRIP BY LOAD ID - CRITICAL FOR BATCH PROCESSING

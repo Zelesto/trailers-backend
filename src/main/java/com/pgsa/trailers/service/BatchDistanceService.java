@@ -132,7 +132,7 @@ public class BatchDistanceService {
                 }
             }
 
-            // Step 4: Update vehicle mileage based on latest completed trips
+            // Step 4: Update vehicle mileage based on latest trips using updatedAt
             log.info("🚗 Updating vehicle mileage...");
             int vehicleUpdates = 0;
             Set<Long> processedVehicleIds = new HashSet<>();
@@ -283,7 +283,7 @@ public class BatchDistanceService {
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         
-        // Calculate distance from depot to first pickup
+        // Calculate distance from depot to first pickup (using isFromDepot flag)
         BigDecimal depotToPickupDistance = calculateDepotToPickupDistance(load, trips);
         
         // Total load distance = depot to pickup + all trip distances
@@ -332,11 +332,14 @@ public class BatchDistanceService {
             return BigDecimal.ZERO;
         }
         
-        // Find the first pickup trip (isFromDepot = false since it's a pickup)
+        // Find the first pickup trip - use isFromDepot = false OR find by earliest date
+        // Sort trips by createdAt or plannedStartDate to get the first one
         Trip firstTrip = trips.stream()
                 .filter(t -> t.getIsFromDepot() != null && !t.getIsFromDepot())
-                .findFirst()
-                .orElse(trips.get(0));
+                .min(Comparator.comparing(Trip::getCreatedAt))
+                .orElse(trips.stream()
+                        .min(Comparator.comparing(Trip::getCreatedAt))
+                        .orElse(trips.get(0)));
         
         String pickupAddress = getOriginAddress(firstTrip);
         if (pickupAddress == null || pickupAddress.isEmpty()) {
@@ -366,7 +369,7 @@ public class BatchDistanceService {
     }
 
     // ============================================================
-    // VEHICLE MILEAGE UPDATE
+    // VEHICLE MILEAGE UPDATE - Using updatedAt for latest trip
     // ============================================================
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -379,8 +382,8 @@ public class BatchDistanceService {
         
         Vehicle vehicle = vehicleOpt.get();
         
-        // Find the latest completed or finalized trip for this vehicle
-        Trip latestTrip = tripRepository.findTopByVehicleIdAndStatusInOrderByActualEndDateDesc(
+        // Find the latest completed or finalized trip for this vehicle using updatedAt
+        Trip latestTrip = tripRepository.findTopByVehicleIdAndStatusInOrderByUpdatedAtDesc(
                 vehicleId, 
                 List.of("COMPLETED", "FINALIZED")
         );
@@ -398,8 +401,8 @@ public class BatchDistanceService {
             vehicle.setLastFuelUpdate(LocalDateTime.now());
             
             vehicleRepository.save(vehicle);
-            log.info("🚗 Vehicle {} mileage updated: {} -> {} km (trip {})", 
-                     vehicleId, currentMileage, newMileage, latestTrip.getId());
+            log.info("🚗 Vehicle {} mileage updated: {} -> {} km (trip {}, updated at {})", 
+                     vehicleId, currentMileage, newMileage, latestTrip.getId(), latestTrip.getUpdatedAt());
         } else {
             log.debug("No completed trips found for vehicle {}", vehicleId);
         }

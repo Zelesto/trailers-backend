@@ -28,7 +28,6 @@ import java.util.stream.Collectors;
 public class IncidentService {
     private final IncidentRepository incidentRepository;
     private final TripRepository tripRepository;
-    private final TripService tripService;
 
     /**
      * Create a new incident for a trip
@@ -38,17 +37,6 @@ public class IncidentService {
         
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip", "id", tripId));
-        
-        // Validate trip status
-        if (!tripService.canReportIncident(trip)) {
-            throw new IllegalStateException("Cannot report incident for trip in status: " + trip.getStatus());
-        }
-
-        // Validate severity
-        List<String> validSeverities = List.of("LOW", "MEDIUM", "HIGH", "CRITICAL");
-        if (request.getSeverity() != null && !validSeverities.contains(request.getSeverity())) {
-            throw new IllegalArgumentException("Invalid severity. Must be one of: " + validSeverities);
-        }
 
         Incident incident = new Incident();
         incident.setTrip(trip);
@@ -59,6 +47,8 @@ public class IncidentService {
         incident.setRequiresAssistance(request.getRequiresAssistance() != null ? request.getRequiresAssistance() : false);
         incident.setResolved(false);
         incident.setReportedAt(LocalDateTime.now());
+        
+        // Set optional payment fields
         incident.setAmount(request.getAmount());
         incident.setPaymentMethod(request.getPaymentMethod());
         incident.setReferenceNumber(request.getReferenceNumber());
@@ -75,6 +65,7 @@ public class IncidentService {
 
     /**
      * Get all incidents for a trip (non-paginated)
+     * ✅ Returns empty list if no incidents or error
      */
     @Transactional(readOnly = true)
     public List<IncidentDTO> getIncidentsByTripId(Long tripId) {
@@ -88,13 +79,21 @@ public class IncidentService {
             }
             
             List<Incident> incidents = incidentRepository.findByTripId(tripId);
+            
+            if (incidents == null || incidents.isEmpty()) {
+                log.info("No incidents found for trip {}", tripId);
+                return new ArrayList<>();
+            }
+            
             log.info("Found {} incidents for trip {}", incidents.size(), tripId);
             
             return incidents.stream()
                     .map(this::toDTO)
                     .collect(Collectors.toList());
+                    
         } catch (Exception e) {
             log.error("Error fetching incidents for trip {}: {}", tripId, e.getMessage(), e);
+            // ✅ Return empty list instead of throwing
             return new ArrayList<>();
         }
     }
@@ -107,16 +106,14 @@ public class IncidentService {
         log.info("Getting paginated incidents for tripId: {}", tripId);
         
         try {
-            // Check if trip exists
             if (!tripRepository.existsById(tripId)) {
                 log.warn("Trip not found with id: {}", tripId);
                 return Page.empty(pageable);
             }
             
             Page<Incident> incidents = incidentRepository.findByTripId(tripId, pageable);
-            log.info("Found {} incidents (page) for trip {}", incidents.getTotalElements(), tripId);
-            
             return incidents.map(this::toDTO);
+            
         } catch (Exception e) {
             log.error("Error fetching paginated incidents for trip {}: {}", tripId, e.getMessage(), e);
             return Page.empty(pageable);
@@ -145,9 +142,7 @@ public class IncidentService {
         Incident incident = incidentRepository.findById(incidentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Incident", "id", incidentId));
         
-        boolean wasResolved = incident.getResolved() != null && incident.getResolved();
-        
-        // Update fields
+        // Update basic fields
         if (request.getIncidentType() != null) {
             incident.setIncidentType(request.getIncidentType());
         }
@@ -163,6 +158,28 @@ public class IncidentService {
         if (request.getRequiresAssistance() != null) {
             incident.setRequiresAssistance(request.getRequiresAssistance());
         }
+        
+        // Handle resolution
+        if (request.getResolved() != null) {
+            boolean wasResolved = incident.getResolved() != null && incident.getResolved();
+            incident.setResolved(request.getResolved());
+            if (request.getResolved() && !wasResolved) {
+                incident.setResolvedAt(LocalDateTime.now());
+                if (request.getResolutionNotes() != null) {
+                    incident.setResolutionNotes(request.getResolutionNotes());
+                }
+                log.info("Resolved incident {}", incidentId);
+            } else if (!request.getResolved() && wasResolved) {
+                incident.setResolvedAt(null);
+                incident.setResolutionNotes(null);
+            }
+        }
+        
+        if (request.getResolutionNotes() != null && !request.getResolutionNotes().isEmpty()) {
+            incident.setResolutionNotes(request.getResolutionNotes());
+        }
+        
+        // Update payment fields
         if (request.getAmount() != null) {
             incident.setAmount(request.getAmount());
         }
@@ -183,25 +200,6 @@ public class IncidentService {
         }
         if (request.getAdditionalNotes() != null) {
             incident.setAdditionalNotes(request.getAdditionalNotes());
-        }
-        
-        // Handle resolution
-        if (request.getResolved() != null) {
-            incident.setResolved(request.getResolved());
-            if (request.getResolved() && !wasResolved) {
-                incident.setResolvedAt(LocalDateTime.now());
-                if (request.getResolutionNotes() != null) {
-                    incident.setResolutionNotes(request.getResolutionNotes());
-                }
-                log.info("Resolved incident {}", incidentId);
-            } else if (!request.getResolved() && wasResolved) {
-                incident.setResolvedAt(null);
-                incident.setResolutionNotes(null);
-            }
-        }
-        
-        if (request.getResolutionNotes() != null && !request.getResolutionNotes().isEmpty()) {
-            incident.setResolutionNotes(request.getResolutionNotes());
         }
         
         Incident updated = incidentRepository.save(incident);
@@ -241,6 +239,7 @@ public class IncidentService {
             return incidents.stream()
                     .map(this::toDTO)
                     .collect(Collectors.toList());
+                    
         } catch (Exception e) {
             log.error("Error fetching active incidents for trip {}: {}", tripId, e.getMessage(), e);
             return new ArrayList<>();
@@ -309,7 +308,6 @@ public class IncidentService {
         log.info("Getting incident stats for tripId: {}", tripId);
         
         try {
-            // Check if trip exists
             if (!tripRepository.existsById(tripId)) {
                 log.warn("Trip not found with id: {}", tripId);
                 return IncidentStatsDTO.builder()
@@ -324,7 +322,7 @@ public class IncidentService {
             
             // Count urgent incidents
             long urgentCount = incidentRepository.findUrgentIncidents().stream()
-                    .filter(i -> i.getTrip().getId().equals(tripId))
+                    .filter(i -> i.getTrip() != null && i.getTrip().getId().equals(tripId))
                     .count();
             
             return IncidentStatsDTO.builder()
@@ -332,6 +330,7 @@ public class IncidentService {
                     .activeIncidents(activeIncidents != null ? activeIncidents : 0L)
                     .urgentIncidents(urgentCount)
                     .build();
+                    
         } catch (Exception e) {
             log.error("Error fetching incident stats for trip {}: {}", tripId, e.getMessage(), e);
             return IncidentStatsDTO.builder()
@@ -346,10 +345,19 @@ public class IncidentService {
      * Map Incident entity to DTO
      */
     private IncidentDTO toDTO(Incident incident) {
+        if (incident == null) {
+            return null;
+        }
+        
         IncidentDTO dto = new IncidentDTO();
         dto.setId(incident.getId());
-        dto.setTripId(incident.getTrip().getId());
-        dto.setTripNumber(incident.getTrip().getTripNumber());
+        
+        // Handle trip safely
+        if (incident.getTrip() != null) {
+            dto.setTripId(incident.getTrip().getId());
+            dto.setTripNumber(incident.getTrip().getTripNumber());
+        }
+        
         dto.setIncidentType(incident.getIncidentType());
         dto.setSeverity(incident.getSeverity());
         dto.setDescription(incident.getDescription());
@@ -361,6 +369,8 @@ public class IncidentService {
         dto.setResolvedAt(incident.getResolvedAt());
         dto.setCreatedAt(incident.getCreatedAt());
         dto.setUpdatedAt(incident.getUpdatedAt());
+        
+        // Payment fields
         dto.setAmount(incident.getAmount());
         dto.setPaymentMethod(incident.getPaymentMethod());
         dto.setReferenceNumber(incident.getReferenceNumber());
@@ -368,6 +378,7 @@ public class IncidentService {
         dto.setEventType(incident.getEventType());
         dto.setDirection(incident.getDirection());
         dto.setAdditionalNotes(incident.getAdditionalNotes());
+        
         return dto;
     }
 }

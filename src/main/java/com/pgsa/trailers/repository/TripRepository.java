@@ -90,6 +90,17 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     );
 
     /**
+     * Find trip by number with all relationships eagerly fetched
+     * ✅ This solves the lazy loading issue for reports
+     */
+    @Query("SELECT t FROM Trip t " +
+           "LEFT JOIN FETCH t.driver " +
+           "LEFT JOIN FETCH t.vehicle " +
+           "LEFT JOIN FETCH t.customer " +
+           "WHERE t.tripNumber = :tripNumber")
+    Optional<Trip> findByTripNumberWithRelations(@Param("tripNumber") String tripNumber);
+
+    /**
      * Find trips that need distance calculation with vehicle eagerly loaded
      */
     @Query("SELECT t FROM Trip t JOIN FETCH t.vehicle WHERE t.calculatedDistanceKm IS NULL OR t.calculatedDistanceKm = 0")

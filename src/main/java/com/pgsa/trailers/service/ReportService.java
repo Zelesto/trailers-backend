@@ -6,11 +6,19 @@ import com.pgsa.trailers.entity.ops.Trip;
 import com.pgsa.trailers.repository.TripRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.sf.jasperreports.engine.*;
+import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
+import net.sf.jasperreports.engine.export.JRPdfExporter;
+import net.sf.jasperreports.engine.export.JRHtmlExporter;
+import net.sf.jasperreports.engine.export.ooxml.JRXlsxExporter;
+import net.sf.jasperreports.export.*;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
-import java.util.HashMap;
-import java.util.Map;
+import java.io.InputStream;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -20,85 +28,115 @@ public class ReportService {
     private final TripRepository tripRepository;
 
     /**
-     * Check if BIRT is available
-     */
-    public boolean isBirtAvailable() {
-        try {
-            // Try to load BIRT classes
-            Class.forName("org.eclipse.birt.core.framework.Platform");
-            return true;
-        } catch (ClassNotFoundException e) {
-            log.debug("BIRT not available: {}", e.getMessage());
-            return false;
-        } catch (Exception e) {
-            log.debug("BIRT check failed: {}", e.getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Generate report using BIRT
+     * Generate trip report in specified format
      */
     public byte[] generateTripReport(String tripNumber, String format) throws Exception {
-        // This is where your BIRT generation logic goes
-        // For now, throw exception to use fallback
-        throw new UnsupportedOperationException("BIRT generation not yet implemented");
+        log.info("📊 Generating JasperReport for trip: {} (format: {})", tripNumber, format);
+
+        // Fetch trip data
+        Trip trip = tripRepository.findByTripNumber(tripNumber)
+                .orElseThrow(() -> new RuntimeException("Trip not found: " + tripNumber));
+
+        // Prepare report data
+        Map<String, Object> params = new HashMap<>();
+        params.put("tripNumber", trip.getTripNumber());
+        params.put("customerName", trip.getCustomer() != null ? trip.getCustomer().getName() : "N/A");
+        params.put("originLocation", trip.getOriginLocation() != null ? trip.getOriginLocation() : "N/A");
+        params.put("destinationLocation", trip.getDestinationLocation() != null ? trip.getDestinationLocation() : "N/A");
+        params.put("plannedDistanceKm", trip.getPlannedDistanceKm() != null ? trip.getPlannedDistanceKm().doubleValue() : 0);
+        params.put("actualDistanceKm", trip.getActualDistanceKm() != null ? trip.getActualDistanceKm().doubleValue() : 0);
+        params.put("status", trip.getStatus() != null ? trip.getStatus() : "N/A");
+        params.put("driverName", trip.getDriver() != null ?
+                (trip.getDriver().getFirstName() + " " + trip.getDriver().getLastName()) : "N/A");
+        params.put("vehicleRegistration", trip.getVehicle() != null ?
+                trip.getVehicle().getRegistrationNumber() : "N/A");
+        params.put("plannedStartDate", trip.getPlannedStartDate() != null ?
+                trip.getPlannedStartDate().toString() : "N/A");
+        params.put("plannedEndDate", trip.getPlannedEndDate() != null ?
+                trip.getPlannedEndDate().toString() : "N/A");
+        params.put("actualStartDate", trip.getActualStartDate() != null ?
+                trip.getActualStartDate().toString() : "N/A");
+        params.put("actualEndDate", trip.getActualEndDate() != null ?
+                trip.getActualEndDate().toString() : "N/A");
+        params.put("actualStartOdometer", trip.getActualStartOdometer() != null ?
+                trip.getActualStartOdometer().doubleValue() : 0);
+        params.put("actualEndOdometer", trip.getActualEndOdometer() != null ?
+                trip.getActualEndOdometer().doubleValue() : 0);
+        params.put("referenceNumber", trip.getReferenceNumber() != null ? trip.getReferenceNumber() : "N/A");
+        params.put("createdAt", trip.getCreatedAt() != null ? trip.getCreatedAt().toString() : "N/A");
+        params.put("reportGenerated", new Date().toString());
+
+        // Report title with logo placeholder
+        params.put("companyName", "PGS Trailers");
+        params.put("reportTitle", "Trip Report");
+        params.put("logoUrl", "/images/logo.png"); // Can be external URL
+
+        // Load report template
+        InputStream reportStream = new ClassPathResource("reports/trip_report.jrxml").getInputStream();
+        JasperReport jasperReport = JasperCompileManager.compileReport(reportStream);
+
+        // Create data source (can be empty for single record reports)
+        List<Map<String, Object>> dataList = Collections.singletonList(params);
+        JRBeanCollectionDataSource dataSource = new JRBeanCollectionDataSource(dataList);
+
+        // Fill report
+        JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, params, dataSource);
+
+        // Export based on format
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+
+        switch (format.toLowerCase()) {
+            case "pdf":
+                exportToPDF(jasperPrint, outputStream);
+                break;
+            case "html":
+                exportToHTML(jasperPrint, outputStream);
+                break;
+            case "xlsx":
+                exportToExcel(jasperPrint, outputStream);
+                break;
+            default:
+                exportToHTML(jasperPrint, outputStream);
+        }
+
+        log.info("✅ JasperReport generated successfully for: {}", tripNumber);
+        return outputStream.toByteArray();
     }
 
-    /**
-     * Generate trip report data for HTML viewer (fallback)
-     */
-    public Map<String, Object> generateTripReportData(String tripNumber) {
-        log.info("📊 Generating HTML report data for trip: {}", tripNumber);
+    private void exportToPDF(JasperPrint jasperPrint, ByteArrayOutputStream outputStream) throws JRException {
+        JRPdfExporter exporter = new JRPdfExporter();
+        exporter.setExporterInput(new SimpleExporterInput(jasperPrint));
+        exporter.setExporterOutput(new SimpleOutputStreamExporterOutput(outputStream));
         
-        try {
-            Trip trip = tripRepository.findByTripNumber(tripNumber)
-                    .orElseThrow(() -> new RuntimeException("Trip not found: " + tripNumber));
-            
-            Map<String, Object> reportData = new HashMap<>();
-            reportData.put("success", true);
-            reportData.put("tripNumber", trip.getTripNumber());
-            reportData.put("status", trip.getStatus());
-            reportData.put("originLocation", trip.getOriginLocation());
-            reportData.put("destinationLocation", trip.getDestinationLocation());
-            reportData.put("plannedDistanceKm", trip.getPlannedDistanceKm());
-            reportData.put("actualDistanceKm", trip.getActualDistanceKm());
-            reportData.put("plannedStartDate", trip.getPlannedStartDate());
-            reportData.put("plannedEndDate", trip.getPlannedEndDate());
-            reportData.put("actualStartDate", trip.getActualStartDate());
-            reportData.put("actualEndDate", trip.getActualEndDate());
-            reportData.put("actualStartOdometer", trip.getActualStartOdometer());
-            reportData.put("actualEndOdometer", trip.getActualEndOdometer());
-            reportData.put("actualDurationHours", trip.getActualDurationHours());
-            reportData.put("referenceNumber", trip.getReferenceNumber());
-            reportData.put("customerName", trip.getCustomer() != null ? trip.getCustomer().getName() : null);
-            
-            // Vehicle info
-            if (trip.getVehicle() != null) {
-                Map<String, Object> vehicle = new HashMap<>();
-                vehicle.put("registrationNumber", trip.getVehicle().getRegistrationNumber());
-                vehicle.put("make", trip.getVehicle().getMake());
-                vehicle.put("model", trip.getVehicle().getModel());
-                vehicle.put("vehicleType", trip.getVehicle().getVehicleType());
-                reportData.put("vehicle", vehicle);
-            }
-            
-            // Driver info
-            if (trip.getDriver() != null) {
-                Map<String, Object> driver = new HashMap<>();
-                driver.put("firstName", trip.getDriver().getFirstName());
-                driver.put("lastName", trip.getDriver().getLastName());
-                driver.put("licenseNumber", trip.getDriver().getLicenseNumber());
-                driver.put("contactNumber", trip.getDriver().getContactNumber());
-                reportData.put("driver", driver);
-            }
-            
-            log.info("✅ HTML report data generated for: {}", tripNumber);
-            return reportData;
-            
-        } catch (Exception e) {
-            log.error("❌ Failed to generate report data: {}", e.getMessage(), e);
-            return Map.of("success", false, "error", e.getMessage());
-        }
+        SimplePdfExporterConfiguration config = new SimplePdfExporterConfiguration();
+        config.setMetadataTitle("Trip Report");
+        config.setMetadataAuthor("PGS Trailers");
+        exporter.setConfiguration(config);
+        
+        exporter.exportReport();
+    }
+
+    private void exportToHTML(JasperPrint jasperPrint, ByteArrayOutputStream outputStream) throws JRException {
+        JRHtmlExporter exporter = new JRHtmlExporter();
+        exporter.setExporterInput(new SimpleExporterInput(jasperPrint));
+        exporter.setExporterOutput(new SimpleHtmlExporterOutput(outputStream));
+        
+        SimpleHtmlExporterConfiguration config = new SimpleHtmlExporterConfiguration();
+        config.setBetweenPagesHtml("");
+        exporter.setConfiguration(config);
+        
+        exporter.exportReport();
+    }
+
+    private void exportToExcel(JasperPrint jasperPrint, ByteArrayOutputStream outputStream) throws JRException {
+        JRXlsxExporter exporter = new JRXlsxExporter();
+        exporter.setExporterInput(new SimpleExporterInput(jasperPrint));
+        exporter.setExporterOutput(new SimpleOutputStreamExporterOutput(outputStream));
+        
+        SimpleXlsxExporterConfiguration config = new SimpleXlsxExporterConfiguration();
+        config.setSheetNames(new String[]{"Trip Report"});
+        exporter.setConfiguration(config);
+        
+        exporter.exportReport();
     }
 }

@@ -2,6 +2,8 @@
 
 package com.pgsa.trailers.dto.report;
 
+import com.pgsa.trailers.entity.assets.Driver;      // ✅ Add this import
+import com.pgsa.trailers.entity.assets.Vehicle;    // ✅ Add this import
 import com.pgsa.trailers.entity.ops.Trip;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -79,7 +81,7 @@ public class TripReportDTO {
             }
             // ✅ Use correct field names from Driver entity
             driverLicense = driver.getLicenseNumber();
-            driverPhone = driver.getPhoneNumber();  // ✅ Correct field name
+            driverPhone = driver.getPhoneNumber();
             driverEmail = driver.getEmail();
         }
         

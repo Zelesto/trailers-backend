@@ -2,13 +2,19 @@ package com.pgsa.trailers.entity.ops;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "incidents")
 @Data
+@EntityListeners(AuditingEntityListener.class)
 public class Incident {
+    
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -21,7 +27,7 @@ public class Incident {
     private String incidentType;
 
     @Column(nullable = false)
-    private String severity; // LOW, MEDIUM, HIGH, CRITICAL
+    private String severity;
 
     @Column(columnDefinition = "TEXT")
     private String description;
@@ -43,9 +49,8 @@ public class Incident {
     @Column(name = "resolved_at")
     private LocalDateTime resolvedAt;
 
-    // ====== NEW PAYMENT FIELDS ======
-    
-    @Column(name = "amount", precision = 15, scale = 2)
+    // Payment fields
+    @Column(precision = 15, scale = 2)
     private BigDecimal amount;
 
     @Column(name = "payment_method", length = 50)
@@ -60,15 +65,17 @@ public class Incident {
     @Column(name = "event_type", length = 50)
     private String eventType;
 
-    @Column(name = "direction", length = 10)
-    private String direction; // IN or OUT
+    @Column(length = 10)
+    private String direction;
 
     @Column(name = "additional_notes", columnDefinition = "TEXT")
     private String additionalNotes;
 
+    @CreatedDate
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
+    @LastModifiedDate
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
@@ -83,97 +90,5 @@ public class Incident {
         if (resolved == null) {
             resolved = false;
         }
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
-    }
-
-    // ====== BUSINESS METHODS ======
-    
-    /**
-     * Check if this incident has a payment associated
-     */
-    public boolean hasPayment() {
-        return amount != null && amount.compareTo(BigDecimal.ZERO) > 0;
-    }
-
-    /**
-     * Get payment direction label
-     */
-    public String getPaymentDirectionLabel() {
-        if (direction == null) {
-            // Default: OUT for vouchers/expenses, IN for refunds/claims
-            if ("VOUCHER".equalsIgnoreCase(incidentType) || 
-                "TOLL".equalsIgnoreCase(incidentType) ||
-                "FUEL".equalsIgnoreCase(incidentType) ||
-                "FOOD".equalsIgnoreCase(incidentType) ||
-                "MAINTENANCE".equalsIgnoreCase(incidentType)) {
-                return "OUT";
-            }
-            if ("DEMURRAGE".equalsIgnoreCase(incidentType) ||
-                "DETENTION".equalsIgnoreCase(incidentType) ||
-                "TOLL_REFUND".equalsIgnoreCase(incidentType)) {
-                return "IN";
-            }
-            return null;
-        }
-        return direction;
-    }
-
-    /**
-     * Get formatted amount with currency
-     */
-    public String getFormattedAmount() {
-        if (amount == null) return null;
-        return String.format("R %.2f", amount);
-    }
-
-    /**
-     * Check if this is a voucher
-     */
-    public boolean isVoucher() {
-        return "VOUCHER".equalsIgnoreCase(incidentType);
-    }
-
-    /**
-     * Check if this is an adverse event
-     */
-    public boolean isAdverseEvent() {
-        return "ADVERSE_EVENT".equalsIgnoreCase(incidentType);
-    }
-
-    /**
-     * Check if this is an incident
-     */
-    public boolean isIncident() {
-        return !isVoucher() && !isAdverseEvent();
-    }
-
-    /**
-     * Check if urgent
-     */
-    public boolean isUrgent() {
-        return "CRITICAL".equalsIgnoreCase(severity) || 
-               (requiresAssistance != null && requiresAssistance);
-    }
-
-    /**
-     * Resolve the incident
-     */
-    public void resolve(String notes) {
-        this.resolved = true;
-        this.resolvedAt = LocalDateTime.now();
-        this.resolutionNotes = notes;
-    }
-
-    /**
-     * Mark for assistance
-     */
-    public void markForAssistance() {
-        this.requiresAssistance = true;
     }
 }

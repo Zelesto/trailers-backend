@@ -49,13 +49,27 @@ public class IncidentService {
         incident.setReportedAt(LocalDateTime.now());
         
         // Set optional payment fields
-        incident.setAmount(request.getAmount());
-        incident.setPaymentMethod(request.getPaymentMethod());
-        incident.setReferenceNumber(request.getReferenceNumber());
-        incident.setVoucherType(request.getVoucherType());
-        incident.setEventType(request.getEventType());
-        incident.setDirection(request.getDirection());
-        incident.setAdditionalNotes(request.getAdditionalNotes());
+        if (request.getAmount() != null) {
+            incident.setAmount(request.getAmount());
+        }
+        if (request.getPaymentMethod() != null) {
+            incident.setPaymentMethod(request.getPaymentMethod());
+        }
+        if (request.getReferenceNumber() != null) {
+            incident.setReferenceNumber(request.getReferenceNumber());
+        }
+        if (request.getVoucherType() != null) {
+            incident.setVoucherType(request.getVoucherType());
+        }
+        if (request.getEventType() != null) {
+            incident.setEventType(request.getEventType());
+        }
+        if (request.getDirection() != null) {
+            incident.setDirection(request.getDirection());
+        }
+        if (request.getAdditionalNotes() != null) {
+            incident.setAdditionalNotes(request.getAdditionalNotes());
+        }
         
         Incident saved = incidentRepository.save(incident);
         log.info("✅ Created incident {} for trip {}", saved.getId(), tripId);
@@ -73,7 +87,7 @@ public class IncidentService {
         
         try {
             // Check if trip exists
-            if (!tripRepository.existsById(tripId)) {
+            if (tripId == null || !tripRepository.existsById(tripId)) {
                 log.warn("Trip not found with id: {}", tripId);
                 return new ArrayList<>();
             }
@@ -106,7 +120,7 @@ public class IncidentService {
         log.info("Getting paginated incidents for tripId: {}", tripId);
         
         try {
-            if (!tripRepository.existsById(tripId)) {
+            if (tripId == null || !tripRepository.existsById(tripId)) {
                 log.warn("Trip not found with id: {}", tripId);
                 return Page.empty(pageable);
             }
@@ -230,7 +244,7 @@ public class IncidentService {
         log.info("Getting active incidents for tripId: {}", tripId);
         
         try {
-            if (!tripRepository.existsById(tripId)) {
+            if (tripId == null || !tripRepository.existsById(tripId)) {
                 log.warn("Trip not found with id: {}", tripId);
                 return new ArrayList<>();
             }
@@ -308,7 +322,7 @@ public class IncidentService {
         log.info("Getting incident stats for tripId: {}", tripId);
         
         try {
-            if (!tripRepository.existsById(tripId)) {
+            if (tripId == null || !tripRepository.existsById(tripId)) {
                 log.warn("Trip not found with id: {}", tripId);
                 return IncidentStatsDTO.builder()
                         .totalIncidents(0L)

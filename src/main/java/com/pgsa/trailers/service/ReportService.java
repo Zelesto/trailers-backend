@@ -6,21 +6,11 @@ import com.pgsa.trailers.entity.ops.Trip;
 import com.pgsa.trailers.repository.TripRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import net.sf.jasperreports.engine.*;
-import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
-import net.sf.jasperreports.engine.export.HtmlExporter;
-import net.sf.jasperreports.engine.export.JRPdfExporter;
-import net.sf.jasperreports.engine.export.ooxml.JRXlsxExporter;
-import net.sf.jasperreports.export.*;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
+import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-
-import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
@@ -31,42 +21,25 @@ public class ReportService {
 
     /**
      * Generate trip report in specified format
+     * Currently supports HTML format with print/PDF capability
      */
     public byte[] generateTripReport(String tripNumber, String format) throws Exception {
         log.info("📊 Generating report for trip: {} (format: {})", tripNumber, format);
 
-        try {
-            // Generate HTML report (works without JasperReports)
-            String htmlContent = generateTripHTML(tripNumber);
-            
-            // For HTML format, return directly
-            if ("html".equalsIgnoreCase(format)) {
-                return htmlContent.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            }
-            
-            // For PDF/Excel, try JasperReports, fallback to HTML
-            try {
-                return generateWithJasperReports(tripNumber, format);
-            } catch (Exception e) {
-                log.warn("JasperReports export failed, returning HTML: {}", e.getMessage());
-                return htmlContent.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            }
-            
-        } catch (Exception e) {
-            log.error("Error generating report: {}", e.getMessage(), e);
-            // Return a simple error HTML
-            return generateErrorHTML(tripNumber, e.getMessage()).getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        }
-    }
-
-    /**
-     * Generate HTML report without JasperReports
-     */
-    private String generateTripHTML(String tripNumber) {
         Trip trip = tripRepository.findByTripNumber(tripNumber)
                 .orElseThrow(() -> new RuntimeException("Trip not found: " + tripNumber));
+
+        // Generate HTML report
+        String htmlContent = generateTripHTML(trip);
         
-        return generateTripHTML(trip);
+        // For HTML format, return directly
+        if ("html".equalsIgnoreCase(format)) {
+            return htmlContent.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        }
+        
+        // For other formats, still return HTML (browser will handle print to PDF)
+        log.warn("Format '{}' requested, returning HTML (browser print to PDF available)", format);
+        return htmlContent.getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     private String generateTripHTML(Trip trip) {
@@ -74,11 +47,24 @@ public class ReportService {
                 (trip.getDriver().getFirstName() + " " + trip.getDriver().getLastName()) : "N/A";
         String vehicleReg = trip.getVehicle() != null ?
                 trip.getVehicle().getRegistrationNumber() : "N/A";
+        String vehicleType = trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null ?
+                trip.getVehicle().getVehicleType() : "N/A";
+        
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm");
         
         String statusColor = getStatusColor(trip.getStatus());
         String statusTextColor = getStatusTextColor(trip.getStatus());
         String statusDisplay = trip.getStatus() != null ? trip.getStatus() : "N/A";
+
+        // ✅ Fix: Handle BigDecimal subtraction properly
+        BigDecimal startOdometer = trip.getActualStartOdometer() != null ? trip.getActualStartOdometer() : BigDecimal.ZERO;
+        BigDecimal endOdometer = trip.getActualEndOdometer() != null ? trip.getActualEndOdometer() : BigDecimal.ZERO;
+        BigDecimal totalOdometer = endOdometer.subtract(startOdometer);
+
+        // ✅ Fix: Get distance value
+        BigDecimal distance = trip.getActualDistanceKm() != null ? 
+                trip.getActualDistanceKm() : 
+                (trip.getPlannedDistanceKm() != null ? trip.getPlannedDistanceKm() : BigDecimal.ZERO);
 
         return """
         <!DOCTYPE html>
@@ -114,10 +100,26 @@ public class ReportService {
                 }
                 .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB; font-size: 11px; color: #9CA3AF; }
                 .footer strong { color: #4F46E5; }
+                .print-btn { 
+                    display: inline-block; 
+                    padding: 10px 24px; 
+                    background: linear-gradient(135deg, #4F46E5 0%, #6366F1 100%);
+                    color: white; 
+                    border: none; 
+                    border-radius: 10px; 
+                    font-size: 14px; 
+                    font-weight: 600;
+                    cursor: pointer;
+                    margin-top: 20px;
+                    transition: transform 0.2s;
+                }
+                .print-btn:hover { transform: scale(1.02); }
                 @media print {
                     body { background: white; padding: 0; }
                     .container { box-shadow: none; padding: 20px; }
                     .section { background: #F9FAFB; }
+                    .print-btn { display: none !important; }
+                    .no-print { display: none !important; }
                 }
                 @media (max-width: 768px) {
                     .grid { grid-template-columns: 1fr; }
@@ -149,8 +151,7 @@ public class ReportService {
                         <div class="section-title">Route Information</div>
                         <div class="row"><span class="label">Origin</span><span class="value">%s</span></div>
                         <div class="row"><span class="label">Destination</span><span class="value">%s</span></div>
-                        <div class="row"><span class="label">Distance</span><span class="value">%.1f km</span></div>
-                        <div class="row"><span class="label">Status</span><span class="value">%s</span></div>
+                        <div class="row"><span class="label">Distance</span><span class="value">%.2f km</span></div>
                     </div>
 
                     <div class="section">
@@ -178,6 +179,10 @@ public class ReportService {
                     </div>
                 </div>
 
+                <div style="text-align: center;" class="no-print">
+                    <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
+                </div>
+
                 <div class="footer">
                     <strong>PGS Trailers</strong> • Generated: %s • Confidential
                 </div>
@@ -195,96 +200,19 @@ public class ReportService {
             trip.getReferenceNumber() != null ? trip.getReferenceNumber() : "N/A",
             trip.getOriginLocation() != null ? trip.getOriginLocation() : "N/A",
             trip.getDestinationLocation() != null ? trip.getDestinationLocation() : "N/A",
-            trip.getActualDistanceKm() != null ? trip.getActualDistanceKm() : trip.getPlannedDistanceKm() != null ? trip.getPlannedDistanceKm() : 0.0,
-            trip.getStatus() != null ? trip.getStatus() : "N/A",
+            distance,
             driverName,
             vehicleReg,
-            trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null ? trip.getVehicle().getVehicleType() : "N/A",
-            trip.getActualStartOdometer() != null ? trip.getActualStartOdometer() : 0.0,
-            trip.getActualEndOdometer() != null ? trip.getActualEndOdometer() : 0.0,
-            (trip.getActualEndOdometer() != null && trip.getActualStartOdometer() != null) ? 
-                trip.getActualEndOdometer() - trip.getActualStartOdometer() : 0.0,
+            vehicleType,
+            startOdometer,
+            endOdometer,
+            totalOdometer,
             trip.getPlannedStartDate() != null ? trip.getPlannedStartDate().format(formatter) : "N/A",
             trip.getActualStartDate() != null ? trip.getActualStartDate().format(formatter) : "N/A",
             trip.getPlannedEndDate() != null ? trip.getPlannedEndDate().format(formatter) : "N/A",
             trip.getActualEndDate() != null ? trip.getActualEndDate().format(formatter) : "N/A",
             new Date().toString()
         );
-    }
-
-    /**
-     * Generate JasperReports report (with fallback to HTML)
-     */
-    private byte[] generateWithJasperReports(String tripNumber, String format) throws Exception {
-        Trip trip = tripRepository.findByTripNumber(tripNumber)
-                .orElseThrow(() -> new RuntimeException("Trip not found: " + tripNumber));
-
-        Map<String, Object> params = new HashMap<>();
-        params.put("tripNumber", trip.getTripNumber());
-        params.put("customerName", trip.getCustomer() != null ? trip.getCustomer().getName() : "N/A");
-        params.put("originLocation", trip.getOriginLocation() != null ? trip.getOriginLocation() : "N/A");
-        params.put("destinationLocation", trip.getDestinationLocation() != null ? trip.getDestinationLocation() : "N/A");
-        params.put("plannedDistanceKm", trip.getPlannedDistanceKm() != null ? trip.getPlannedDistanceKm().doubleValue() : 0);
-        params.put("actualDistanceKm", trip.getActualDistanceKm() != null ? trip.getActualDistanceKm().doubleValue() : 0);
-        params.put("status", trip.getStatus() != null ? trip.getStatus() : "N/A");
-        params.put("driverName", trip.getDriver() != null ?
-                (trip.getDriver().getFirstName() + " " + trip.getDriver().getLastName()) : "N/A");
-        params.put("vehicleRegistration", trip.getVehicle() != null ?
-                trip.getVehicle().getRegistrationNumber() : "N/A");
-        params.put("reportGenerated", new Date().toString());
-
-        try {
-            // Try to load compiled report
-            InputStream jasperStream = new ClassPathResource("reports/trip_report.jasper").getInputStream();
-            JasperReport jasperReport = (JasperReport) JRLoader.loadObject(jasperStream);
-            
-            List<Map<String, Object>> dataList = Collections.singletonList(params);
-            JRBeanCollectionDataSource dataSource = new JRBeanCollectionDataSource(dataList);
-            JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, params, dataSource);
-            
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            
-            if ("pdf".equalsIgnoreCase(format)) {
-                JRPdfExporter exporter = new JRPdfExporter();
-                exporter.setExporterInput(new SimpleExporterInput(jasperPrint));
-                exporter.setExporterOutput(new SimpleOutputStreamExporterOutput(outputStream));
-                exporter.exportReport();
-            } else if ("xlsx".equalsIgnoreCase(format)) {
-                JRXlsxExporter exporter = new JRXlsxExporter();
-                exporter.setExporterInput(new SimpleExporterInput(jasperPrint));
-                exporter.setExporterOutput(new SimpleOutputStreamExporterOutput(outputStream));
-                exporter.exportReport();
-            } else {
-                HtmlExporter exporter = new HtmlExporter();
-                exporter.setExporterInput(new SimpleExporterInput(jasperPrint));
-                exporter.setExporterOutput(new SimpleHtmlExporterOutput(outputStream));
-                exporter.exportReport();
-            }
-            
-            return outputStream.toByteArray();
-            
-        } catch (Exception e) {
-            log.warn("JasperReports processing failed: {}", e.getMessage());
-            throw e;
-        }
-    }
-
-    /**
-     * Generate error HTML
-     */
-    private String generateErrorHTML(String tripNumber, String error) {
-        return """
-        <!DOCTYPE html>
-        <html>
-        <head><meta charset="UTF-8"><title>Error</title></head>
-        <body style="font-family:Arial;text-align:center;padding:40px;">
-            <h2 style="color:#EF4444;">⚠️ Report Generation Error</h2>
-            <p><strong>Trip:</strong> %s</p>
-            <p style="color:#6B7280;">%s</p>
-            <p style="font-size:12px;color:#9CA3AF;margin-top:20px;">Please try again or contact support.</p>
-        </body>
-        </html>
-        """.formatted(tripNumber, error);
     }
 
     private String getStatusColor(String status) {
@@ -307,5 +235,12 @@ public class ReportService {
             case "CANCELLED" -> "#991B1B";
             default -> "#6B7280";
         };
+    }
+
+    /**
+     * Check if BIRT is available (for backward compatibility)
+     */
+    public boolean isBirtAvailable() {
+        return false; // Using pure HTML reporting now
     }
 }

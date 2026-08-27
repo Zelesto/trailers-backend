@@ -92,6 +92,18 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     );
 
     /**
+     * Native query fallback - if JPQL has issues
+     */
+    @Query(value = """
+        SELECT t.* FROM trip t
+        LEFT JOIN driver d ON t.driver_id = d.id
+        LEFT JOIN vehicle v ON t.vehicle_id = v.id
+        LEFT JOIN customer c ON t.customer_id = c.id
+        WHERE t.trip_number = :tripNumber
+        """, nativeQuery = true)
+    Optional<Trip> findByTripNumberNative(@Param("tripNumber") String tripNumber);
+
+    /**
      * Find trip by number with all relationships eagerly fetched
      * ✅ This solves the lazy loading issue for reports
      */

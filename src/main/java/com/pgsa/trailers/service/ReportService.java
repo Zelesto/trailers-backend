@@ -36,13 +36,14 @@ public class ReportService {
     // TRIP REPORT
     // ============================================================
 
-    @Transactional(readOnly = true)
+   @Transactional(readOnly = true)
     public TripReportDTO generateTripReport(String tripNumber) {
         log.info("📊 Generating trip report for: {}", tripNumber);
-
-        Trip trip = tripRepository.findByTripNumber(tripNumber)
+    
+        // ✅ Use the new method that eagerly fetches all relationships
+        Trip trip = tripRepository.findByTripNumberWithRelations(tripNumber)
                 .orElseThrow(() -> new RuntimeException("Trip not found: " + tripNumber));
-
+    
         return TripReportDTO.fromEntity(trip);
     }
 

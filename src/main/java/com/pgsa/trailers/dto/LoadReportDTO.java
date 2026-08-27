@@ -57,20 +57,34 @@ public class LoadReportDTO {
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd MMM yyyy");
 
         List<TripSummary> tripSummaries = trips.stream()
-                .map(trip -> TripSummary.builder()
-                        .tripId(trip.getId())
-                        .tripNumber(trip.getTripNumber())
-                        .driverName(trip.getDriver() != null ? 
-                                trip.getDriver().getFirstName() + " " + trip.getDriver().getLastName() : "N/A")
-                        .vehicleRegistration(trip.getVehicle() != null ? 
-                                trip.getVehicle().getRegistrationNumber() : "N/A")
-                        .plannedStartDate(trip.getPlannedStartDate() != null ? 
-                                trip.getPlannedStartDate().format(dateFormatter) : "N/A")
-                        .plannedEndDate(trip.getPlannedEndDate() != null ? 
-                                trip.getPlannedEndDate().format(dateFormatter) : "N/A")
-                        .actualDistanceKm(trip.getActualDistanceKm())
-                        .status(trip.getStatus())
-                        .build())
+                .map(trip -> {
+                    String driverName = null;
+                    if (trip.getDriver() != null) {
+                        String firstName = trip.getDriver().getFirstName();
+                        String lastName = trip.getDriver().getLastName();
+                        if (firstName != null || lastName != null) {
+                            driverName = (firstName != null ? firstName : "") + 
+                                         (lastName != null ? " " + lastName : "");
+                            driverName = driverName.trim();
+                            if (driverName.isEmpty()) driverName = null;
+                        }
+                    }
+                    String vehicleReg = trip.getVehicle() != null ? 
+                            trip.getVehicle().getRegistrationNumber() : null;
+                    
+                    return TripSummary.builder()
+                            .tripId(trip.getId())
+                            .tripNumber(trip.getTripNumber())
+                            .driverName(driverName != null ? driverName : "N/A")
+                            .vehicleRegistration(vehicleReg != null ? vehicleReg : "N/A")
+                            .plannedStartDate(trip.getPlannedStartDate() != null ? 
+                                    trip.getPlannedStartDate().format(dateFormatter) : "N/A")
+                            .plannedEndDate(trip.getPlannedEndDate() != null ? 
+                                    trip.getPlannedEndDate().format(dateFormatter) : "N/A")
+                            .actualDistanceKm(trip.getActualDistanceKm())
+                            .status(trip.getStatus())
+                            .build();
+                })
                 .collect(Collectors.toList());
 
         return LoadReportDTO.builder()

@@ -1,19 +1,20 @@
 # ============================================================================
 # DOCKERFILE FOR SPRING BOOT APPLICATION
-# Use this for local Docker testing (Render doesn't use Dockerfile by default)
 # ============================================================================
 
 # Stage 1: Build the application
 FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /app
 
-# Copy pom.xml and download dependencies
+# Copy pom.xml
 COPY pom.xml .
-RUN mvn dependency:go-offline
+
+# ✅ Option 1: Skip go-offline and let Maven resolve during build
+# RUN mvn dependency:go-offline
 
 # Copy source code and build
 COPY src ./src
-RUN mvn clean package -DskipTests -e
+RUN mvn clean package -DskipTests
 
 # Stage 2: Create the runtime image
 FROM eclipse-temurin:17-jre-alpine

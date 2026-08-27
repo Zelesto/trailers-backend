@@ -1,0 +1,394 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports 
+              http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="Trip Report" language="groovy" pageWidth="595" pageHeight="842" 
+              columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20"
+              uuid="a1b2c3d4-e5f6-7890-abcd-ef1234567890">
+
+    <parameter name="companyName" class="java.lang.String"/>
+    <parameter name="reportTitle" class="java.lang.String"/>
+    <parameter name="logoUrl" class="java.lang.String"/>
+    <parameter name="tripNumber" class="java.lang.String"/>
+    <parameter name="customerName" class="java.lang.String"/>
+    <parameter name="status" class="java.lang.String"/>
+    <parameter name="originLocation" class="java.lang.String"/>
+    <parameter name="destinationLocation" class="java.lang.String"/>
+    <parameter name="plannedDistanceKm" class="java.lang.Double"/>
+    <parameter name="actualDistanceKm" class="java.lang.Double"/>
+    <parameter name="driverName" class="java.lang.String"/>
+    <parameter name="vehicleRegistration" class="java.lang.String"/>
+    <parameter name="plannedStartDate" class="java.lang.String"/>
+    <parameter name="plannedEndDate" class="java.lang.String"/>
+    <parameter name="actualStartDate" class="java.lang.String"/>
+    <parameter name="actualEndDate" class="java.lang.String"/>
+    <parameter name="actualStartOdometer" class="java.lang.Double"/>
+    <parameter name="actualEndOdometer" class="java.lang.Double"/>
+    <parameter name="referenceNumber" class="java.lang.String"/>
+    <parameter name="createdAt" class="java.lang.String"/>
+    <parameter name="reportGenerated" class="java.lang.String"/>
+
+    <title>
+        <band height="120">
+            <!-- Logo -->
+            <image>
+                <reportElement x="20" y="20" width="60" height="60" uuid="logo"/>
+                <imageExpression><![CDATA[$P{logoUrl}]]></imageExpression>
+            </image>
+            
+            <!-- Title -->
+            <staticText>
+                <reportElement x="100" y="20" width="400" height="30" uuid="title"/>
+                <textElement textAlignment="Center">
+                    <font size="18" isBold="true"/>
+                </textElement>
+                <text><![CDATA[$P{companyName}]]></text>
+            </staticText>
+            
+            <staticText>
+                <reportElement x="100" y="55" width="400" height="25" uuid="subtitle"/>
+                <textElement textAlignment="Center">
+                    <font size="14" isBold="true"/>
+                </textElement>
+                <text><![CDATA[$P{reportTitle}]]></text>
+            </staticText>
+            
+            <!-- Trip Number -->
+            <staticText>
+                <reportElement x="400" y="85" width="100" height="20" uuid="tripLabel"/>
+                <textElement textAlignment="Right">
+                    <font size="10"/>
+                </textElement>
+                <text><![CDATA[Trip #:]]></text>
+            </staticText>
+            
+            <textField>
+                <reportElement x="450" y="85" width="100" height="20" uuid="tripValue"/>
+                <textElement textAlignment="Left">
+                    <font size="10" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{tripNumber}]]></textFieldExpression>
+            </textField>
+        </band>
+    </title>
+
+    <detail>
+        <band height="700">
+            <staticText>
+                <reportElement x="20" y="10" width="200" height="20" uuid="section1"/>
+                <textElement>
+                    <font size="12" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Trip Details]]></text>
+            </staticText>
+            
+            <!-- Trip Details -->
+            <staticText>
+                <reportElement x="20" y="35" width="150" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <text><![CDATA[Customer:]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="180" y="35" width="350" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{customerName}]]></textFieldExpression>
+            </textField>
+            
+            <staticText>
+                <reportElement x="20" y="60" width="150" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <text><![CDATA[Status:]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="180" y="60" width="350" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{status}]]></textFieldExpression>
+            </textField>
+            
+            <staticText>
+                <reportElement x="20" y="85" width="150" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <text><![CDATA[Reference:]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="180" y="85" width="350" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{referenceNumber}]]></textFieldExpression>
+            </textField>
+
+            <line>
+                <reportElement x="20" y="115" width="515" height="1"/>
+                <graphicElement>
+                    <pen lineWidth="0.5"/>
+                </graphicElement>
+            </line>
+
+            <!-- Route Information -->
+            <staticText>
+                <reportElement x="20" y="125" width="200" height="20" uuid="section2"/>
+                <textElement>
+                    <font size="12" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Route Information]]></text>
+            </staticText>
+            
+            <staticText>
+                <reportElement x="20" y="150" width="150" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <text><![CDATA[Origin:]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="180" y="150" width="350" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{originLocation}]]></textFieldExpression>
+            </textField>
+            
+            <staticText>
+                <reportElement x="20" y="175" width="150" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <text><![CDATA[Destination:]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="180" y="175" width="350" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{destinationLocation}]]></textFieldExpression>
+            </textField>
+            
+            <staticText>
+                <reportElement x="20" y="200" width="150" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <text><![CDATA[Planned Distance:]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="180" y="200" width="150" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{plannedDistanceKm} + " km"]]></textFieldExpression>
+            </textField>
+            
+            <staticText>
+                <reportElement x="350" y="200" width="150" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <text><![CDATA[Actual Distance:]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="500" y="200" width="100" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{actualDistanceKm} + " km"]]></textFieldExpression>
+            </textField>
+
+            <line>
+                <reportElement x="20" y="230" width="515" height="1"/>
+                <graphicElement>
+                    <pen lineWidth="0.5"/>
+                </graphicElement>
+            </line>
+
+            <!-- Driver & Vehicle -->
+            <staticText>
+                <reportElement x="20" y="240" width="200" height="20" uuid="section3"/>
+                <textElement>
+                    <font size="12" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Driver & Vehicle]]></text>
+            </staticText>
+            
+            <staticText>
+                <reportElement x="20" y="265" width="150" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <text><![CDATA[Driver:]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="180" y="265" width="350" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{driverName}]]></textFieldExpression>
+            </textField>
+            
+            <staticText>
+                <reportElement x="20" y="290" width="150" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <text><![CDATA[Vehicle:]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="180" y="290" width="350" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{vehicleRegistration}]]></textFieldExpression>
+            </textField>
+
+            <line>
+                <reportElement x="20" y="320" width="515" height="1"/>
+                <graphicElement>
+                    <pen lineWidth="0.5"/>
+                </graphicElement>
+            </line>
+
+            <!-- Odometer -->
+            <staticText>
+                <reportElement x="20" y="330" width="200" height="20" uuid="section4"/>
+                <textElement>
+                    <font size="12" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Odometer Readings]]></text>
+            </staticText>
+            
+            <staticText>
+                <reportElement x="20" y="355" width="150" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <text><![CDATA[Start:]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="180" y="355" width="200" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{actualStartOdometer} + " km"]]></textFieldExpression>
+            </textField>
+            
+            <staticText>
+                <reportElement x="400" y="355" width="150" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <text><![CDATA[End:]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="450" y="355" width="100" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{actualEndOdometer} + " km"]]></textFieldExpression>
+            </textField>
+
+            <line>
+                <reportElement x="20" y="385" width="515" height="1"/>
+                <graphicElement>
+                    <pen lineWidth="0.5"/>
+                </graphicElement>
+            </line>
+
+            <!-- Timing -->
+            <staticText>
+                <reportElement x="20" y="395" width="200" height="20" uuid="section5"/>
+                <textElement>
+                    <font size="12" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Timing]]></text>
+            </staticText>
+            
+            <staticText>
+                <reportElement x="20" y="420" width="150" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <text><![CDATA[Planned Start:]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="180" y="420" width="350" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{plannedStartDate}]]></textFieldExpression>
+            </textField>
+            
+            <staticText>
+                <reportElement x="20" y="445" width="150" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <text><![CDATA[Actual Start:]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="180" y="445" width="350" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{actualStartDate}]]></textFieldExpression>
+            </textField>
+            
+            <staticText>
+                <reportElement x="20" y="470" width="150" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <text><![CDATA[Planned End:]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="180" y="470" width="350" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{plannedEndDate}]]></textFieldExpression>
+            </textField>
+            
+            <staticText>
+                <reportElement x="20" y="495" width="150" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <text><![CDATA[Actual End:]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="180" y="495" width="350" height="20"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{actualEndDate}]]></textFieldExpression>
+            </textField>
+
+            <!-- Footer -->
+            <staticText>
+                <reportElement x="20" y="540" width="500" height="20"/>
+                <textElement textAlignment="Center">
+                    <font size="8"/>
+                </textElement>
+                <text><![CDATA[Generated by Trailers System]]></text>
+            </staticText>
+            
+            <textField>
+                <reportElement x="20" y="560" width="500" height="20"/>
+                <textElement textAlignment="Center">
+                    <font size="8"/>
+                </textElement>
+                <textFieldExpression><![CDATA["Generated: " + $P{reportGenerated}]]></textFieldExpression>
+            </textField>
+        </band>
+    </detail>
+</jasperReport>

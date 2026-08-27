@@ -80,9 +80,24 @@ public class ReportService {
     // HTML REPORT GENERATION (for React Viewer)
     // ============================================================
 
+    @Transactional(readOnly = true)
     public String generateTripReportHTML(String tripNumber) {
-        TripReportDTO report = generateTripReport(tripNumber);
-        return generateTripHTML(report);
+        log.info("📊 Generating trip report for: {}", tripNumber);
+
+        try {
+            // ✅ Use the method that eagerly fetches all relationships
+            Trip trip = tripRepository.findByTripNumberWithRelations(tripNumber)
+                    .orElseThrow(() -> new RuntimeException("Trip not found: " + tripNumber));
+
+            // ✅ Convert to DTO while still in transaction
+            TripReportDTO reportDTO = TripReportDTO.fromEntity(trip);
+            
+            return generateTripHTML(reportDTO);
+            
+        } catch (Exception e) {
+            log.error("Error generating trip report: {}", e.getMessage(), e);
+            return generateErrorHTML(tripNumber, e.getMessage());
+        }
     }
 
     public String generateLoadReportHTML(String loadNumber) {
@@ -100,6 +115,9 @@ public class ReportService {
     // ============================================================
 
     private String generateTripHTML(TripReportDTO trip) {
+        String statusColor = getStatusColor(trip.getStatus());
+        String statusTextColor = getStatusTextColor(trip.getStatus());
+
         return """
         <!DOCTYPE html>
         <html>
@@ -113,7 +131,6 @@ public class ReportService {
                 .header { text-align: center; border-bottom: 3px double #4F46E5; padding-bottom: 20px; margin-bottom: 30px; }
                 .logo { font-size: 28px; font-weight: 700; color: #4F46E5; }
                 .logo span { color: #6366F1; }
-                .subtitle { font-size: 14px; color: #6B7280; }
                 .report-title { font-size: 20px; font-weight: 600; color: #111827; margin-top: 8px; }
                 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
                 .section { background: #F9FAFB; border-radius: 12px; padding: 16px 20px; }
@@ -124,11 +141,6 @@ public class ReportService {
                 .label { width: 140px; font-size: 12px; color: #6B7280; flex-shrink: 0; }
                 .value { font-size: 13px; font-weight: 500; color: #111827; }
                 .status-badge { display: inline-block; padding: 2px 14px; border-radius: 20px; font-size: 11px; font-weight: 600; background-color: %s; color: %s; }
-                .table-container { overflow-x: auto; }
-                table { width: 100%; border-collapse: collapse; font-size: 12px; }
-                th { background: #F3F4F6; padding: 10px 12px; text-align: left; font-weight: 600; color: #374151; border-bottom: 2px solid #E5E7EB; }
-                td { padding: 8px 12px; border-bottom: 1px solid #F3F4F6; }
-                .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB; font-size: 11px; color: #9CA3AF; }
                 .print-btn { display: inline-block; padding: 10px 24px; background: linear-gradient(135deg, #4F46E5 0%, #6366F1 100%); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 20px; }
                 @media print { body { background: white; padding: 0; } .container { box-shadow: none; padding: 20px; } .print-btn { display: none !important; } }
                 @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .container { padding: 20px; } }
@@ -166,6 +178,7 @@ public class ReportService {
                         <div class="row"><span class="label">Make / Model</span><span class="value">%s</span></div>
                         <div class="row"><span class="label">Driver</span><span class="value">%s</span></div>
                         <div class="row"><span class="label">License</span><span class="value">%s</span></div>
+                        <div class="row"><span class="label">Phone</span><span class="value">%s</span></div>
                     </div>
 
                     <div class="section">
@@ -201,10 +214,10 @@ public class ReportService {
         </html>
         """.formatted(
             trip.getTripNumber(),
-            getStatusColor(trip.getStatus()), getStatusTextColor(trip.getStatus()),
+            statusColor, statusTextColor,
             trip.getTripNumber(), new Date().toString(),
             trip.getTripNumber(),
-            getStatusColor(trip.getStatus()), getStatusTextColor(trip.getStatus()), trip.getStatus(),
+            statusColor, statusTextColor, trip.getStatus() != null ? trip.getStatus() : "N/A",
             trip.getTripType() != null ? trip.getTripType() : "N/A",
             trip.getReferenceNumber() != null ? trip.getReferenceNumber() : "N/A",
             trip.getCustomerName() != null ? trip.getCustomerName() : "N/A",
@@ -213,6 +226,7 @@ public class ReportService {
             (trip.getVehicleMake() != null ? trip.getVehicleMake() : "") + " " + (trip.getVehicleModel() != null ? trip.getVehicleModel() : ""),
             trip.getDriverName() != null ? trip.getDriverName() : "N/A",
             trip.getDriverLicense() != null ? trip.getDriverLicense() : "N/A",
+            trip.getDriverPhone() != null ? trip.getDriverPhone() : "N/A",
             trip.getOriginLocation() != null ? trip.getOriginLocation() : "N/A",
             trip.getDestinationLocation() != null ? trip.getDestinationLocation() : "N/A",
             trip.getPlannedDistanceKm() != null ? trip.getPlannedDistanceKm() : 0.0,
@@ -487,6 +501,27 @@ public class ReportService {
         );
     }
 
+
+
+    // ============================================================
+    // ERROR HTML
+    // ============================================================
+
+    private String generateErrorHTML(String tripNumber, String error) {
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="UTF-8"><title>Error</title></head>
+        <body style="font-family:Arial;text-align:center;padding:40px;">
+            <h2 style="color:#EF4444;">⚠️ Report Generation Error</h2>
+            <p><strong>Trip:</strong> %s</p>
+            <p style="color:#6B7280;">%s</p>
+            <p style="font-size:12px;color:#9CA3AF;margin-top:20px;">Please try again or contact support.</p>
+        </body>
+        </html>
+        """.formatted(tripNumber, error);
+    }
+    
     // ============================================================
     // HELPER METHODS
     // ============================================================

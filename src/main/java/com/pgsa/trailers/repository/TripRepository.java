@@ -1,6 +1,8 @@
 // src/main/java/com/pgsa/trailers/repository/TripRepository.java
 package com.pgsa.trailers.repository;
 
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import com.pgsa.trailers.entity.ops.Trip;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

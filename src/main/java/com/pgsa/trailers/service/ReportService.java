@@ -7,6 +7,7 @@ import com.pgsa.trailers.repository.TripRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
@@ -21,16 +22,28 @@ public class ReportService {
 
     /**
      * Generate trip report in specified format
-     * Currently supports HTML format with print/PDF capability
+     * ✅ Added @Transactional to handle lazy loading
      */
+    @Transactional(readOnly = true)
     public byte[] generateTripReport(String tripNumber, String format) throws Exception {
         log.info("📊 Generating report for trip: {} (format: {})", tripNumber, format);
 
+        // ✅ Fetch trip with all relationships loaded
         Trip trip = tripRepository.findByTripNumber(tripNumber)
                 .orElseThrow(() -> new RuntimeException("Trip not found: " + tripNumber));
 
+        // ✅ Initialize lazy relationships before transaction closes
+        // Accessing these inside the transaction ensures they're loaded
+        String driverName = trip.getDriver() != null ?
+                (trip.getDriver().getFirstName() + " " + trip.getDriver().getLastName()) : "N/A";
+        String vehicleReg = trip.getVehicle() != null ?
+                trip.getVehicle().getRegistrationNumber() : "N/A";
+        String vehicleType = trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null ?
+                trip.getVehicle().getVehicleType() : "N/A";
+        String customerName = trip.getCustomer() != null ? trip.getCustomer().getName() : "N/A";
+
         // Generate HTML report
-        String htmlContent = generateTripHTML(trip);
+        String htmlContent = generateTripHTML(trip, driverName, vehicleReg, vehicleType, customerName);
         
         // For HTML format, return directly
         if ("html".equalsIgnoreCase(format)) {
@@ -42,26 +55,18 @@ public class ReportService {
         return htmlContent.getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    private String generateTripHTML(Trip trip) {
-        String driverName = trip.getDriver() != null ?
-                (trip.getDriver().getFirstName() + " " + trip.getDriver().getLastName()) : "N/A";
-        String vehicleReg = trip.getVehicle() != null ?
-                trip.getVehicle().getRegistrationNumber() : "N/A";
-        String vehicleType = trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null ?
-                trip.getVehicle().getVehicleType() : "N/A";
-        
+    private String generateTripHTML(Trip trip, String driverName, String vehicleReg, String vehicleType, String customerName) {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm");
         
         String statusColor = getStatusColor(trip.getStatus());
         String statusTextColor = getStatusTextColor(trip.getStatus());
         String statusDisplay = trip.getStatus() != null ? trip.getStatus() : "N/A";
 
-        // ✅ Fix: Handle BigDecimal subtraction properly
+        // Handle BigDecimal values safely
         BigDecimal startOdometer = trip.getActualStartOdometer() != null ? trip.getActualStartOdometer() : BigDecimal.ZERO;
         BigDecimal endOdometer = trip.getActualEndOdometer() != null ? trip.getActualEndOdometer() : BigDecimal.ZERO;
         BigDecimal totalOdometer = endOdometer.subtract(startOdometer);
 
-        // ✅ Fix: Get distance value
         BigDecimal distance = trip.getActualDistanceKm() != null ? 
                 trip.getActualDistanceKm() : 
                 (trip.getPlannedDistanceKm() != null ? trip.getPlannedDistanceKm() : BigDecimal.ZERO);
@@ -196,7 +201,7 @@ public class ReportService {
             new Date().toString(),
             trip.getTripNumber(),
             statusColor, statusTextColor, statusDisplay,
-            trip.getCustomer() != null ? trip.getCustomer().getName() : "N/A",
+            customerName,
             trip.getReferenceNumber() != null ? trip.getReferenceNumber() : "N/A",
             trip.getOriginLocation() != null ? trip.getOriginLocation() : "N/A",
             trip.getDestinationLocation() != null ? trip.getDestinationLocation() : "N/A",

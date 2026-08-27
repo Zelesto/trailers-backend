@@ -5,10 +5,10 @@ package com.pgsa.trailers.controller;
 import com.pgsa.trailers.service.ReportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -20,17 +20,8 @@ public class ReportController {
 
     private final ReportService reportService;
 
-    @GetMapping("/health")
-    public ResponseEntity<Map<String, Object>> healthCheck() {
-        return ResponseEntity.ok(Map.of(
-                "status", "OK",
-                "birtAvailable", false,
-                "jasperAvailable", true
-        ));
-    }
-
     @PostMapping("/trip/{tripNumber}")
-    public ResponseEntity<String> generateTripReport(
+    public ResponseEntity<Map<String, Object>> generateTripReport(
             @PathVariable String tripNumber,
             @RequestParam(defaultValue = "html") String format) {
         
@@ -38,17 +29,26 @@ public class ReportController {
         
         try {
             String html = reportService.generateTripReportHTML(tripNumber);
-            return ResponseEntity.ok()
-                    .contentType(MediaType.TEXT_HTML)
-                    .body(html);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("format", "html");
+            response.put("content", html);
+            
+            return ResponseEntity.ok(response);
+            
         } catch (Exception e) {
             log.error("Error generating trip report: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().body("<h2>Error: " + e.getMessage() + "</h2>");
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(errorResponse);
         }
     }
 
     @PostMapping("/load/{loadNumber}")
-    public ResponseEntity<String> generateLoadReport(
+    public ResponseEntity<Map<String, Object>> generateLoadReport(
             @PathVariable String loadNumber,
             @RequestParam(defaultValue = "html") String format) {
         
@@ -56,17 +56,26 @@ public class ReportController {
         
         try {
             String html = reportService.generateLoadReportHTML(loadNumber);
-            return ResponseEntity.ok()
-                    .contentType(MediaType.TEXT_HTML)
-                    .body(html);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("format", "html");
+            response.put("content", html);
+            
+            return ResponseEntity.ok(response);
+            
         } catch (Exception e) {
             log.error("Error generating load report: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().body("<h2>Error: " + e.getMessage() + "</h2>");
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(errorResponse);
         }
     }
 
     @PostMapping("/fuel")
-    public ResponseEntity<String> generateFuelReport(
+    public ResponseEntity<Map<String, Object>> generateFuelReport(
             @RequestParam(required = false) Long vehicleId,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate,
@@ -76,12 +85,21 @@ public class ReportController {
         
         try {
             String html = reportService.generateFuelReportHTML(vehicleId, startDate, endDate);
-            return ResponseEntity.ok()
-                    .contentType(MediaType.TEXT_HTML)
-                    .body(html);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("format", "html");
+            response.put("content", html);
+            
+            return ResponseEntity.ok(response);
+            
         } catch (Exception e) {
             log.error("Error generating fuel report: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().body("<h2>Error: " + e.getMessage() + "</h2>");
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(errorResponse);
         }
     }
 }

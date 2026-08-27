@@ -32,7 +32,8 @@ public class TripReportDTO {
     
     private String driverName;
     private String driverLicense;
-    private String driverContact;
+    private String driverPhone;
+    private String driverEmail;
     
     private String loadNumber;
     private String loadDescription;
@@ -59,6 +60,43 @@ public class TripReportDTO {
     public static TripReportDTO fromEntity(Trip trip) {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm");
         
+        // ✅ Driver fields - using correct field names from Driver entity
+        String driverName = null;
+        String driverLicense = null;
+        String driverPhone = null;
+        String driverEmail = null;
+        
+        if (trip.getDriver() != null) {
+            Driver driver = trip.getDriver();
+            // Full name
+            String firstName = driver.getFirstName();
+            String lastName = driver.getLastName();
+            if (firstName != null || lastName != null) {
+                driverName = (firstName != null ? firstName : "") + 
+                             (lastName != null ? " " + lastName : "");
+                driverName = driverName.trim();
+                if (driverName.isEmpty()) driverName = null;
+            }
+            // ✅ Use correct field names from Driver entity
+            driverLicense = driver.getLicenseNumber();
+            driverPhone = driver.getPhoneNumber();  // ✅ Correct field name
+            driverEmail = driver.getEmail();
+        }
+        
+        // ✅ Vehicle fields - using correct field names from Vehicle entity
+        String vehicleMake = null;
+        String vehicleModel = null;
+        String vehicleRegistration = null;
+        String vehicleType = null;
+        
+        if (trip.getVehicle() != null) {
+            Vehicle vehicle = trip.getVehicle();
+            vehicleMake = vehicle.getMake();
+            vehicleModel = vehicle.getModel();
+            vehicleRegistration = vehicle.getRegistrationNumber();
+            vehicleType = vehicle.getVehicleType();
+        }
+
         return TripReportDTO.builder()
                 .tripNumber(trip.getTripNumber())
                 .tripType(trip.getTripType())
@@ -67,14 +105,14 @@ public class TripReportDTO {
                 .referenceNumber(trip.getReferenceNumber())
                 .customerName(trip.getCustomer() != null ? trip.getCustomer().getName() : null)
                 .customerCode(trip.getCustomer() != null ? trip.getCustomer().getCustomerCode() : null)
-                .vehicleRegistration(trip.getVehicle() != null ? trip.getVehicle().getRegistrationNumber() : null)
-                .vehicleMake(trip.getVehicle() != null ? trip.getVehicle().getMake() : null)
-                .vehicleModel(trip.getVehicle() != null ? trip.getVehicle().getModel() : null)
-                .vehicleType(trip.getVehicle() != null ? trip.getVehicle().getVehicleType() : null)
-                .driverName(trip.getDriver() != null ? 
-                        trip.getDriver().getFirstName() + " " + trip.getDriver().getLastName() : null)
-                .driverLicense(trip.getDriver() != null ? trip.getDriver().getLicenseNumber() : null)
-                .driverContact(trip.getDriver() != null ? trip.getDriver().getContactNumber() : null)
+                .vehicleRegistration(vehicleRegistration)
+                .vehicleMake(vehicleMake)
+                .vehicleModel(vehicleModel)
+                .vehicleType(vehicleType)
+                .driverName(driverName)
+                .driverLicense(driverLicense)
+                .driverPhone(driverPhone)
+                .driverEmail(driverEmail)
                 .loadNumber(trip.getLoadNumber())
                 .loadDescription(trip.getLoadDescription())
                 .commodityType(trip.getCommodityType())

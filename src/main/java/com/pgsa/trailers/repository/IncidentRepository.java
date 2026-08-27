@@ -9,7 +9,6 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Optional;
 
 @Repository
 public interface IncidentRepository extends JpaRepository<Incident, Long> {
@@ -45,8 +44,4 @@ public interface IncidentRepository extends JpaRepository<Incident, Long> {
     // Find urgent incidents (requires assistance and not resolved)
     @Query("SELECT i FROM Incident i WHERE i.requiresAssistance = true AND i.resolved = false ORDER BY i.reportedAt DESC")
     List<Incident> findUrgentIncidents();
-    
-    // Check if trip has incidents
-    @Query("SELECT COUNT(i) > 0 FROM Incident i WHERE i.trip.id = :tripId")
-    boolean existsByTripId(@Param("tripId") Long tripId);
 }

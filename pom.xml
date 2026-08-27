@@ -26,7 +26,58 @@
         <pdfbox.version>2.0.29</pdfbox.version>
         <poi.version>5.2.5</poi.version>
         <xdocreport.version>2.0.3</xdocreport.version>
+        <jasperreports.version>6.20.6</jasperreports.version>
     </properties>
+
+    <!-- ============================================
+         REPOSITORIES
+         ============================================ -->
+    <repositories>
+        <repository>
+            <id>central</id>
+            <url>https://repo.maven.apache.org/maven2</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+        <repository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+        <!-- JasperReports repository -->
+        <repository>
+            <id>jaspersoft-repo</id>
+            <name>Jaspersoft Repository</name>
+            <url>https://jaspersoft.jfrog.io/jaspersoft/third-party-ce-artifacts/</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+        <repository>
+            <id>apache-snapshots</id>
+            <name>Apache Snapshots</name>
+            <url>https://repository.apache.org/snapshots</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
 
     <!-- ============================================
          AWS SDK BOM - Managed at the root level
@@ -42,60 +93,6 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
-
-    <!-- ============================================
-         REPOSITORIES - ADD BIRT REPOSITORY
-         ============================================ -->
-    <repositories>
-        <repository>
-            <id>central</id>
-            <url>https://repo.maven.apache.org/maven2</url>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
-
-        <!-- ✅ BIRT/Eclipse Repository -->
-        <repository>
-            <id>eclipse-birt</id>
-            <name>Eclipse BIRT Repository</name>
-            <url>https://repo.eclipse.org/content/groups/birt/</url>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
-
-        <!-- ✅ Fallback Eclipse Repository -->
-        <repository>
-            <id>eclipse-releases</id>
-            <name>Eclipse Releases</name>
-            <url>https://repo.eclipse.org/content/repositories/releases/</url>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
-
-        <repository>
-            <id>spring-milestones</id>
-            <name>Spring Milestones</name>
-            <url>https://repo.spring.io/milestone</url>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
 
     <dependencies>
         <!-- Spring Boot Starters -->
@@ -162,6 +159,7 @@
         <!-- ============================================
              PDF & Document Conversion
              ============================================ -->
+        <!-- Apache PDFBox for PDF manipulation -->
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>
@@ -174,6 +172,7 @@
             <version>${pdfbox.version}</version>
         </dependency>
 
+        <!-- Apache POI for DOC/DOCX handling -->
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi</artifactId>
@@ -186,6 +185,7 @@
             <version>${poi.version}</version>
         </dependency>
 
+        <!-- XDocReport for DOC to PDF conversion -->
         <dependency>
             <groupId>fr.opensagres.xdocreport</groupId>
             <artifactId>fr.opensagres.xdocreport.core</artifactId>
@@ -199,24 +199,30 @@
         </dependency>
 
         <!-- ============================================
-             BIRT - MAKE OPTIONAL with proper repository
+             JASPERREPORTS - Professional Reporting
              ============================================ -->
+        <!-- Core JasperReports -->
         <dependency>
-            <groupId>org.eclipse.birt.runtime</groupId>
-            <artifactId>org.eclipse.birt.runtime</artifactId>
-            <version>4.8.0</version>
-            <optional>true</optional>
+            <groupId>net.sf.jasperreports</groupId>
+            <artifactId>jasperreports</artifactId>
+            <version>${jasperreports.version}</version>
         </dependency>
 
-        <!-- ✅ Alternative BIRT dependency if the above doesn't work -->
-        <!--
+        <!-- JasperReports Fonts (for PDF export) -->
         <dependency>
-            <groupId>org.eclipse.birt</groupId>
-            <artifactId>org.eclipse.birt.runtime</artifactId>
-            <version>4.8.0</version>
-            <optional>true</optional>
+            <groupId>net.sf.jasperreports</groupId>
+            <artifactId>jasperreports-fonts</artifactId>
+            <version>${jasperreports.version}</version>
         </dependency>
-        -->
+
+        <!-- iText for PDF export -->
+        <dependency>
+            <groupId>com.lowagie</groupId>
+            <artifactId>itext</artifactId>
+            <version>2.1.7</version>
+        </dependency>
+
+        <!-- Apache POI for Excel export (already included above) -->
 
         <!-- ============================================
              Database & ORM
@@ -358,7 +364,7 @@
                 </configuration>
             </plugin>
 
-            <!-- ✅ Skip dependency:go-offline if BIRT fails -->
+            <!-- ✅ Skip dependency:go-offline for Docker builds -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>

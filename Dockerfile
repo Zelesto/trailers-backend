@@ -6,28 +6,25 @@
 FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /app
 
-# Copy pom.xml
+# Copy pom.xml and source
 COPY pom.xml .
-
-# ✅ Option 1: Skip go-offline and let Maven resolve during build
-# RUN mvn dependency:go-offline
-
-# Copy source code and build
 COPY src ./src
+
+# ✅ Build directly - dependencies resolve during compile
 RUN mvn clean package -DskipTests
 
 # Stage 2: Create the runtime image
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
-# Create a non-root user to run the application
+# Create a non-root user
 RUN addgroup -S spring && adduser -S spring -G spring
 USER spring:spring
 
-# Copy the built jar from the build stage
+# Copy the built jar
 COPY --from=build --chown=spring:spring /app/target/*.jar app.jar
 
-# Expose port (Render will override this)
+# Expose port
 EXPOSE 8080
 
 # Health check

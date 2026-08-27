@@ -5,14 +5,10 @@ package com.pgsa.trailers.controller;
 import com.pgsa.trailers.service.ReportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.InputStreamResource;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.ByteArrayInputStream;
-import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -24,53 +20,68 @@ public class ReportController {
 
     private final ReportService reportService;
 
-    /**
-     * Generate trip report in specified format
-     */
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, Object>> healthCheck() {
+        return ResponseEntity.ok(Map.of(
+                "status", "OK",
+                "birtAvailable", false,
+                "jasperAvailable", true
+        ));
+    }
+
     @PostMapping("/trip/{tripNumber}")
-    public ResponseEntity<?> generateTripReport(
+    public ResponseEntity<String> generateTripReport(
             @PathVariable String tripNumber,
             @RequestParam(defaultValue = "html") String format) {
         
-        log.info("📊 Generating trip report for: {} (format: {})", tripNumber, format);
+        log.info("📊 Generating trip report for: {}", tripNumber);
         
         try {
-            byte[] reportData = reportService.generateTripReport(tripNumber, format);
-            
-            String filename = String.format("Trip_Report_%s.%s", tripNumber, 
-                    format.equals("html") ? "html" : format);
-            
-            HttpHeaders headers = new HttpHeaders();
-            headers.add(HttpHeaders.CONTENT_DISPOSITION, 
-                    "inline; filename=\"" + filename + "\"");
-            headers.add(HttpHeaders.CACHE_CONTROL, "no-cache, no-store, must-revalidate");
-            
-            MediaType mediaType = getMediaType(format);
-            
-            log.info("✅ Report generated successfully for: {}", tripNumber);
-            
+            String html = reportService.generateTripReportHTML(tripNumber);
             return ResponseEntity.ok()
-                    .headers(headers)
-                    .contentType(mediaType)
-                    .body(new InputStreamResource(new ByteArrayInputStream(reportData)));
-            
+                    .contentType(MediaType.TEXT_HTML)
+                    .body(html);
         } catch (Exception e) {
-            log.error("❌ Failed to generate report: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "error", e.getMessage()
-            ));
+            log.error("Error generating trip report: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body("<h2>Error: " + e.getMessage() + "</h2>");
         }
     }
 
-    private MediaType getMediaType(String format) {
-        switch (format.toLowerCase()) {
-            case "pdf":
-                return MediaType.APPLICATION_PDF;
-            case "xlsx":
-                return MediaType.APPLICATION_OCTET_STREAM;
-            default:
-                return MediaType.TEXT_HTML;
+    @PostMapping("/load/{loadNumber}")
+    public ResponseEntity<String> generateLoadReport(
+            @PathVariable String loadNumber,
+            @RequestParam(defaultValue = "html") String format) {
+        
+        log.info("📊 Generating load report for: {}", loadNumber);
+        
+        try {
+            String html = reportService.generateLoadReportHTML(loadNumber);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.TEXT_HTML)
+                    .body(html);
+        } catch (Exception e) {
+            log.error("Error generating load report: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body("<h2>Error: " + e.getMessage() + "</h2>");
+        }
+    }
+
+    @PostMapping("/fuel")
+    public ResponseEntity<String> generateFuelReport(
+            @RequestParam(required = false) Long vehicleId,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(defaultValue = "html") String format) {
+        
+        log.info("📊 Generating fuel report for vehicle: {}", vehicleId);
+        
+        try {
+            String html = reportService.generateFuelReportHTML(vehicleId, startDate, endDate);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.TEXT_HTML)
+                    .body(html);
+        } catch (Exception e) {
+            log.error("Error generating fuel report: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body("<h2>Error: " + e.getMessage() + "</h2>");
         }
     }
 }

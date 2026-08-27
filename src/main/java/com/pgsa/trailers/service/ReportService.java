@@ -8,8 +8,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.sf.jasperreports.engine.*;
 import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
+import net.sf.jasperreports.engine.export.HtmlExporter;
 import net.sf.jasperreports.engine.export.JRPdfExporter;
-import net.sf.jasperreports.engine.export.JRHtmlExporter;
 import net.sf.jasperreports.engine.export.ooxml.JRXlsxExporter;
 import net.sf.jasperreports.export.*;
 import org.springframework.core.io.ClassPathResource;
@@ -18,7 +18,6 @@ import org.springframework.stereotype.Service;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -69,13 +68,22 @@ public class ReportService {
         // Report title with logo placeholder
         params.put("companyName", "PGS Trailers");
         params.put("reportTitle", "Trip Report");
-        params.put("logoUrl", "/images/logo.png"); // Can be external URL
 
-        // Load report template
-        InputStream reportStream = new ClassPathResource("reports/trip_report.jrxml").getInputStream();
-        JasperReport jasperReport = JasperCompileManager.compileReport(reportStream);
+        // Load report template - use compiled jasper if available, otherwise compile
+        JasperReport jasperReport;
+        try {
+            // Try to load compiled .jasper file first
+            InputStream jasperStream = new ClassPathResource("reports/trip_report.jasper").getInputStream();
+            jasperReport = (JasperReport) JRLoader.loadObject(jasperStream);
+            log.info("✅ Loaded compiled report template");
+        } catch (Exception e) {
+            // Fallback: compile from .jrxml
+            log.info("Compiling report template from JRXML...");
+            InputStream reportStream = new ClassPathResource("reports/trip_report.jrxml").getInputStream();
+            jasperReport = JasperCompileManager.compileReport(reportStream);
+        }
 
-        // Create data source (can be empty for single record reports)
+        // Create data source
         List<Map<String, Object>> dataList = Collections.singletonList(params);
         JRBeanCollectionDataSource dataSource = new JRBeanCollectionDataSource(dataList);
 
@@ -89,12 +97,10 @@ public class ReportService {
             case "pdf":
                 exportToPDF(jasperPrint, outputStream);
                 break;
-            case "html":
-                exportToHTML(jasperPrint, outputStream);
-                break;
             case "xlsx":
                 exportToExcel(jasperPrint, outputStream);
                 break;
+            case "html":
             default:
                 exportToHTML(jasperPrint, outputStream);
         }
@@ -117,7 +123,8 @@ public class ReportService {
     }
 
     private void exportToHTML(JasperPrint jasperPrint, ByteArrayOutputStream outputStream) throws JRException {
-        JRHtmlExporter exporter = new JRHtmlExporter();
+        // ✅ Use HtmlExporter instead of JRHtmlExporter (newer API)
+        HtmlExporter exporter = new HtmlExporter();
         exporter.setExporterInput(new SimpleExporterInput(jasperPrint));
         exporter.setExporterOutput(new SimpleHtmlExporterOutput(outputStream));
         

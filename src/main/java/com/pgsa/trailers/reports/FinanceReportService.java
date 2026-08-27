@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Service
-public class ReportService {
+public class FinanceReportService {
 
     // Example: close an account statement (implementation placeholder)
     @Transactional

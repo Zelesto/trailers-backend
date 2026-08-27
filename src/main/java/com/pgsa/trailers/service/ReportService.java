@@ -15,10 +15,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -36,50 +34,6 @@ public class ReportService {
     // TRIP REPORT
     // ============================================================
 
-   @Transactional(readOnly = true)
-    public TripReportDTO generateTripReport(String tripNumber) {
-        log.info("📊 Generating trip report for: {}", tripNumber);
-    
-        // ✅ Use the new method that eagerly fetches all relationships
-        Trip trip = tripRepository.findByTripNumberWithRelations(tripNumber)
-                .orElseThrow(() -> new RuntimeException("Trip not found: " + tripNumber));
-    
-        return TripReportDTO.fromEntity(trip);
-    }
-
-    // ============================================================
-    // LOAD REPORT
-    // ============================================================
-
-    @Transactional(readOnly = true)
-    public LoadReportDTO generateLoadReport(String loadNumber) {
-        log.info("📊 Generating load report for: {}", loadNumber);
-
-        Load load = loadRepository.findByLoadNumber(loadNumber)
-                .orElseThrow(() -> new RuntimeException("Load not found: " + loadNumber));
-
-        List<Trip> trips = tripRepository.findByLoadId(loadNumber);
-
-        return LoadReportDTO.fromEntity(load, trips);
-    }
-
-    // ============================================================
-    // FUEL REPORT
-    // ============================================================
-
-    @Transactional(readOnly = true)
-    public FuelReportDTO generateFuelReport(Long vehicleId, String startDate, String endDate) {
-        log.info("📊 Generating fuel report for vehicle: {} from {} to {}", vehicleId, startDate, endDate);
-
-        // This would fetch fuel slips from your fuel service
-        // For now, return sample data
-        return FuelReportDTO.createSample(vehicleId);
-    }
-
-    // ============================================================
-    // HTML REPORT GENERATION (for React Viewer)
-    // ============================================================
-
     @Transactional(readOnly = true)
     public String generateTripReportHTML(String tripNumber) {
         log.info("📊 Generating trip report for: {}", tripNumber);
@@ -89,9 +43,7 @@ public class ReportService {
             Trip trip = tripRepository.findByTripNumberWithRelations(tripNumber)
                     .orElseThrow(() -> new RuntimeException("Trip not found: " + tripNumber));
 
-            // ✅ Convert to DTO while still in transaction
             TripReportDTO reportDTO = TripReportDTO.fromEntity(trip);
-            
             return generateTripHTML(reportDTO);
             
         } catch (Exception e) {
@@ -100,14 +52,55 @@ public class ReportService {
         }
     }
 
+    // ============================================================
+    // LOAD REPORT
+    // ============================================================
+
+    @Transactional(readOnly = true)
     public String generateLoadReportHTML(String loadNumber) {
-        LoadReportDTO report = generateLoadReport(loadNumber);
-        return generateLoadHTML(report);
+        log.info("📊 Generating load report for: {}", loadNumber);
+
+        try {
+            // ✅ Try to find load by load number
+            Optional<Load> loadOpt = loadRepository.findByLoadNumber(loadNumber);
+            
+            if (loadOpt.isEmpty()) {
+                throw new RuntimeException("Load not found: " + loadNumber);
+            }
+            
+            Load load = loadOpt.get();
+            
+            // Get trips for this load - handle null loadId
+            List<Trip> trips = new ArrayList<>();
+            if (load.getLoadNumber() != null) {
+                trips = tripRepository.findByLoadId(load.getLoadNumber());
+            }
+            
+            LoadReportDTO reportDTO = LoadReportDTO.fromEntity(load, trips);
+            return generateLoadHTML(reportDTO);
+            
+        } catch (Exception e) {
+            log.error("Error generating load report: {}", e.getMessage(), e);
+            return generateErrorHTML(loadNumber, e.getMessage());
+        }
     }
 
+    // ============================================================
+    // FUEL REPORT
+    // ============================================================
+
+    @Transactional(readOnly = true)
     public String generateFuelReportHTML(Long vehicleId, String startDate, String endDate) {
-        FuelReportDTO report = generateFuelReport(vehicleId, startDate, endDate);
-        return generateFuelHTML(report);
+        log.info("📊 Generating fuel report for vehicle: {} from {} to {}", vehicleId, startDate, endDate);
+
+        try {
+            // For now, return sample data
+            FuelReportDTO report = FuelReportDTO.createSample(vehicleId);
+            return generateFuelHTML(report);
+        } catch (Exception e) {
+            log.error("Error generating fuel report: {}", e.getMessage(), e);
+            return generateErrorHTML("Fuel Report", e.getMessage());
+        }
     }
 
     // ============================================================
@@ -115,6 +108,40 @@ public class ReportService {
     // ============================================================
 
     private String generateTripHTML(TripReportDTO trip) {
+        // ... existing trip HTML generator ...
+        return generateTripHTMLContent(trip);
+    }
+
+    private String generateLoadHTML(LoadReportDTO load) {
+        // ... existing load HTML generator ...
+        return generateLoadHTMLContent(load);
+    }
+
+    private String generateFuelHTML(FuelReportDTO report) {
+        // ... existing fuel HTML generator ...
+        return generateFuelHTMLContent(report);
+    }
+
+    private String generateErrorHTML(String entity, String error) {
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="UTF-8"><title>Error</title></head>
+        <body style="font-family:Arial;text-align:center;padding:40px;">
+            <h2 style="color:#EF4444;">⚠️ Report Generation Error</h2>
+            <p><strong>Entity:</strong> %s</p>
+            <p style="color:#6B7280;">%s</p>
+            <p style="font-size:12px;color:#9CA3AF;margin-top:20px;">Please try again or contact support.</p>
+        </body>
+        </html>
+        """.formatted(entity, error);
+    }
+
+    // ============================================================
+    // TRIP HTML CONTENT
+    // ============================================================
+
+    private String generateTripHTMLContent(TripReportDTO trip) {
         String statusColor = getStatusColor(trip.getStatus());
         String statusTextColor = getStatusTextColor(trip.getStatus());
 
@@ -131,6 +158,7 @@ public class ReportService {
                 .header { text-align: center; border-bottom: 3px double #4F46E5; padding-bottom: 20px; margin-bottom: 30px; }
                 .logo { font-size: 28px; font-weight: 700; color: #4F46E5; }
                 .logo span { color: #6366F1; }
+                .subtitle { font-size: 14px; color: #6B7280; }
                 .report-title { font-size: 20px; font-weight: 600; color: #111827; margin-top: 8px; }
                 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
                 .section { background: #F9FAFB; border-radius: 12px; padding: 16px 20px; }
@@ -178,7 +206,6 @@ public class ReportService {
                         <div class="row"><span class="label">Make / Model</span><span class="value">%s</span></div>
                         <div class="row"><span class="label">Driver</span><span class="value">%s</span></div>
                         <div class="row"><span class="label">License</span><span class="value">%s</span></div>
-                        <div class="row"><span class="label">Phone</span><span class="value">%s</span></div>
                     </div>
 
                     <div class="section">
@@ -226,7 +253,6 @@ public class ReportService {
             (trip.getVehicleMake() != null ? trip.getVehicleMake() : "") + " " + (trip.getVehicleModel() != null ? trip.getVehicleModel() : ""),
             trip.getDriverName() != null ? trip.getDriverName() : "N/A",
             trip.getDriverLicense() != null ? trip.getDriverLicense() : "N/A",
-            trip.getDriverPhone() != null ? trip.getDriverPhone() : "N/A",
             trip.getOriginLocation() != null ? trip.getOriginLocation() : "N/A",
             trip.getDestinationLocation() != null ? trip.getDestinationLocation() : "N/A",
             trip.getPlannedDistanceKm() != null ? trip.getPlannedDistanceKm() : 0.0,
@@ -241,7 +267,11 @@ public class ReportService {
         );
     }
 
-    private String generateLoadHTML(LoadReportDTO load) {
+    // ============================================================
+    // LOAD HTML CONTENT
+    // ============================================================
+
+    private String generateLoadHTMLContent(LoadReportDTO load) {
         StringBuilder tripsHtml = new StringBuilder();
         for (LoadReportDTO.TripSummary trip : load.getTrips()) {
             tripsHtml.append("""
@@ -399,7 +429,11 @@ public class ReportService {
         );
     }
 
-    private String generateFuelHTML(FuelReportDTO report) {
+    // ============================================================
+    // FUEL HTML CONTENT
+    // ============================================================
+
+    private String generateFuelHTMLContent(FuelReportDTO report) {
         StringBuilder rows = new StringBuilder();
         for (FuelReportDTO.FuelEntry entry : report.getEntries()) {
             rows.append("""
@@ -501,27 +535,6 @@ public class ReportService {
         );
     }
 
-
-
-    // ============================================================
-    // ERROR HTML
-    // ============================================================
-
-    private String generateErrorHTML(String tripNumber, String error) {
-        return """
-        <!DOCTYPE html>
-        <html>
-        <head><meta charset="UTF-8"><title>Error</title></head>
-        <body style="font-family:Arial;text-align:center;padding:40px;">
-            <h2 style="color:#EF4444;">⚠️ Report Generation Error</h2>
-            <p><strong>Trip:</strong> %s</p>
-            <p style="color:#6B7280;">%s</p>
-            <p style="font-size:12px;color:#9CA3AF;margin-top:20px;">Please try again or contact support.</p>
-        </body>
-        </html>
-        """.formatted(tripNumber, error);
-    }
-    
     // ============================================================
     // HELPER METHODS
     // ============================================================

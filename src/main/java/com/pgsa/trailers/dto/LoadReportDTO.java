@@ -2,6 +2,8 @@
 
 package com.pgsa.trailers.dto.report;
 
+import com.pgsa.trailers.entity.assets.Driver;
+import com.pgsa.trailers.entity.assets.Vehicle; 
 import com.pgsa.trailers.entity.ops.Load;
 import com.pgsa.trailers.entity.ops.Trip;
 import lombok.AllArgsConstructor;

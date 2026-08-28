@@ -9,10 +9,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -26,40 +22,42 @@ public class ReportController {
     private final ReportService reportService;
 
     @PostMapping(
-    value = "/trip/{tripNumber}",
-    produces = MediaType.APPLICATION_JSON_VALUE
-)
-public ResponseEntity<Map<String, Object>> generateTripReport(
-        @PathVariable String tripNumber,
-        @RequestParam(defaultValue = "html") String format) {
+        value = "/trip/{tripNumber}",
+        produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public ResponseEntity<Map<String, Object>> generateTripReport(
+            @PathVariable String tripNumber,
+            @RequestParam(defaultValue = "html") String format) {
 
-    log.info("📊 Generating trip report for: {}", tripNumber);
+        log.info("📊 Generating trip report for: {}", tripNumber);
 
-    try {
-        String rawHtml = reportService.generateTripReportHTML(tripNumber);
-        
-        // Use JSON serialization instead of HTML escaping
-        // Spring's Jackson will handle escaping automatically when serializing to JSON
-        String jsonEscapedHtml = JsonUtils.escapeForJson(rawHtml);  // Or use a proper JSON library
+        try {
+            // Get raw HTML - NO escaping needed
+            String html = reportService.generateTripReportHTML(tripNumber);
 
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("format", "html");
-        response.put("content", jsonEscapedHtml);
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("format", "html");
+            response.put("content", html);  // Jackson escapes this automatically
 
-        // Alternatively, let Jackson handle it:
-        // return ResponseEntity.ok(response); // Jackson handles escaping
+            log.info("✅ Trip report generated successfully for: {}", tripNumber);
 
-        log.info("✅ Trip report generated successfully for: {}", tripNumber);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(response);
 
-        return ResponseEntity.ok()
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(response);
+        } catch (Exception e) {
+            log.error("❌ Error generating trip report: {}", e.getMessage(), e);
 
-    } catch (Exception e) {
-        // ... error handling
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", e.getMessage());
+
+            return ResponseEntity.badRequest()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(errorResponse);
+        }
     }
-}
 
     @PostMapping(
         value = "/load/{loadNumber}",
@@ -72,18 +70,17 @@ public ResponseEntity<Map<String, Object>> generateTripReport(
         log.info("📊 Generating load report for: {}", loadNumber);
 
         try {
-            String rawHtml = reportService.generateLoadReportHTML(loadNumber);
-            String html = HtmlUtils.htmlEscape(rawHtml);
-            
+            // Get raw HTML - NO escaping
+            String html = reportService.generateLoadReportHTML(loadNumber);
+
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("format", "html");
-            response.put("content", html);
-            
+            response.put("content", html);  // Jackson handles escaping
+
             return ResponseEntity.ok()
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(response);
-
 
         } catch (Exception e) {
             log.error("❌ Error generating load report: {}", e.getMessage(), e);
@@ -111,18 +108,17 @@ public ResponseEntity<Map<String, Object>> generateTripReport(
         log.info("📊 Generating fuel report for vehicle: {}", vehicleId);
 
         try {
-            String rawHtml = reportService.generateFuelReportHTML(vehicleId, startDate, endDate);
-            String html = HtmlUtils.htmlEscape(rawHtml);
-            
+            // Get raw HTML - NO escaping
+            String html = reportService.generateFuelReportHTML(vehicleId, startDate, endDate);
+
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("format", "html");
-            response.put("content", html);
-            
+            response.put("content", html);  // Jackson handles escaping
+
             return ResponseEntity.ok()
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(response);
-
 
         } catch (Exception e) {
             log.error("❌ Error generating fuel report: {}", e.getMessage(), e);

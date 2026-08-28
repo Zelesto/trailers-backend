@@ -24,42 +24,41 @@ public class ReportController {
     private final ReportService reportService;
 
     @PostMapping(
-        value = "/trip/{tripNumber}",
-        produces = MediaType.APPLICATION_JSON_VALUE
-    )
-    public ResponseEntity<Map<String, Object>> generateTripReport(
-            @PathVariable String tripNumber,
-            @RequestParam(defaultValue = "html") String format) {
+    value = "/trip/{tripNumber}",
+    produces = MediaType.APPLICATION_JSON_VALUE
+)
+public ResponseEntity<Map<String, Object>> generateTripReport(
+        @PathVariable String tripNumber,
+        @RequestParam(defaultValue = "html") String format) {
 
-        log.info("📊 Generating trip report for: {}", tripNumber);
+    log.info("📊 Generating trip report for: {}", tripNumber);
 
-        try {
-            String rawHtml = reportService.generateTripReportHTML(tripNumber);
-            String html = HtmlUtils.htmlEscape(rawHtml);
+    try {
+        String html = reportService.generateTripReportHTML(tripNumber);  // No escaping
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("format", "html");
-            response.put("content", html);
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("format", "html");
+        response.put("content", html);  // Send raw HTML
 
-            log.info("✅ Trip report generated successfully for: {}", tripNumber);
+        log.info("✅ Trip report generated successfully for: {}", tripNumber);
 
-            return ResponseEntity.ok()
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(response);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(response);
 
-        } catch (Exception e) {
-            log.error("❌ Error generating trip report: {}", e.getMessage(), e);
+    } catch (Exception e) {
+        log.error("❌ Error generating trip report: {}", e.getMessage(), e);
 
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("error", e.getMessage());
+        Map<String, Object> errorResponse = new HashMap<>();
+        errorResponse.put("success", false);
+        errorResponse.put("error", e.getMessage());
 
-            return ResponseEntity.badRequest()
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(errorResponse);
-        }
+        return ResponseEntity.badRequest()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(errorResponse);
     }
+}
 
     @PostMapping(
         value = "/load/{loadNumber}",

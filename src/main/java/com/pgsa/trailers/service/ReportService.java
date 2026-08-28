@@ -9,7 +9,6 @@ import com.pgsa.trailers.entity.ops.Load;
 import com.pgsa.trailers.entity.ops.Trip;
 import com.pgsa.trailers.repository.LoadRepository;
 import com.pgsa.trailers.repository.TripRepository;
-import com.pgsa.trailers.repository.VehicleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,10 +24,8 @@ public class ReportService {
 
     private final TripRepository tripRepository;
     private final LoadRepository loadRepository;
-    private final VehicleRepository vehicleRepository;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm");
-    private static final DateTimeFormatter DATE_ONLY_FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy");
 
     // ============================================================
     // TRIP REPORT
@@ -39,7 +36,6 @@ public class ReportService {
         log.info("📊 Generating trip report for: {}", tripNumber);
 
         try {
-            // ✅ Use the method that eagerly fetches all relationships
             Trip trip = tripRepository.findByTripNumberWithRelations(tripNumber)
                     .orElseThrow(() -> new RuntimeException("Trip not found: " + tripNumber));
 
@@ -61,20 +57,13 @@ public class ReportService {
         log.info("📊 Generating load report for: {}", loadNumber);
 
         try {
-            // ✅ Try to find load by load number
             Optional<Load> loadOpt = loadRepository.findByLoadNumber(loadNumber);
-            
             if (loadOpt.isEmpty()) {
                 throw new RuntimeException("Load not found: " + loadNumber);
             }
             
             Load load = loadOpt.get();
-            
-            // Get trips for this load - handle null loadId
-            List<Trip> trips = new ArrayList<>();
-            if (load.getLoadNumber() != null) {
-                trips = tripRepository.findByLoadId(load.getLoadNumber());
-            }
+            List<Trip> trips = tripRepository.findByLoadId(load.getLoadNumber());
             
             LoadReportDTO reportDTO = LoadReportDTO.fromEntity(load, trips);
             return generateLoadHTML(reportDTO);
@@ -91,10 +80,9 @@ public class ReportService {
 
     @Transactional(readOnly = true)
     public String generateFuelReportHTML(Long vehicleId, String startDate, String endDate) {
-        log.info("📊 Generating fuel report for vehicle: {} from {} to {}", vehicleId, startDate, endDate);
+        log.info("📊 Generating fuel report for vehicle: {}", vehicleId);
 
         try {
-            // For now, return sample data
             FuelReportDTO report = FuelReportDTO.createSample(vehicleId);
             return generateFuelHTML(report);
         } catch (Exception e) {
@@ -104,47 +92,14 @@ public class ReportService {
     }
 
     // ============================================================
-    // HTML GENERATORS
+    // HTML GENERATORS - FIXED FORMAT SPECIFIERS
     // ============================================================
 
     private String generateTripHTML(TripReportDTO trip) {
-        // ... existing trip HTML generator ...
-        return generateTripHTMLContent(trip);
-    }
-
-    private String generateLoadHTML(LoadReportDTO load) {
-        // ... existing load HTML generator ...
-        return generateLoadHTMLContent(load);
-    }
-
-    private String generateFuelHTML(FuelReportDTO report) {
-        // ... existing fuel HTML generator ...
-        return generateFuelHTMLContent(report);
-    }
-
-    private String generateErrorHTML(String entity, String error) {
-        return """
-        <!DOCTYPE html>
-        <html>
-        <head><meta charset="UTF-8"><title>Error</title></head>
-        <body style="font-family:Arial;text-align:center;padding:40px;">
-            <h2 style="color:#EF4444;">⚠️ Report Generation Error</h2>
-            <p><strong>Entity:</strong> %s</p>
-            <p style="color:#6B7280;">%s</p>
-            <p style="font-size:12px;color:#9CA3AF;margin-top:20px;">Please try again or contact support.</p>
-        </body>
-        </html>
-        """.formatted(entity, error);
-    }
-
-    // ============================================================
-    // TRIP HTML CONTENT
-    // ============================================================
-
-    private String generateTripHTMLContent(TripReportDTO trip) {
         String statusColor = getStatusColor(trip.getStatus());
         String statusTextColor = getStatusTextColor(trip.getStatus());
 
+        // ✅ All format specifiers are lowercase - FIXED
         return """
         <!DOCTYPE html>
         <html>
@@ -169,7 +124,7 @@ public class ReportService {
                 .label { width: 140px; font-size: 12px; color: #6B7280; flex-shrink: 0; }
                 .value { font-size: 13px; font-weight: 500; color: #111827; }
                 .status-badge { display: inline-block; padding: 2px 14px; border-radius: 20px; font-size: 11px; font-weight: 600; background-color: %s; color: %s; }
-                .print-btn { display: inline-block; padding: 10px 24px; background: linear-gradient(135deg, #4F46E5 0%, #6366F1 100%); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 20px; }
+                .print-btn { display: inline-block; padding: 10px 24px; background: linear-gradient(135deg, #4F46E5 0%%, #6366F1 100%%); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 20px; }
                 @media print { body { background: white; padding: 0; } .container { box-shadow: none; padding: 20px; } .print-btn { display: none !important; } }
                 @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .container { padding: 20px; } }
             </style>
@@ -267,11 +222,7 @@ public class ReportService {
         );
     }
 
-    // ============================================================
-    // LOAD HTML CONTENT
-    // ============================================================
-
-    private String generateLoadHTMLContent(LoadReportDTO load) {
+    private String generateLoadHTML(LoadReportDTO load) {
         StringBuilder tripsHtml = new StringBuilder();
         for (LoadReportDTO.TripSummary trip : load.getTrips()) {
             tripsHtml.append("""
@@ -324,7 +275,7 @@ public class ReportService {
                 th { background: #F3F4F6; padding: 10px 12px; text-align: left; font-weight: 600; color: #374151; border-bottom: 2px solid #E5E7EB; }
                 td { padding: 8px 12px; border-bottom: 1px solid #F3F4F6; }
                 .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB; font-size: 11px; color: #9CA3AF; }
-                .print-btn { display: inline-block; padding: 10px 24px; background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 20px; }
+                .print-btn { display: inline-block; padding: 10px 24px; background: linear-gradient(135deg, #059669 0%%, #10B981 100%%); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 20px; }
                 .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
                 .badge-success { background: #D1FAE5; color: #065F46; }
                 .badge-warning { background: #FEF3C7; color: #92400E; }
@@ -429,11 +380,7 @@ public class ReportService {
         );
     }
 
-    // ============================================================
-    // FUEL HTML CONTENT
-    // ============================================================
-
-    private String generateFuelHTMLContent(FuelReportDTO report) {
+    private String generateFuelHTML(FuelReportDTO report) {
         StringBuilder rows = new StringBuilder();
         for (FuelReportDTO.FuelEntry entry : report.getEntries()) {
             rows.append("""
@@ -478,7 +425,7 @@ public class ReportService {
                 th { background: #F3F4F6; padding: 10px 12px; text-align: left; font-weight: 600; color: #374151; border-bottom: 2px solid #E5E7EB; }
                 td { padding: 8px 12px; border-bottom: 1px solid #F3F4F6; }
                 .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB; font-size: 11px; color: #9CA3AF; }
-                .print-btn { display: inline-block; padding: 10px 24px; background: linear-gradient(135deg, #D97706 0%, #F59E0B 100%); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 20px; }
+                .print-btn { display: inline-block; padding: 10px 24px; background: linear-gradient(135deg, #D97706 0%%, #F59E0B 100%%); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 20px; }
                 @media print { body { background: white; padding: 0; } .container { box-shadow: none; padding: 20px; } .print-btn { display: none !important; } }
                 @media (max-width: 768px) { .grid { grid-template-columns: 1fr 1fr; } .container { padding: 20px; } }
             </style>
@@ -533,6 +480,25 @@ public class ReportService {
             rows.toString(),
             new Date().toString()
         );
+    }
+
+    // ============================================================
+    // ERROR HTML
+    // ============================================================
+
+    private String generateErrorHTML(String entity, String error) {
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="UTF-8"><title>Error</title></head>
+        <body style="font-family:Arial;text-align:center;padding:40px;">
+            <h2 style="color:#EF4444;">⚠️ Report Generation Error</h2>
+            <p><strong>Entity:</strong> %s</p>
+            <p style="color:#6B7280;">%s</p>
+            <p style="font-size:12px;color:#9CA3AF;margin-top:20px;">Please try again or contact support.</p>
+        </body>
+        </html>
+        """.formatted(entity, error);
     }
 
     // ============================================================

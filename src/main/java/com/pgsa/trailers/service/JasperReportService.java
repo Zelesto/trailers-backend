@@ -12,6 +12,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -35,7 +36,7 @@ public class JasperReportService {
         try {
             log.info("📄 Generating PDF trip report");
             return generatePDF("trip_report.jrxml", buildTripParams(data));
-        } catch (Exception e) {
+        } catch (JRException | IOException e) {
             log.error("❌ Error generating PDF trip report: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to generate PDF trip report", e);
         }
@@ -48,7 +49,7 @@ public class JasperReportService {
         try {
             log.info("📄 Generating PDF load report");
             return generatePDF("load_report.jrxml", buildLoadParams(data));
-        } catch (Exception e) {
+        } catch (JRException | IOException e) {
             log.error("❌ Error generating PDF load report: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to generate PDF load report", e);
         }
@@ -61,7 +62,7 @@ public class JasperReportService {
         try {
             log.info("📄 Generating PDF fuel report");
             return generatePDF("fuel_report.jrxml", buildFuelParams(data));
-        } catch (Exception e) {
+        } catch (JRException | IOException e) {
             log.error("❌ Error generating PDF fuel report: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to generate PDF fuel report", e);
         }
@@ -69,9 +70,16 @@ public class JasperReportService {
 
     /**
      * Generic PDF generation method
+     * 
+     * @throws JRException if Jasper report generation fails
+     * @throws IOException if template file cannot be read
      */
-    private byte[] generatePDF(String templateName, Map<String, Object> params) throws JRException {
+    private byte[] generatePDF(String templateName, Map<String, Object> params) 
+            throws JRException, IOException {
+        
+        // ✅ This can throw IOException - we declare it in the method signature
         InputStream templateStream = new ClassPathResource("reports/" + templateName).getInputStream();
+        
         JasperReport jasperReport = JasperCompileManager.compileReport(templateStream);
         
         JasperPrint jasperPrint = JasperFillManager.fillReport(

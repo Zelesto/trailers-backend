@@ -21,7 +21,10 @@ public class ReportController {
 
     private final ReportService reportService;
 
-    @PostMapping(value = "/trip/{tripNumber}")
+    @PostMapping(
+        value = "/trip/{tripNumber}",
+        produces = MediaType.APPLICATION_JSON_VALUE
+    )
     public ResponseEntity<Map<String, Object>> generateTripReport(
             @PathVariable String tripNumber,
             @RequestParam(defaultValue = "html") String format) {
@@ -37,7 +40,10 @@ public class ReportController {
             response.put("content", html);
 
             log.info("✅ Trip report generated successfully for: {}", tripNumber);
-            return ResponseEntity.ok(response);
+
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(response);
 
         } catch (Exception e) {
             log.error("❌ Error generating trip report: {}", e.getMessage(), e);
@@ -45,11 +51,17 @@ public class ReportController {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             errorResponse.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(errorResponse);
+
+            return ResponseEntity.badRequest()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(errorResponse);
         }
     }
 
-    @PostMapping(value = "/load/{loadNumber}")
+    @PostMapping(
+        value = "/load/{loadNumber}",
+        produces = MediaType.APPLICATION_JSON_VALUE
+    )
     public ResponseEntity<Map<String, Object>> generateLoadReport(
             @PathVariable String loadNumber,
             @RequestParam(defaultValue = "html") String format) {
@@ -65,7 +77,10 @@ public class ReportController {
             response.put("content", html);
 
             log.info("✅ Load report generated successfully for: {}", loadNumber);
-            return ResponseEntity.ok(response);
+
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(response);
 
         } catch (Exception e) {
             log.error("❌ Error generating load report: {}", e.getMessage(), e);
@@ -73,11 +88,17 @@ public class ReportController {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             errorResponse.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(errorResponse);
+
+            return ResponseEntity.badRequest()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(errorResponse);
         }
     }
 
-    @PostMapping(value = "/fuel")
+    @PostMapping(
+        value = "/fuel",
+        produces = MediaType.APPLICATION_JSON_VALUE
+    )
     public ResponseEntity<Map<String, Object>> generateFuelReport(
             @RequestParam(required = false) Long vehicleId,
             @RequestParam(required = false) String startDate,
@@ -95,7 +116,10 @@ public class ReportController {
             response.put("content", html);
 
             log.info("✅ Fuel report generated successfully");
-            return ResponseEntity.ok(response);
+
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(response);
 
         } catch (Exception e) {
             log.error("❌ Error generating fuel report: {}", e.getMessage(), e);
@@ -103,7 +127,10 @@ public class ReportController {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             errorResponse.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(errorResponse);
+
+            return ResponseEntity.badRequest()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(errorResponse);
         }
     }
 

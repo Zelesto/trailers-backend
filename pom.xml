@@ -54,7 +54,6 @@
                 <enabled>false</enabled>
             </snapshots>
         </repository>
-        <!-- JasperReports repository -->
         <repository>
             <id>jaspersoft-repo</id>
             <name>Jaspersoft Repository</name>
@@ -95,21 +94,9 @@
     </dependencyManagement>
 
     <dependencies>
-         <!-- JasperReports -->
-    <dependency>
-        <groupId>net.sf.jasperreports</groupId>
-        <artifactId>jasperreports</artifactId>
-        <version>6.20.6</version>
-    </dependency>
-    
-    <!-- iText for PDF export -->
-    <dependency>
-        <groupId>com.lowagie</groupId>
-        <artifactId>itext</artifactId>
-        <version>2.1.7</version>
-    </dependency>
-             
-        <!-- Spring Boot Starters -->
+        <!-- ============================================
+             Spring Boot Starters
+             ============================================ -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -135,7 +122,9 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
-        <!-- OpenAPI/Swagger -->
+        <!-- ============================================
+             OpenAPI/Swagger
+             ============================================ -->
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
@@ -171,9 +160,29 @@
         </dependency>
 
         <!-- ============================================
+             JASPERREPORTS - Professional Reporting
+             ============================================ -->
+        <dependency>
+            <groupId>net.sf.jasperreports</groupId>
+            <artifactId>jasperreports</artifactId>
+            <version>${jasperreports.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>net.sf.jasperreports</groupId>
+            <artifactId>jasperreports-fonts</artifactId>
+            <version>${jasperreports.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.lowagie</groupId>
+            <artifactId>itext</artifactId>
+            <version>2.1.7</version>
+        </dependency>
+
+        <!-- ============================================
              PDF & Document Conversion
              ============================================ -->
-        <!-- Apache PDFBox for PDF manipulation -->
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>
@@ -186,7 +195,6 @@
             <version>${pdfbox.version}</version>
         </dependency>
 
-        <!-- Apache POI for DOC/DOCX handling -->
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi</artifactId>
@@ -199,7 +207,6 @@
             <version>${poi.version}</version>
         </dependency>
 
-        <!-- XDocReport for DOC to PDF conversion -->
         <dependency>
             <groupId>fr.opensagres.xdocreport</groupId>
             <artifactId>fr.opensagres.xdocreport.core</artifactId>
@@ -211,32 +218,6 @@
             <artifactId>fr.opensagres.xdocreport.converter.docx.docx4j</artifactId>
             <version>${xdocreport.version}</version>
         </dependency>
-
-        <!-- ============================================
-             JASPERREPORTS - Professional Reporting
-             ============================================ -->
-        <!-- Core JasperReports -->
-        <dependency>
-            <groupId>net.sf.jasperreports</groupId>
-            <artifactId>jasperreports</artifactId>
-            <version>${jasperreports.version}</version>
-        </dependency>
-
-        <!-- JasperReports Fonts (for PDF export) -->
-        <dependency>
-            <groupId>net.sf.jasperreports</groupId>
-            <artifactId>jasperreports-fonts</artifactId>
-            <version>${jasperreports.version}</version>
-        </dependency>
-
-        <!-- iText for PDF export -->
-        <dependency>
-            <groupId>com.lowagie</groupId>
-            <artifactId>itext</artifactId>
-            <version>2.1.7</version>
-        </dependency>
-
-        <!-- Apache POI for Excel export (already included above) -->
 
         <!-- ============================================
              Database & ORM
@@ -378,7 +359,6 @@
                 </configuration>
             </plugin>
 
-            <!-- ✅ Skip dependency:go-offline for Docker builds -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>

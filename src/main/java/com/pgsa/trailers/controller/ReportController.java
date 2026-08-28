@@ -32,13 +32,13 @@ public class ReportController {
         log.info("📊 Generating trip report for: {}", tripNumber);
 
         try {
-            // Get raw HTML - NO escaping needed
-            String html = reportService.generateTripReportHTML(tripNumber);
+            // ✅ Get raw HTML - NO ESCAPING!
+            String rawHtml = reportService.generateTripReportHTML(tripNumber);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("format", "html");
-            response.put("content", html);  // Jackson escapes this automatically
+            response.put("content", rawHtml);  // ✅ Send raw HTML, Jackson handles JSON escaping
 
             log.info("✅ Trip report generated successfully for: {}", tripNumber);
 
@@ -70,13 +70,13 @@ public class ReportController {
         log.info("📊 Generating load report for: {}", loadNumber);
 
         try {
-            // Get raw HTML - NO escaping
-            String html = reportService.generateLoadReportHTML(loadNumber);
+            // ✅ Get raw HTML - NO ESCAPING!
+            String rawHtml = reportService.generateLoadReportHTML(loadNumber);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("format", "html");
-            response.put("content", html);  // Jackson handles escaping
+            response.put("content", rawHtml);  // ✅ Send raw HTML
 
             return ResponseEntity.ok()
                     .contentType(MediaType.APPLICATION_JSON)
@@ -108,13 +108,13 @@ public class ReportController {
         log.info("📊 Generating fuel report for vehicle: {}", vehicleId);
 
         try {
-            // Get raw HTML - NO escaping
-            String html = reportService.generateFuelReportHTML(vehicleId, startDate, endDate);
+            // ✅ Get raw HTML - NO ESCAPING!
+            String rawHtml = reportService.generateFuelReportHTML(vehicleId, startDate, endDate);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("format", "html");
-            response.put("content", html);  // Jackson handles escaping
+            response.put("content", rawHtml);  // ✅ Send raw HTML
 
             return ResponseEntity.ok()
                     .contentType(MediaType.APPLICATION_JSON)

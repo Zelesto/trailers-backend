@@ -9,6 +9,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.web.util.HtmlUtils;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -70,18 +72,18 @@ public class ReportController {
         log.info("📊 Generating load report for: {}", loadNumber);
 
         try {
-            String html = reportService.generateLoadReportHTML(loadNumber);
-
+            String rawHtml = reportService.generateLoadReportHTML(loadNumber);
+            String html = HtmlUtils.htmlEscape(rawHtml);
+            
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("format", "html");
             response.put("content", html);
-
-            log.info("✅ Load report generated successfully for: {}", loadNumber);
-
+            
             return ResponseEntity.ok()
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(response);
+
 
         } catch (Exception e) {
             log.error("❌ Error generating load report: {}", e.getMessage(), e);
@@ -109,18 +111,18 @@ public class ReportController {
         log.info("📊 Generating fuel report for vehicle: {}", vehicleId);
 
         try {
-            String html = reportService.generateFuelReportHTML(vehicleId, startDate, endDate);
-
+            String rawHtml = reportService.generateFuelReportHTML(vehicleId, startDate, endDate);
+            String html = HtmlUtils.htmlEscape(rawHtml);
+            
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("format", "html");
             response.put("content", html);
-
-            log.info("✅ Fuel report generated successfully");
-
+            
             return ResponseEntity.ok()
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(response);
+
 
         } catch (Exception e) {
             log.error("❌ Error generating fuel report: {}", e.getMessage(), e);

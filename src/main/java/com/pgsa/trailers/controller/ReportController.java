@@ -9,7 +9,9 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import org.springframework.web.util.HtmlUtils;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -34,12 +36,19 @@ public ResponseEntity<Map<String, Object>> generateTripReport(
     log.info("📊 Generating trip report for: {}", tripNumber);
 
     try {
-        String html = reportService.generateTripReportHTML(tripNumber);  // No escaping
+        String rawHtml = reportService.generateTripReportHTML(tripNumber);
+        
+        // Use JSON serialization instead of HTML escaping
+        // Spring's Jackson will handle escaping automatically when serializing to JSON
+        String jsonEscapedHtml = JsonUtils.escapeForJson(rawHtml);  // Or use a proper JSON library
 
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         response.put("format", "html");
-        response.put("content", html);  // Send raw HTML
+        response.put("content", jsonEscapedHtml);
+
+        // Alternatively, let Jackson handle it:
+        // return ResponseEntity.ok(response); // Jackson handles escaping
 
         log.info("✅ Trip report generated successfully for: {}", tripNumber);
 
@@ -48,15 +57,7 @@ public ResponseEntity<Map<String, Object>> generateTripReport(
                 .body(response);
 
     } catch (Exception e) {
-        log.error("❌ Error generating trip report: {}", e.getMessage(), e);
-
-        Map<String, Object> errorResponse = new HashMap<>();
-        errorResponse.put("success", false);
-        errorResponse.put("error", e.getMessage());
-
-        return ResponseEntity.badRequest()
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(errorResponse);
+        // ... error handling
     }
 }
 

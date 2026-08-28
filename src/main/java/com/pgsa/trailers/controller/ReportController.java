@@ -32,7 +32,8 @@ public class ReportController {
         log.info("📊 Generating trip report for: {}", tripNumber);
 
         try {
-            String html = reportService.generateTripReportHTML(tripNumber);
+            String rawHtml = reportService.generateTripReportHTML(tripNumber);
+            String html = HtmlUtils.htmlEscape(rawHtml);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);

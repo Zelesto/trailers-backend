@@ -48,6 +48,143 @@ public class ReportService {
         }
     }
 
+
+    // ============================================================
+// DATA METHODS FOR PDF REPORTS
+// ============================================================
+
+/**
+ * Get trip report data as Map for Jasper PDF generation
+ */
+public Map<String, Object> getTripReportData(String tripNumber) {
+    log.info("📊 Getting trip report data for: {}", tripNumber);
+    
+    try {
+        Trip trip = tripRepository.findByTripNumberWithRelations(tripNumber)
+                .orElseThrow(() -> new RuntimeException("Trip not found: " + tripNumber));
+        
+        TripReportDTO dto = TripReportDTO.fromEntity(trip);
+        Map<String, Object> data = new HashMap<>();
+        
+        data.put("tripNumber", dto.getTripNumber());
+        data.put("customerName", dto.getCustomerName());
+        data.put("customerCode", dto.getCustomerCode());
+        data.put("status", dto.getStatus());
+        data.put("tripType", dto.getTripType());
+        data.put("referenceNumber", dto.getReferenceNumber());
+        data.put("originLocation", dto.getOriginLocation());
+        data.put("destinationLocation", dto.getDestinationLocation());
+        data.put("plannedDistanceKm", dto.getPlannedDistanceKm());
+        data.put("actualDistanceKm", dto.getActualDistanceKm());
+        data.put("driverName", dto.getDriverName());
+        data.put("driverLicense", dto.getDriverLicense());
+        data.put("vehicleRegistration", dto.getVehicleRegistration());
+        data.put("vehicleMake", dto.getVehicleMake());
+        data.put("vehicleModel", dto.getVehicleModel());
+        data.put("plannedStartDate", dto.getPlannedStartDate());
+        data.put("plannedEndDate", dto.getPlannedEndDate());
+        data.put("actualStartDate", dto.getActualStartDate());
+        data.put("actualEndDate", dto.getActualEndDate());
+        data.put("actualStartOdometer", dto.getActualStartOdometer());
+        data.put("actualEndOdometer", dto.getActualEndOdometer());
+        
+        return data;
+        
+    } catch (Exception e) {
+        log.error("Error getting trip report data: {}", e.getMessage(), e);
+        throw new RuntimeException("Failed to get trip report data", e);
+    }
+}
+
+        /**
+         * Get load report data as Map for Jasper PDF generation
+         */
+        public Map<String, Object> getLoadReportData(String loadNumber) {
+            log.info("📊 Getting load report data for: {}", loadNumber);
+            
+            try {
+                Load load = loadRepository.findByLoadNumber(loadNumber)
+                        .orElseThrow(() -> new RuntimeException("Load not found: " + loadNumber));
+                
+                List<Trip> trips = tripRepository.findByLoadId(load.getLoadNumber());
+                LoadReportDTO dto = LoadReportDTO.fromEntity(load, trips);
+                
+                Map<String, Object> data = new HashMap<>();
+                data.put("loadNumber", dto.getLoadNumber());
+                data.put("status", dto.getStatus());
+                data.put("description", dto.getDescription());
+                data.put("commodityType", dto.getCommodityType());
+                data.put("weightKg", dto.getWeightKg());
+                data.put("palletCount", dto.getPalletCount());
+                data.put("tripCount", dto.getTripCount());
+                data.put("customerName", dto.getCustomerName());
+                data.put("totalDistanceKm", dto.getTotalDistanceKm());
+                data.put("totalFromDepotKm", dto.getTotalFromDepotKm());
+                data.put("totalToDepotKm", dto.getTotalToDepotKm());
+                
+                // Convert trips to list of maps for Jasper
+                List<Map<String, Object>> tripList = new ArrayList<>();
+                for (LoadReportDTO.TripSummary trip : dto.getTrips()) {
+                    Map<String, Object> tripMap = new HashMap<>();
+                    tripMap.put("tripNumber", trip.getTripNumber());
+                    tripMap.put("driverName", trip.getDriverName());
+                    tripMap.put("vehicleRegistration", trip.getVehicleRegistration());
+                    tripMap.put("plannedStartDate", trip.getPlannedStartDate());
+                    tripMap.put("plannedEndDate", trip.getPlannedEndDate());
+                    tripMap.put("actualDistanceKm", trip.getActualDistanceKm());
+                    tripMap.put("status", trip.getStatus());
+                    tripList.add(tripMap);
+                }
+                data.put("trips", tripList);
+                
+                return data;
+                
+            } catch (Exception e) {
+                log.error("Error getting load report data: {}", e.getMessage(), e);
+                throw new RuntimeException("Failed to get load report data", e);
+            }
+        }
+        
+        /**
+         * Get fuel report data as Map for Jasper PDF generation
+         */
+        public Map<String, Object> getFuelReportData(Long vehicleId, String startDate, String endDate) {
+            log.info("📊 Getting fuel report data for vehicle: {}", vehicleId);
+            
+            try {
+                FuelReportDTO dto = FuelReportDTO.createSample(vehicleId);
+                
+                Map<String, Object> data = new HashMap<>();
+                data.put("vehicleRegistration", dto.getVehicleRegistration());
+                data.put("startDate", dto.getStartDate());
+                data.put("endDate", dto.getEndDate());
+                data.put("totalLiters", dto.getTotalLiters());
+                data.put("totalCost", dto.getTotalCost());
+                data.put("avgUnitPrice", dto.getAvgUnitPrice());
+                data.put("entryCount", dto.getEntryCount());
+                
+                // Convert entries to list of maps for Jasper
+                List<Map<String, Object>> entryList = new ArrayList<>();
+                for (FuelReportDTO.FuelEntry entry : dto.getEntries()) {
+                    Map<String, Object> entryMap = new HashMap<>();
+                    entryMap.put("date", entry.getDate());
+                    entryMap.put("station", entry.getStation());
+                    entryMap.put("liters", entry.getLiters());
+                    entryMap.put("unitPrice", entry.getUnitPrice());
+                    entryMap.put("total", entry.getTotal());
+                    entryMap.put("odometer", entry.getOdometer());
+                    entryList.add(entryMap);
+                }
+                data.put("entries", entryList);
+                
+                return data;
+                
+            } catch (Exception e) {
+                log.error("Error getting fuel report data: {}", e.getMessage(), e);
+                throw new RuntimeException("Failed to get fuel report data", e);
+            }
+        }
+    
     // ============================================================
     // LOAD REPORT
     // ============================================================

@@ -2,7 +2,7 @@
 
 package com.pgsa.trailers.repository;
 
-import com.pgsa.trailers.entity.ops.FuelEntry;
+import com.pgsa.trailers.entity.ops.FuelSlip;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

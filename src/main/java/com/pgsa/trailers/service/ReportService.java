@@ -163,8 +163,10 @@ private FuelReportDTO buildFuelReportDTO(List<FuelSlip> slips, Long vehicleId,
     // Get vehicle info
     String vehicleRegistration = null;
     if (vehicleId != null) {
-        vehicleRepository.findById(vehicleId).ifPresent(v -> 
-            vehicleRegistration = v.getRegistrationNumber());
+        Optional<Vehicle> vehicleOpt = vehicleRepository.findById(vehicleId);
+        if (vehicleOpt.isPresent()) {
+            vehicleRegistration = vehicleOpt.get().getRegistrationNumber();
+        }
     }
 
     // Build DTO
@@ -174,12 +176,26 @@ private FuelReportDTO buildFuelReportDTO(List<FuelSlip> slips, Long vehicleId,
     dto.setEndDate(endDate != null ? endDate.format(DATE_FORMATTER) : "N/A");
     dto.setEntryCount(slips.size());
 
-    double totalLiters = 0.0;
-    double totalCost = 0.0;
-    double avgUnitPrice = 0.0;
+    // ✅ Calculate totals using streams (no lambda mutation issues)
+    double totalLiters = slips.stream()
+        .filter(s -> s.getQuantity() != null)
+        .mapToDouble(s -> s.getQuantity().doubleValue())
+        .sum();
 
+    double totalCost = slips.stream()
+        .filter(s -> s.getTotalAmount() != null)
+        .mapToDouble(s -> s.getTotalAmount().doubleValue())
+        .sum();
+
+    // ✅ Calculate average unit price
+    double avgUnitPrice = slips.stream()
+        .filter(s -> s.getUnitPrice() != null)
+        .mapToDouble(s -> s.getUnitPrice().doubleValue())
+        .average()
+        .orElse(0.0);
+
+    // ✅ Build entry list
     List<FuelReportDTO.FuelEntry> fuelEntryList = new ArrayList<>();
-
     for (FuelSlip slip : slips) {
         FuelReportDTO.FuelEntry dtoEntry = new FuelReportDTO.FuelEntry();
         
@@ -187,7 +203,7 @@ private FuelReportDTO buildFuelReportDTO(List<FuelSlip> slips, Long vehicleId,
         dtoEntry.setDate(slip.getTransactionDate() != null ? 
             slip.getTransactionDate().format(DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm")) : "N/A");
         
-        // ✅ FIXED: Use getName() instead of getSourceName()
+        // ✅ Use getName() from FuelSource
         dtoEntry.setStation(slip.getFuelSource() != null ? 
             slip.getFuelSource().getName() : "N/A");
         
@@ -203,23 +219,9 @@ private FuelReportDTO buildFuelReportDTO(List<FuelSlip> slips, Long vehicleId,
             slip.getOdometerReading().doubleValue() : 0.0);
         
         fuelEntryList.add(dtoEntry);
-
-        totalLiters += liters;
-        totalCost += cost;
     }
 
-    // Calculate average unit price
-    if (!slips.isEmpty()) {
-        double totalUnitPrice = slips.stream()
-            .filter(s -> s.getUnitPrice() != null)
-            .mapToDouble(s -> s.getUnitPrice().doubleValue())
-            .sum();
-        long countWithPrice = slips.stream()
-            .filter(s -> s.getUnitPrice() != null)
-            .count();
-        avgUnitPrice = countWithPrice > 0 ? totalUnitPrice / countWithPrice : 0.0;
-    }
-
+    // Set values
     dto.setTotalLiters(totalLiters);
     dto.setTotalCost(totalCost);
     dto.setAvgUnitPrice(avgUnitPrice);

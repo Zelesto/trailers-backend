@@ -42,7 +42,7 @@ public class ReportService {
         DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm");
 
     // ✅ LOGO URL
-    private static final String LOGO_URL = "/logo.png";
+    private static final String LOGO_URL = "https://trailers-backend.onrender.com/logo.png";
 
     // ============================================================
     // TRIP REPORT
@@ -70,26 +70,41 @@ public class ReportService {
     // ============================================================
 
     @Transactional(readOnly = true)
-    public String generateLoadReportHTML(String loadNumber) {
-        log.info("📊 Generating load report for: {}", loadNumber);
+public String generateLoadReportHTML(String loadNumber) {
+    log.info("📊 Generating load report for: {}", loadNumber);
 
-        try {
-            Optional<Load> loadOpt = loadRepository.findByLoadNumber(loadNumber);
-            if (loadOpt.isEmpty()) {
-                throw new RuntimeException("Load not found: " + loadNumber);
-            }
-            
-            Load load = loadOpt.get();
-            List<Trip> trips = tripRepository.findByLoadId(load.getLoadNumber());
-            
-            LoadReportDTO reportDTO = LoadReportDTO.fromEntity(load, trips);
-            return generateLoadHTML(reportDTO);
-            
-        } catch (Exception e) {
-            log.error("Error generating load report: {}", e.getMessage(), e);
-            return generateErrorHTML("Load Report", loadNumber, e.getMessage());
+    try {
+        // ✅ Check if load exists
+        Optional<Load> loadOpt = loadRepository.findByLoadNumber(loadNumber);
+        if (loadOpt.isEmpty()) {
+            String error = "Load not found: " + loadNumber;
+            log.error("❌ {}", error);
+            return generateErrorHTML("Load Report", loadNumber, error);
         }
+        
+        Load load = loadOpt.get();
+        log.info("✅ Load found: {}", load.getLoadNumber());
+        
+        // ✅ Get trips for this load
+        List<Trip> trips = tripRepository.findByLoadId(load.getLoadNumber());
+        log.info("📊 Found {} trips for load {}", trips.size(), load.getLoadNumber());
+        
+        // ✅ Build DTO
+        LoadReportDTO reportDTO = LoadReportDTO.fromEntity(load, trips);
+        
+        // ✅ Generate HTML
+        String html = generateLoadHTML(reportDTO);
+        
+        // ✅ Log the HTML length to verify
+        log.info("📊 Generated load report HTML length: {} bytes", html != null ? html.length() : 0);
+        
+        return html;
+        
+    } catch (Exception e) {
+        log.error("❌ Error generating load report: {}", e.getMessage(), e);
+        return generateErrorHTML("Load Report", loadNumber, e.getMessage());
     }
+}
 
     // ============================================================
     // FUEL REPORT - ✅ FIXED TO USE FuelSlip
@@ -501,11 +516,184 @@ private FuelReportDTO buildFuelReportDTO(List<FuelSlip> slips, Long vehicleId,
     }
 
     private String generateLoadHTML(LoadReportDTO load) {
-        // ... (keep your existing implementation)
-        // Same as before but with LOGO_URL
-        // I'll keep it short here since it's the same as before
-        return generateLoadHTMLWithLogo(load);
+    // ✅ Build trips table rows
+    StringBuilder tripsHtml = new StringBuilder();
+    
+    if (load.getTrips() == null || load.getTrips().isEmpty()) {
+        tripsHtml.append("""
+            <tr>
+                <td colspan="7" style="text-align:center; padding: 20px; color: #6B7280;">
+                    No trips linked to this load
+                </td>
+            </tr>
+            """);
+    } else {
+        for (LoadReportDTO.TripSummary trip : load.getTrips()) {
+            tripsHtml.append("""
+                <tr>
+                    <td><strong>%s</strong></td>
+                    <td>%s</td>
+                    <td>%s</td>
+                    <td>%s</td>
+                    <td>%s</td>
+                    <td>%.1f km</td>
+                    <td><span class="status-badge" style="background-color:%s;color:%s;">%s</span></td>
+                </tr>
+                """.formatted(
+                    trip.getTripNumber() != null ? trip.getTripNumber() : "N/A",
+                    trip.getDriverName() != null ? trip.getDriverName() : "N/A",
+                    trip.getVehicleRegistration() != null ? trip.getVehicleRegistration() : "N/A",
+                    trip.getPlannedStartDate() != null ? trip.getPlannedStartDate() : "N/A",
+                    trip.getPlannedEndDate() != null ? trip.getPlannedEndDate() : "N/A",
+                    trip.getActualDistanceKm() != null ? trip.getActualDistanceKm() : 0.0,
+                    getStatusColor(trip.getStatus()), 
+                    getStatusTextColor(trip.getStatus()), 
+                    trip.getStatus() != null ? trip.getStatus() : "N/A"
+            ));
+        }
     }
+
+    // ✅ Build complete HTML with logo
+    String statusColor = getStatusColor(load.getStatus());
+    String statusTextColor = getStatusTextColor(load.getStatus());
+
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Load Report - %s</title>
+        <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; background: #F7F7FC; padding: 20px; }
+            .container { max-width: 1200px; margin: 0 auto; background: #FFFFFF; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); padding: 40px; }
+            .header { text-align: center; border-bottom: 3px double #059669; padding-bottom: 20px; margin-bottom: 30px; }
+            .logo-container { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 4px; }
+            .logo-img { height: 50px; width: auto; }
+            .logo-text { font-size: 28px; font-weight: 700; color: #059669; }
+            .logo-text span { color: #10B981; }
+            .subtitle { font-size: 14px; color: #6B7280; }
+            .report-title { font-size: 20px; font-weight: 600; color: #111827; margin-top: 8px; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+            .section { background: #F9FAFB; border-radius: 12px; padding: 16px 20px; }
+            .section-full { grid-column: 1 / -1; }
+            .section-title { font-size: 13px; font-weight: 600; color: #059669; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 2px solid #E5E7EB; }
+            .row { display: flex; padding: 6px 0; border-bottom: 1px solid #F3F4F6; }
+            .row:last-child { border-bottom: none; }
+            .label { width: 140px; font-size: 12px; color: #6B7280; flex-shrink: 0; }
+            .value { font-size: 13px; font-weight: 500; color: #111827; }
+            .status-badge { display: inline-block; padding: 2px 14px; border-radius: 20px; font-size: 11px; font-weight: 600; background-color: %s; color: %s; }
+            .table-container { overflow-x: auto; margin-top: 16px; }
+            table { width: 100%%; border-collapse: collapse; font-size: 12px; }
+            th { background: #F3F4F6; padding: 10px 12px; text-align: left; font-weight: 600; color: #374151; border-bottom: 2px solid #E5E7EB; }
+            td { padding: 8px 12px; border-bottom: 1px solid #F3F4F6; }
+            .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB; font-size: 11px; color: #9CA3AF; }
+            .print-btn { display: inline-block; padding: 10px 24px; background: linear-gradient(135deg, #059669 0%%, #10B981 100%%); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 20px; }
+            @media print { body { background: white; padding: 0; } .container { box-shadow: none; padding: 20px; } .print-btn { display: none !important; } }
+            @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .container { padding: 20px; } }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="logo-container">
+                    <img src="%s" alt="SNL Trailers" class="logo-img" 
+                         onerror="this.style.display='none'">
+                    <div class="logo-text">📦 <span>SNL</span> Trailers</div>
+                </div>
+                <div class="subtitle">Logistics &amp; Trucking Operations</div>
+                <div class="report-title">Load Report</div>
+                <div style="font-size: 12px; color: #6B7280; margin-top: 4px;">
+                    %s • Generated: %s
+                </div>
+            </div>
+
+            <div class="grid">
+                <div class="section">
+                    <div class="section-title">Load Details</div>
+                    <div class="row"><span class="label">Load Number</span><span class="value">%s</span></div>
+                    <div class="row"><span class="label">Status</span><span class="value"><span class="status-badge" style="background-color:%s;color:%s;">%s</span></span></div>
+                    <div class="row"><span class="label">Description</span><span class="value">%s</span></div>
+                    <div class="row"><span class="label">Commodity</span><span class="value">%s</span></div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Measurements</div>
+                    <div class="row"><span class="label">Weight</span><span class="value">%.1f kg</span></div>
+                    <div class="row"><span class="label">Pallets</span><span class="value">%d</span></div>
+                    <div class="row"><span class="label">Trips</span><span class="value">%d</span></div>
+                    <div class="row"><span class="label">Customer</span><span class="value">%s</span></div>
+                </div>
+
+                <div class="section section-full">
+                    <div class="section-title">Distance Summary</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+                        <div style="text-align: center; padding: 12px; background: #DBEAFE; border-radius: 8px;">
+                            <div style="font-size: 11px; color: #1E40AF;">Total Distance</div>
+                            <div style="font-size: 20px; font-weight: 700; color: #1E40AF;">%.1f km</div>
+                        </div>
+                        <div style="text-align: center; padding: 12px; background: #D1FAE5; border-radius: 8px;">
+                            <div style="font-size: 11px; color: #065F46;">From Depot</div>
+                            <div style="font-size: 20px; font-weight: 700; color: #065F46;">%.1f km</div>
+                        </div>
+                        <div style="text-align: center; padding: 12px; background: #FEF3C7; border-radius: 8px;">
+                            <div style="font-size: 11px; color: #92400E;">To Depot</div>
+                            <div style="font-size: 20px; font-weight: 700; color: #92400E;">%.1f km</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-title" style="margin-top: 24px;">Trips Linked to Load</div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Trip Number</th>
+                            <th>Driver</th>
+                            <th>Vehicle</th>
+                            <th>Planned Start</th>
+                            <th>Planned End</th>
+                            <th>Actual Distance</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        %s
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="text-align: center;" class="no-print">
+                <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
+            </div>
+
+            <div class="footer">
+                <strong>SNL Trailers</strong> • Generated: %s • Confidential
+            </div>
+        </div>
+    </body>
+    </html>
+    """.formatted(
+        load.getLoadNumber(),
+        statusColor, statusTextColor,
+        LOGO_URL,
+        load.getLoadNumber(), LocalDateTime.now().format(TIME_FORMATTER),
+        load.getLoadNumber(),
+        statusColor, statusTextColor, load.getStatus() != null ? load.getStatus() : "N/A",
+        load.getDescription() != null ? load.getDescription() : "N/A",
+        load.getCommodityType() != null ? load.getCommodityType() : "N/A",
+        load.getWeightKg() != null ? load.getWeightKg() : 0.0,
+        load.getPalletCount() != null ? load.getPalletCount() : 0,
+        load.getTripCount() != null ? load.getTripCount() : 0,
+        load.getCustomerName() != null ? load.getCustomerName() : "N/A",
+        load.getTotalDistanceKm() != null ? load.getTotalDistanceKm() : 0.0,
+        load.getTotalFromDepotKm() != null ? load.getTotalFromDepotKm() : 0.0,
+        load.getTotalToDepotKm() != null ? load.getTotalToDepotKm() : 0.0,
+        tripsHtml.toString(),
+        LocalDateTime.now().format(TIME_FORMATTER)
+    );
+}
 
     // ============================================================
     // FUEL HTML GENERATOR - ✅ UPDATED

@@ -443,7 +443,7 @@ public class ReportService {
                 </div>
 
                 <div class="footer">
-                    <strong>PGS Trailers</strong> • Generated: %s • Confidential
+                    <strong>SNL Trailers</strong> • Generated: %s • Confidential
                 </div>
             </div>
         </body>
@@ -624,7 +624,7 @@ public class ReportService {
                 </div>
 
                 <div class="footer">
-                    <strong>PGS Trailers</strong> • Generated: %s • Confidential
+                    <strong>SNL Trailers</strong> • Generated: %s • Confidential
                 </div>
             </div>
         </body>

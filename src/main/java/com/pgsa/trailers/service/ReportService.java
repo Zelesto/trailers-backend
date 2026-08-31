@@ -5,12 +5,11 @@ package com.pgsa.trailers.service;
 import com.pgsa.trailers.dto.report.FuelReportDTO;
 import com.pgsa.trailers.dto.report.LoadReportDTO;
 import com.pgsa.trailers.dto.report.TripReportDTO;
-// ✅ USE FuelSlip INSTEAD OF FuelEntry
 import com.pgsa.trailers.entity.ops.FuelSlip;
+import com.pgsa.trailers.entity.ops.FuelSource;
 import com.pgsa.trailers.entity.ops.Load;
 import com.pgsa.trailers.entity.ops.Trip;
 import com.pgsa.trailers.entity.assets.Vehicle;
-// ✅ USE FuelSlipRepository INSTEAD OF FuelEntryRepository
 import com.pgsa.trailers.repository.FuelSlipRepository;
 import com.pgsa.trailers.repository.LoadRepository;
 import com.pgsa.trailers.repository.TripRepository;
@@ -157,77 +156,80 @@ public class ReportService {
         }
     }
 
-    private FuelReportDTO buildFuelReportDTO(List<FuelSlip> slips, Long vehicleId, 
-                                             LocalDate startDate, LocalDate endDate) {
-        // Get vehicle info
-        String vehicleRegistration = null;
-        if (vehicleId != null) {
-            vehicleRepository.findById(vehicleId).ifPresent(v -> 
-                vehicleRegistration = v.getRegistrationNumber());
-        }
+    // src/main/java/com/pgsa/trailers/service/ReportService.java
 
-        // Build DTO
-        FuelReportDTO dto = new FuelReportDTO();
-        dto.setVehicleRegistration(vehicleRegistration != null ? vehicleRegistration : "All Vehicles");
-        dto.setStartDate(startDate != null ? startDate.format(DATE_FORMATTER) : "N/A");
-        dto.setEndDate(endDate != null ? endDate.format(DATE_FORMATTER) : "N/A");
-        dto.setEntryCount(slips.size());
-
-        // Calculate totals
-        double totalLiters = 0.0;
-        double totalCost = 0.0;
-        double avgUnitPrice = 0.0;
-
-        List<FuelReportDTO.FuelEntry> fuelEntryList = new ArrayList<>();
-
-        for (FuelSlip slip : slips) {
-            FuelReportDTO.FuelEntry dtoEntry = new FuelReportDTO.FuelEntry();
-            
-            // ✅ Use FuelSlip fields
-            dtoEntry.setDate(slip.getTransactionDate() != null ? 
-                slip.getTransactionDate().format(DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm")) : "N/A");
-            dtoEntry.setStation(slip.getFuelSource() != null ? 
-                slip.getFuelSource().getSourceName() : "N/A");
-            
-            // ✅ Use BigDecimal values from FuelSlip
-            Double liters = slip.getQuantity() != null ? slip.getQuantity().doubleValue() : 0.0;
-            Double cost = slip.getTotalAmount() != null ? slip.getTotalAmount().doubleValue() : 0.0;
-            Double pricePerLiter = slip.getUnitPrice() != null ? slip.getUnitPrice().doubleValue() : 0.0;
-            
-            dtoEntry.setLiters(liters);
-            dtoEntry.setTotal(cost);
-            dtoEntry.setUnitPrice(pricePerLiter);
-            dtoEntry.setOdometer(slip.getOdometerReading() != null ? 
-                slip.getOdometerReading().doubleValue() : 0.0);
-            
-            fuelEntryList.add(dtoEntry);
-
-            totalLiters += liters;
-            totalCost += cost;
-        }
-
-        // Calculate average unit price
-        if (!slips.isEmpty()) {
-            double totalUnitPrice = slips.stream()
-                .filter(s -> s.getUnitPrice() != null)
-                .mapToDouble(s -> s.getUnitPrice().doubleValue())
-                .sum();
-            long countWithPrice = slips.stream()
-                .filter(s -> s.getUnitPrice() != null)
-                .count();
-            avgUnitPrice = countWithPrice > 0 ? totalUnitPrice / countWithPrice : 0.0;
-        }
-
-        dto.setTotalLiters(totalLiters);
-        dto.setTotalCost(totalCost);
-        dto.setAvgUnitPrice(avgUnitPrice);
-        dto.setEntries(fuelEntryList);
-
-        log.info("📊 Fuel report DTO built: {} entries, total liters: {}, total cost: {}", 
-            fuelEntryList.size(), totalLiters, totalCost);
-
-        return dto;
+private FuelReportDTO buildFuelReportDTO(List<FuelSlip> slips, Long vehicleId, 
+                                         LocalDate startDate, LocalDate endDate) {
+    // Get vehicle info
+    String vehicleRegistration = null;
+    if (vehicleId != null) {
+        vehicleRepository.findById(vehicleId).ifPresent(v -> 
+            vehicleRegistration = v.getRegistrationNumber());
     }
+
+    // Build DTO
+    FuelReportDTO dto = new FuelReportDTO();
+    dto.setVehicleRegistration(vehicleRegistration != null ? vehicleRegistration : "All Vehicles");
+    dto.setStartDate(startDate != null ? startDate.format(DATE_FORMATTER) : "N/A");
+    dto.setEndDate(endDate != null ? endDate.format(DATE_FORMATTER) : "N/A");
+    dto.setEntryCount(slips.size());
+
+    double totalLiters = 0.0;
+    double totalCost = 0.0;
+    double avgUnitPrice = 0.0;
+
+    List<FuelReportDTO.FuelEntry> fuelEntryList = new ArrayList<>();
+
+    for (FuelSlip slip : slips) {
+        FuelReportDTO.FuelEntry dtoEntry = new FuelReportDTO.FuelEntry();
+        
+        // Format date
+        dtoEntry.setDate(slip.getTransactionDate() != null ? 
+            slip.getTransactionDate().format(DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm")) : "N/A");
+        
+        // ✅ FIXED: Use getName() instead of getSourceName()
+        dtoEntry.setStation(slip.getFuelSource() != null ? 
+            slip.getFuelSource().getName() : "N/A");
+        
+        // Get values from FuelSlip
+        Double liters = slip.getQuantity() != null ? slip.getQuantity().doubleValue() : 0.0;
+        Double cost = slip.getTotalAmount() != null ? slip.getTotalAmount().doubleValue() : 0.0;
+        Double pricePerLiter = slip.getUnitPrice() != null ? slip.getUnitPrice().doubleValue() : 0.0;
+        
+        dtoEntry.setLiters(liters);
+        dtoEntry.setTotal(cost);
+        dtoEntry.setUnitPrice(pricePerLiter);
+        dtoEntry.setOdometer(slip.getOdometerReading() != null ? 
+            slip.getOdometerReading().doubleValue() : 0.0);
+        
+        fuelEntryList.add(dtoEntry);
+
+        totalLiters += liters;
+        totalCost += cost;
+    }
+
+    // Calculate average unit price
+    if (!slips.isEmpty()) {
+        double totalUnitPrice = slips.stream()
+            .filter(s -> s.getUnitPrice() != null)
+            .mapToDouble(s -> s.getUnitPrice().doubleValue())
+            .sum();
+        long countWithPrice = slips.stream()
+            .filter(s -> s.getUnitPrice() != null)
+            .count();
+        avgUnitPrice = countWithPrice > 0 ? totalUnitPrice / countWithPrice : 0.0;
+    }
+
+    dto.setTotalLiters(totalLiters);
+    dto.setTotalCost(totalCost);
+    dto.setAvgUnitPrice(avgUnitPrice);
+    dto.setEntries(fuelEntryList);
+
+    log.info("📊 Fuel report DTO built: {} entries, total liters: {}, total cost: {}", 
+        fuelEntryList.size(), totalLiters, totalCost);
+
+    return dto;
+}
 
     // ============================================================
     // DATA METHODS FOR PDF REPORTS (Jasper) - ✅ UPDATED

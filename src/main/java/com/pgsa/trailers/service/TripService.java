@@ -73,6 +73,7 @@ public class TripService {
     private final JdbcTemplate jdbcTemplate;
     private final RoutingEngine routingEngine;
     private final LoadService loadService;
+    private final BillingCalculatorService billingCalculatorService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -714,9 +715,21 @@ public CompletableFuture<Trip> calculateTripDistance(Long tripId) {
         eventPublisher.publishEvent(new TripCompletedEvent(tripId));
         log.info("Trip {} completed. Distance: {} km", tripId, trip.getActualDistanceKm());
 
-        return tripResponseMapper.toResponse(updated);
+       try {
+        TripBilling billing = billingCalculatorService.calculateTripBilling(tripId, userId);
+        log.info("💰 Billing calculated for trip {}: {}", tripId, billing.getTotal());
+    } catch (Exception e) {
+        log.error("❌ Failed to calculate billing for trip {}: {}", tripId, e.getMessage(), e);
     }
 
+    return tripResponseMapper.toResponse(updated);
+}
+
+@Transactional
+public TripBilling recalculateBilling(Long tripId, Long userId) {
+    log.info("🔄 Manually recalculating billing for Trip: {}", tripId);
+    return billingCalculatorService.calculateTripBilling(tripId, userId);
+}
     // ============================================================
     // READ METHODS
     // ============================================================

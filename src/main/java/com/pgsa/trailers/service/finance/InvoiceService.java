@@ -1,7 +1,7 @@
 package com.pgsa.trailers.service.finance;
 
 import com.pgsa.trailers.dto.InvoiceStats;
-import com.pgsa.trailers.entity.suppliers.Invoice;
+import com.pgsa.trailers.entity.billing.Invoice;
 import com.pgsa.trailers.repository.finance.InvoiceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

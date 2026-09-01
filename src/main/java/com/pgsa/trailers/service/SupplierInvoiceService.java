@@ -1,6 +1,6 @@
 package com.pgsa.trailers.service;
 
-import com.pgsa.trailers.entity.suppliers.Invoice;
+import com.pgsa.trailers.entity.billing.Invoice;
 import com.pgsa.trailers.repository.SupplierInvoiceRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

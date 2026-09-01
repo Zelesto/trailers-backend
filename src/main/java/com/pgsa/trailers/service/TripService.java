@@ -21,7 +21,7 @@ import com.pgsa.trailers.repository.DriverRepository;
 import com.pgsa.trailers.repository.LoadRepository;
 import com.pgsa.trailers.repository.TripRepository;
 import com.pgsa.trailers.repository.VehicleRepository;
-import com.pgsa.trailers.service.routing.BillingCalculatorService;
+import com.pgsa.trailers.service.billing.BillingCalculatorService;
 import com.pgsa.trailers.service.routing.RoutingEngine;
 import com.pgsa.trailers.service.routing.RoutingResult;
 import com.pgsa.trailers.service.util.LoadNumberGenerator;

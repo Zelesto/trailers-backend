@@ -6,6 +6,8 @@ import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 import org.hibernate.annotations.Type;
 
 import java.math.BigDecimal;
@@ -16,6 +18,8 @@ import java.util.Map;
 @Data
 @Entity
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @Table(name = "trip_billing", indexes = {
     @Index(name = "idx_trip_billing_trip", columnList = "trip_id"),
     @Index(name = "idx_trip_billing_customer", columnList = "customer_id"),
@@ -34,8 +38,13 @@ public class TripBilling {
     @JoinColumn(name = "rate_id")
     private Rate rate;
 
+    // ADD THIS - Direct customer ID field
+    @Column(name = "customer_id")
+    private Long customerId;
+
+    // Keep this relationship
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "customer_id")
+    @JoinColumn(name = "customer_id", insertable = false, updatable = false)
     private Customer customer;
 
     // Trip metrics used

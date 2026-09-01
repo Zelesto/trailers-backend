@@ -1,0 +1,332 @@
+package com.pgsa.trailers.service.billing;
+
+import com.pgsa.trailers.entity.billing.LoadBilling;
+import com.pgsa.trailers.entity.billing.TripBilling;
+import com.pgsa.trailers.entity.finance.Invoice;
+import com.pgsa.trailers.entity.finance.InvoiceItem;
+import com.pgsa.trailers.entity.ops.Customer;
+import com.pgsa.trailers.entity.ops.Load;
+import com.pgsa.trailers.entity.ops.Trip;
+import com.pgsa.trailers.repository.billing.LoadBillingRepository;
+import com.pgsa.trailers.repository.billing.TripBillingRepository;
+import com.pgsa.trailers.repository.finance.InvoiceRepository;
+import com.pgsa.trailers.repository.LoadRepository;
+import com.pgsa.trailers.repository.CustomerRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class InvoiceBillingService {
+
+    private final LoadBillingRepository loadBillingRepository;
+    private final TripBillingRepository tripBillingRepository;
+    private final InvoiceRepository invoiceRepository;
+    private final LoadRepository loadRepository;
+    private final CustomerRepository customerRepository;
+
+    /**
+     * Generate an invoice from a Load's billing
+     */
+    @Transactional
+    public Invoice generateInvoiceFromLoad(String loadId, Long userId) {
+        log.info("📄 Generating invoice for Load: {}", loadId);
+
+        Load load = loadRepository.findByLoadNumber(loadId)
+            .orElseThrow(() -> new RuntimeException("Load not found: " + loadId));
+
+        LoadBilling loadBilling = loadBillingRepository.findByLoadId(loadId)
+            .orElseThrow(() -> new RuntimeException("Load billing not found for: " + loadId));
+
+        Customer customer = customerRepository.findById(loadBilling.getCustomerId())
+            .orElseThrow(() -> new RuntimeException("Customer not found"));
+
+        // Check if already invoiced
+        if (loadBilling.getInvoiceId() != null) {
+            throw new RuntimeException("Load already has an invoice: " + loadBilling.getInvoiceId());
+        }
+
+        // Create invoice
+        Invoice invoice = new Invoice();
+        invoice.setInvoiceNumber(generateInvoiceNumber());
+        invoice.setInvoiceType("RECEIVABLE");
+        invoice.setCustomerId(customer.getId());
+        invoice.setCustomerName(customer.getName());
+        invoice.setCustomerEmail(customer.getEmail());
+        invoice.setCustomerAddress(buildCustomerAddress(customer));
+        invoice.setInvoiceDate(LocalDateTime.now());
+        invoice.setDueDate(LocalDateTime.now().plusDays(30));
+        invoice.setCurrency("ZAR");
+        invoice.setStatus("DRAFT");
+        invoice.setDescription("Transport services for Load: " + loadId);
+        invoice.setVatRate(new BigDecimal("15.00"));
+
+        // Build line items from trip billings
+        List<TripBilling> tripBillings = tripBillingRepository.findByTrip_LoadId(loadId);
+        List<InvoiceItem> items = new ArrayList<>();
+
+        // Add one line item per trip
+        for (TripBilling tb : tripBillings) {
+            Trip trip = tb.getTrip();
+            InvoiceItem item = new InvoiceItem();
+            item.setDescription(String.format(
+                "Trip %s: %s → %s (%.0f km, %.1f tons)",
+                trip.getTripNumber(),
+                trip.getOriginLocation() != null ? truncate(trip.getOriginLocation(), 20) : "N/A",
+                trip.getDestinationLocation() != null ? truncate(trip.getDestinationLocation(), 20) : "N/A",
+                tb.getDistanceKm() != null ? tb.getDistanceKm() : BigDecimal.ZERO,
+                tb.getTonnage() != null ? tb.getTonnage() : BigDecimal.ZERO
+            ));
+            item.setQuantity(BigDecimal.ONE);
+            item.setUnitPrice(tb.getTotal()); // Total per trip
+            item.setTaxRate(new BigDecimal("15.00"));
+            item.setLineTotal(tb.getTotal());
+            item.setTaxAmount(tb.getVat());
+            item.setInvoice(invoice);
+            item.setTripId(trip.getId());
+            items.add(item);
+        }
+
+        // Add a load summary line
+        InvoiceItem summaryItem = new InvoiceItem();
+        summaryItem.setDescription(String.format(
+            "Load %s: %d trips, %.0f km total",
+            loadId,
+            tripBillings.size(),
+            loadBilling.getTotalDistanceKm() != null ? loadBilling.getTotalDistanceKm() : BigDecimal.ZERO
+        ));
+        summaryItem.setQuantity(BigDecimal.ONE);
+        summaryItem.setUnitPrice(loadBilling.getSubtotal());
+        summaryItem.setTaxRate(new BigDecimal("15.00"));
+        summaryItem.setLineTotal(loadBilling.getSubtotal());
+        summaryItem.setTaxAmount(loadBilling.getVat());
+        summaryItem.setInvoice(invoice);
+        items.add(summaryItem);
+
+        // Set totals
+        invoice.setItems(items);
+        invoice.setSubtotal(loadBilling.getSubtotal());
+        invoice.setTaxTotal(loadBilling.getVat());
+        invoice.setTotalAmount(loadBilling.getTotal());
+
+        Invoice savedInvoice = invoiceRepository.save(invoice);
+
+        // Update billing with invoice reference
+        loadBilling.setInvoiceId(savedInvoice.getId());
+        loadBilling.setStatus("INVOICED");
+        loadBilling.setInvoicedAt(LocalDateTime.now());
+        loadBillingRepository.save(loadBilling);
+
+        // Update all trip billings
+        for (TripBilling tb : tripBillings) {
+            tb.setInvoiceId(savedInvoice.getId());
+            tb.setStatus("INVOICED");
+            tb.setInvoicedAt(LocalDateTime.now());
+        }
+        tripBillingRepository.saveAll(tripBillings);
+
+        log.info("✅ Invoice {} generated for Load {}", savedInvoice.getInvoiceNumber(), loadId);
+        return savedInvoice;
+    }
+
+    /**
+     * Generate an invoice from a single Trip
+     */
+    @Transactional
+    public Invoice generateInvoiceFromTrip(Long tripId, Long userId) {
+        log.info("📄 Generating invoice for Trip: {}", tripId);
+
+        TripBilling tripBilling = tripBillingRepository.findByTripId(tripId);
+        if (tripBilling == null) {
+            throw new RuntimeException("Trip billing not found for: " + tripId);
+        }
+
+        if (tripBilling.getInvoiceId() != null) {
+            throw new RuntimeException("Trip already has an invoice: " + tripBilling.getInvoiceId());
+        }
+
+        Trip trip = tripBilling.getTrip();
+        Customer customer = customerRepository.findById(tripBilling.getCustomerId())
+            .orElseThrow(() -> new RuntimeException("Customer not found"));
+
+        Invoice invoice = new Invoice();
+        invoice.setInvoiceNumber(generateInvoiceNumber());
+        invoice.setInvoiceType("RECEIVABLE");
+        invoice.setCustomerId(customer.getId());
+        invoice.setCustomerName(customer.getName());
+        invoice.setCustomerEmail(customer.getEmail());
+        invoice.setCustomerAddress(buildCustomerAddress(customer));
+        invoice.setInvoiceDate(LocalDateTime.now());
+        invoice.setDueDate(LocalDateTime.now().plusDays(30));
+        invoice.setCurrency("ZAR");
+        invoice.setStatus("DRAFT");
+        invoice.setDescription("Transport service - Trip " + trip.getTripNumber());
+        invoice.setVatRate(new BigDecimal("15.00"));
+
+        // Build line items - breakdown by charge type
+        List<InvoiceItem> items = new ArrayList<>();
+
+        // Distance charge
+        if (tripBilling.getDistanceCharge() != null && tripBilling.getDistanceCharge().compareTo(BigDecimal.ZERO) > 0) {
+            InvoiceItem distItem = new InvoiceItem();
+            distItem.setDescription(String.format(
+                "Distance charge: %.0f km @ R%.2f/km",
+                tripBilling.getDistanceKm() != null ? tripBilling.getDistanceKm() : BigDecimal.ZERO,
+                tripBilling.getBaseRate() != null ? tripBilling.getBaseRate() : BigDecimal.ZERO
+            ));
+            distItem.setQuantity(BigDecimal.ONE);
+            distItem.setUnitPrice(tripBilling.getDistanceCharge());
+            distItem.setTaxRate(new BigDecimal("15.00"));
+            distItem.setLineTotal(tripBilling.getDistanceCharge());
+            distItem.setTaxAmount(tripBilling.getDistanceCharge().multiply(new BigDecimal("0.15")));
+            distItem.setInvoice(invoice);
+            items.add(distItem);
+        }
+
+        // Tonnage charge
+        if (tripBilling.getTonnageCharge() != null && tripBilling.getTonnageCharge().compareTo(BigDecimal.ZERO) > 0) {
+            InvoiceItem tonItem = new InvoiceItem();
+            tonItem.setDescription(String.format(
+                "Tonnage charge: %.1f tons",
+                tripBilling.getTonnage() != null ? tripBilling.getTonnage() : BigDecimal.ZERO
+            ));
+            tonItem.setQuantity(BigDecimal.ONE);
+            tonItem.setUnitPrice(tripBilling.getTonnageCharge());
+            tonItem.setTaxRate(new BigDecimal("15.00"));
+            tonItem.setLineTotal(tripBilling.getTonnageCharge());
+            tonItem.setTaxAmount(tripBilling.getTonnageCharge().multiply(new BigDecimal("0.15")));
+            tonItem.setInvoice(invoice);
+            items.add(tonItem);
+        }
+
+        // Daily rate charge
+        if (tripBilling.getDailyRateCharge() != null && tripBilling.getDailyRateCharge().compareTo(BigDecimal.ZERO) > 0) {
+            InvoiceItem dailyItem = new InvoiceItem();
+            dailyItem.setDescription(String.format(
+                "Daily rate: %d day(s)",
+                tripBilling.getDays() != null ? tripBilling.getDays() : 1
+            ));
+            dailyItem.setQuantity(BigDecimal.ONE);
+            dailyItem.setUnitPrice(tripBilling.getDailyRateCharge());
+            dailyItem.setTaxRate(new BigDecimal("15.00"));
+            dailyItem.setLineTotal(tripBilling.getDailyRateCharge());
+            dailyItem.setTaxAmount(tripBilling.getDailyRateCharge().multiply(new BigDecimal("0.15")));
+            dailyItem.setInvoice(invoice);
+            items.add(dailyItem);
+        }
+
+        // Labour charge
+        if (tripBilling.getLabourCharge() != null && tripBilling.getLabourCharge().compareTo(BigDecimal.ZERO) > 0) {
+            InvoiceItem labourItem = new InvoiceItem();
+            labourItem.setDescription(String.format(
+                "Labour: %.1f hours",
+                tripBilling.getLabourHours() != null ? tripBilling.getLabourHours() : BigDecimal.ZERO
+            ));
+            labourItem.setQuantity(BigDecimal.ONE);
+            labourItem.setUnitPrice(tripBilling.getLabourCharge());
+            labourItem.setTaxRate(new BigDecimal("15.00"));
+            labourItem.setLineTotal(tripBilling.getLabourCharge());
+            labourItem.setTaxAmount(tripBilling.getLabourCharge().multiply(new BigDecimal("0.15")));
+            labourItem.setInvoice(invoice);
+            items.add(labourItem);
+        }
+
+        // Fixed surcharge
+        if (tripBilling.getFixedSurcharge() != null && tripBilling.getFixedSurcharge().compareTo(BigDecimal.ZERO) > 0) {
+            InvoiceItem fixedItem = new InvoiceItem();
+            fixedItem.setDescription("Fixed surcharge");
+            fixedItem.setQuantity(BigDecimal.ONE);
+            fixedItem.setUnitPrice(tripBilling.getFixedSurcharge());
+            fixedItem.setTaxRate(new BigDecimal("15.00"));
+            fixedItem.setLineTotal(tripBilling.getFixedSurcharge());
+            fixedItem.setTaxAmount(tripBilling.getFixedSurcharge().multiply(new BigDecimal("0.15")));
+            fixedItem.setInvoice(invoice);
+            items.add(fixedItem);
+        }
+
+        invoice.setItems(items);
+        invoice.setSubtotal(tripBilling.getSubtotal());
+        invoice.setTaxTotal(tripBilling.getVat());
+        invoice.setTotalAmount(tripBilling.getTotal());
+
+        Invoice savedInvoice = invoiceRepository.save(invoice);
+
+        // Update billing
+        tripBilling.setInvoiceId(savedInvoice.getId());
+        tripBilling.setStatus("INVOICED");
+        tripBilling.setInvoicedAt(LocalDateTime.now());
+        tripBillingRepository.save(tripBilling);
+
+        log.info("✅ Invoice {} generated for Trip {}", savedInvoice.getInvoiceNumber(), tripId);
+        return savedInvoice;
+    }
+
+    /**
+     * Get billing summary for a load (preview before generating invoice)
+     */
+    public LoadBillingSummary getLoadBillingSummary(String loadId) {
+        Load load = loadRepository.findByLoadNumber(loadId)
+            .orElseThrow(() -> new RuntimeException("Load not found: " + loadId));
+
+        LoadBilling loadBilling = loadBillingRepository.findByLoadId(loadId)
+            .orElse(null);
+
+        List<TripBilling> tripBillings = tripBillingRepository.findByTrip_LoadId(loadId);
+
+        return LoadBillingSummary.builder()
+            .loadId(loadId)
+            .loadDescription(load.getDescription())
+            .customerId(load.getCustomerId())
+            .customerName(load.getCustomer() != null ? load.getCustomer().getName() : null)
+            .totalTrips(tripBillings.size())
+            .totalBillable(tripBillings.stream()
+                .filter(tb -> "CALCULATED".equals(tb.getStatus()))
+                .count())
+            .totalInvoiced(tripBillings.stream()
+                .filter(tb -> "INVOICED".equals(tb.getStatus()))
+                .count())
+            .totalAmount(loadBilling != null ? loadBilling.getTotal() : BigDecimal.ZERO)
+            .subtotal(loadBilling != null ? loadBilling.getSubtotal() : BigDecimal.ZERO)
+            .vat(loadBilling != null ? loadBilling.getVat() : BigDecimal.ZERO)
+            .trips(tripBillings)
+            .canInvoice(loadBilling != null && 
+                loadBilling.getInvoiceId() == null && 
+                !tripBillings.isEmpty())
+            .build();
+    }
+
+    // ========== Helper Methods ==========
+
+    private String generateInvoiceNumber() {
+        String year = String.valueOf(java.time.Year.now().getValue());
+        String prefix = "INV-" + year + "-";
+        String random = UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        return prefix + random;
+    }
+
+    private String buildCustomerAddress(Customer customer) {
+        StringBuilder sb = new StringBuilder();
+        if (customer.getAddressLine1() != null) sb.append(customer.getAddressLine1());
+        if (customer.getAddressLine2() != null) sb.append(", ").append(customer.getAddressLine2());
+        if (customer.getCity() != null) sb.append(", ").append(customer.getCity());
+        if (customer.getProvince() != null) sb.append(", ").append(customer.getProvince());
+        if (customer.getPostalCode() != null) sb.append(" ").append(customer.getPostalCode());
+        if (customer.getCountry() != null) sb.append(", ").append(customer.getCountry());
+        return sb.toString();
+    }
+
+    private String truncate(String text, int maxLength) {
+        if (text == null) return "";
+        if (text.length() <= maxLength) return text;
+        return text.substring(0, maxLength) + "...";
+    }
+}

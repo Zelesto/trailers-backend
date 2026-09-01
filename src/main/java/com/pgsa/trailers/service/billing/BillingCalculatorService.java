@@ -119,6 +119,23 @@ public class BillingCalculatorService {
         return saved;
     }
 
+
+    public LoadBilling getLoadBilling(String loadId) {
+    return loadBillingRepository.findByLoadId(loadId)
+        .orElseThrow(() -> new RuntimeException("Load billing not found: " + loadId));
+}
+
+public TripBilling getTripBilling(Long tripId) {
+    TripBilling billing = tripBillingRepository.findByTripId(tripId);
+    if (billing == null) {
+        throw new RuntimeException("Trip billing not found for trip: " + tripId);
+    }
+    return billing;
+}
+
+public List<LoadBilling> getBillableLoads() {
+    return loadBillingRepository.findBillableLoads();
+}
     /**
      * Calculate distance charge with sliding scale
      */

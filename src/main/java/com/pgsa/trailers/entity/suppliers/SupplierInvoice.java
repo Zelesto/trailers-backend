@@ -12,7 +12,7 @@ import java.util.function.Supplier;
 @Getter
 @Setter
 @Entity
-@Table(name = "invoice")
+@Table(name = "supplier_invoice")
 public class Invoice extends BaseEntity {
 
     @Column(name = "invoice_number", nullable = false, unique = true)

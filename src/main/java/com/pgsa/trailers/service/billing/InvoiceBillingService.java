@@ -2,6 +2,7 @@ package com.pgsa.trailers.service.billing;
 
 import com.pgsa.trailers.entity.billing.LoadBilling;
 import com.pgsa.trailers.entity.billing.TripBilling;
+import com.pgsa.trailers.dto.billing.LoadBillingSummary;
 import com.pgsa.trailers.entity.finance.Invoice;
 import com.pgsa.trailers.entity.finance.InvoiceItem;
 import com.pgsa.trailers.entity.ops.Customer;

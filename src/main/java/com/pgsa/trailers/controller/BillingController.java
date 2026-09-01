@@ -11,11 +11,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/billing")
 @RequiredArgsConstructor
 @Slf4j
-public class BillingInvoiceController {
+public class BillingController {
 
     private final InvoiceBillingService invoiceBillingService;
     private final BillingCalculatorService billingCalculatorService;
@@ -32,13 +35,22 @@ public class BillingInvoiceController {
         return ResponseEntity.ok(billingCalculatorService.getLoadBilling(loadId));
     }
 
+    @GetMapping("/loads/billable")
+    public ResponseEntity<List<LoadBilling>> getBillableLoads() {
+        return ResponseEntity.ok(billingCalculatorService.getBillableLoads());
+    }
+
     @PostMapping("/load/{loadId}/calculate")
-    public ResponseEntity<LoadBilling> calculateLoadBilling(@PathVariable String loadId, @RequestParam Long userId) {
+    public ResponseEntity<LoadBilling> calculateLoadBilling(
+            @PathVariable String loadId, 
+            @RequestParam Long userId) {
         return ResponseEntity.ok(billingCalculatorService.updateLoadBilling(loadId, userId));
     }
 
     @PostMapping("/load/{loadId}/recalculate")
-    public ResponseEntity<LoadBilling> recalculateLoadBilling(@PathVariable String loadId, @RequestParam Long userId) {
+    public ResponseEntity<LoadBilling> recalculateLoadBilling(
+            @PathVariable String loadId, 
+            @RequestParam Long userId) {
         return ResponseEntity.ok(billingCalculatorService.recalculateLoadBilling(loadId, userId));
     }
 
@@ -46,30 +58,39 @@ public class BillingInvoiceController {
 
     @GetMapping("/trip/{tripId}")
     public ResponseEntity<TripBilling> getTripBilling(@PathVariable Long tripId) {
-        return ResponseEntity.ok(billingCalculatorService.getTripBilling(tripId));
+        TripBilling billing = billingCalculatorService.getTripBilling(tripId);
+        return ResponseEntity.ok(billing);
     }
 
     @PostMapping("/trip/{tripId}/calculate")
-    public ResponseEntity<TripBilling> calculateTripBilling(@PathVariable Long tripId, @RequestParam Long userId) {
+    public ResponseEntity<TripBilling> calculateTripBilling(
+            @PathVariable Long tripId, 
+            @RequestParam Long userId) {
         return ResponseEntity.ok(billingCalculatorService.calculateTripBilling(tripId, userId));
     }
 
     // ========== INVOICE GENERATION ==========
 
     @PostMapping("/load/{loadId}/invoice")
-    public ResponseEntity<Invoice> generateInvoiceFromLoad(@PathVariable String loadId, @RequestParam Long userId) {
+    public ResponseEntity<Invoice> generateInvoiceFromLoad(
+            @PathVariable String loadId, 
+            @RequestParam Long userId) {
         return ResponseEntity.ok(invoiceBillingService.generateInvoiceFromLoad(loadId, userId));
     }
 
     @PostMapping("/trip/{tripId}/invoice")
-    public ResponseEntity<Invoice> generateInvoiceFromTrip(@PathVariable Long tripId, @RequestParam Long userId) {
+    public ResponseEntity<Invoice> generateInvoiceFromTrip(
+            @PathVariable Long tripId, 
+            @RequestParam Long userId) {
         return ResponseEntity.ok(invoiceBillingService.generateInvoiceFromTrip(tripId, userId));
     }
 
     // ========== BULK OPERATIONS ==========
 
     @PostMapping("/load/bulk-invoice")
-    public ResponseEntity<List<Invoice>> bulkGenerateInvoices(@RequestBody List<String> loadIds, @RequestParam Long userId) {
+    public ResponseEntity<List<Invoice>> bulkGenerateInvoices(
+            @RequestBody List<String> loadIds, 
+            @RequestParam Long userId) {
         List<Invoice> invoices = new ArrayList<>();
         for (String loadId : loadIds) {
             try {

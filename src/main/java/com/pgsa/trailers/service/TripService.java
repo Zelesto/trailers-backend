@@ -712,24 +712,31 @@ public CompletableFuture<Trip> calculateTripDistance(Long tripId) {
         }
 
         Trip updated = tripRepository.save(trip);
-        eventPublisher.publishEvent(new TripCompletedEvent(tripId));
-        log.info("Trip {} completed. Distance: {} km", tripId, trip.getActualDistanceKm());
+    eventPublisher.publishEvent(new TripCompletedEvent(tripId));
+    log.info("Trip {} completed. Distance: {} km", tripId, trip.getActualDistanceKm());
 
-       try {
-        TripBilling billing = billingCalculatorService.calculateTripBilling(tripId, userId);
-        log.info("💰 Billing calculated for trip {}: {}", tripId, billing.getTotal());
-    } catch (Exception e) {
-        log.error("❌ Failed to calculate billing for trip {}: {}", tripId, e.getMessage(), e);
+    // ✅ NEW: Calculate billing automatically (with null safety)
+    if (billingCalculatorService != null) {
+        try {
+            TripBilling billing = billingCalculatorService.calculateTripBilling(tripId, userId);
+            log.info("💰 Billing calculated for trip {}: {}", tripId, billing.getTotal());
+        } catch (Exception e) {
+            log.error("❌ Failed to calculate billing for trip {}: {}", tripId, e.getMessage(), e);
+        }
     }
 
     return tripResponseMapper.toResponse(updated);
 }
-
+// Add method to manually trigger billing recalculation (with null safety)
 @Transactional
 public TripBilling recalculateBilling(Long tripId, Long userId) {
     log.info("🔄 Manually recalculating billing for Trip: {}", tripId);
+    if (billingCalculatorService == null) {
+        throw new RuntimeException("Billing service not available");
+    }
     return billingCalculatorService.calculateTripBilling(tripId, userId);
 }
+
     // ============================================================
     // READ METHODS
     // ============================================================

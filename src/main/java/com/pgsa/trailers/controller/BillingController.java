@@ -37,7 +37,14 @@ public class BillingController {
 
     @GetMapping("/loads/billable")
     public ResponseEntity<List<LoadBilling>> getBillableLoads() {
-        return ResponseEntity.ok(billingCalculatorService.getBillableLoads());
+        log.info("GET /api/billing/loads/billable");
+        try {
+            List<LoadBilling> billableLoads = billingCalculatorService.getBillableLoads();
+            return ResponseEntity.ok(billableLoads != null ? billableLoads : new ArrayList<>());
+        } catch (Exception e) {
+            log.error("Error fetching billable loads: {}", e.getMessage(), e);
+            return ResponseEntity.ok(new ArrayList<>());
+        }
     }
 
     @PostMapping("/load/{loadId}/calculate")

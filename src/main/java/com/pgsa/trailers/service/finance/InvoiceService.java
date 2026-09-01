@@ -1,6 +1,7 @@
 package com.pgsa.trailers.service.finance;
 
-import com.pgsa.trailers.entity.finance.Invoice;
+import com.pgsa.trailers.dto.InvoiceStats;
+import com.pgsa.trailers.entity.suppliers.Invoice;
 import com.pgsa.trailers.repository.finance.InvoiceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +22,13 @@ public class InvoiceService {
 
     @Transactional(readOnly = true)
     public Page<Invoice> getAllInvoices(Pageable pageable) {
-        return invoiceRepository.findAll(pageable);
+        try {
+            return invoiceRepository.findAll(pageable);
+        } catch (Exception e) {
+            log.error("Error fetching invoices: {}", e.getMessage());
+            // Return empty page on error
+            return Page.empty(pageable);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -32,8 +39,19 @@ public class InvoiceService {
 
     @Transactional
     public Invoice createInvoice(Invoice invoice) {
-        invoice.setCreatedAt(LocalDateTime.now());
-        invoice.setUpdatedAt(LocalDateTime.now());
+        log.info("Creating invoice: {}", invoice.getInvoiceNumber());
+        if (invoice.getCreatedAt() == null) {
+            invoice.setCreatedAt(LocalDateTime.now());
+        }
+        if (invoice.getUpdatedAt() == null) {
+            invoice.setUpdatedAt(LocalDateTime.now());
+        }
+        if (invoice.getStatus() == null) {
+            invoice.setStatus("DRAFT");
+        }
+        if (invoice.getSource() == null) {
+            invoice.setSource("MANUAL");
+        }
         return invoiceRepository.save(invoice);
     }
 
@@ -69,23 +87,33 @@ public class InvoiceService {
     @Transactional
     public void sendInvoiceEmail(Long id) {
         Invoice invoice = getInvoiceById(id);
-        // TODO: Implement email sending
         log.info("Sending invoice {} to {}", invoice.getInvoiceNumber(), invoice.getCustomerEmail());
+        // TODO: Implement actual email sending
     }
 
     @Transactional(readOnly = true)
     public InvoiceStats getInvoiceStats() {
-        Long totalInvoices = invoiceRepository.count();
-        Long overdueCount = invoiceRepository.countOverdue();
-        java.math.BigDecimal totalPaid = invoiceRepository.sumPaidAmount();
-        java.math.BigDecimal totalOutstanding = invoiceRepository.sumOutstandingAmount();
+        try {
+            Long totalInvoices = invoiceRepository.count();
+            Long overdueCount = invoiceRepository.countOverdue();
+            java.math.BigDecimal totalPaid = invoiceRepository.sumPaidAmount();
+            java.math.BigDecimal totalOutstanding = invoiceRepository.sumOutstandingAmount();
 
-        return InvoiceStats.builder()
-                .totalInvoices(totalInvoices)
-                .overdueCount(overdueCount)
-                .totalPaid(totalPaid != null ? totalPaid : java.math.BigDecimal.ZERO)
-                .totalOutstanding(totalOutstanding != null ? totalOutstanding : java.math.BigDecimal.ZERO)
-                .build();
+            return InvoiceStats.builder()
+                    .totalInvoices(totalInvoices != null ? totalInvoices : 0L)
+                    .overdueCount(overdueCount != null ? overdueCount : 0L)
+                    .totalPaid(totalPaid != null ? totalPaid : java.math.BigDecimal.ZERO)
+                    .totalOutstanding(totalOutstanding != null ? totalOutstanding : java.math.BigDecimal.ZERO)
+                    .build();
+        } catch (Exception e) {
+            log.error("Error calculating invoice stats: {}", e.getMessage());
+            return InvoiceStats.builder()
+                    .totalInvoices(0L)
+                    .overdueCount(0L)
+                    .totalPaid(java.math.BigDecimal.ZERO)
+                    .totalOutstanding(java.math.BigDecimal.ZERO)
+                    .build();
+        }
     }
 
     @Transactional(readOnly = true)

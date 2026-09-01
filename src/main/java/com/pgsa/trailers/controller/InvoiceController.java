@@ -1,8 +1,7 @@
 package com.pgsa.trailers.controller;
 
-// IMPORTANT: Use the existing Invoice from suppliers package
-import com.pgsa.trailers.entity.suppliers.Invoice;
 import com.pgsa.trailers.dto.InvoiceStats;
+import com.pgsa.trailers.entity.finance.Invoice;
 import com.pgsa.trailers.service.finance.InvoiceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,12 +25,7 @@ public class InvoiceController {
     public ResponseEntity<Page<Invoice>> getAllInvoices(
             @PageableDefault(size = 20) Pageable pageable) {
         log.info("GET /api/invoices - Fetching all invoices");
-        try {
-            return ResponseEntity.ok(invoiceService.getAllInvoices(pageable));
-        } catch (Exception e) {
-            log.error("Error fetching invoices: {}", e.getMessage(), e);
-            throw e;
-        }
+        return ResponseEntity.ok(invoiceService.getAllInvoices(pageable));
     }
 
     @GetMapping("/{id}")

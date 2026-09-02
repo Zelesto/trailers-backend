@@ -364,29 +364,36 @@ public class FuelMonthCloseService {
     }
 
     /**
-     * Create reconciliation snapshot
-     */
-    private void createReconciliation(
-            Account account,
-            LocalDateTime from,
-            LocalDateTime to,
-            BigDecimal slipsTotal,
-            BigDecimal paymentsTotal,
-            String performedBy
-    ) {
-        Reconciliation reconciliation = new Reconciliation();
-        reconciliation.setAccountName(account.getName());
-        reconciliation.setSlipsTotal(slipsTotal);
-        reconciliation.setPaymentsTotal(paymentsTotal);
-        reconciliation.setVariance(paymentsTotal.subtract(slipsTotal));
-        reconciliation.setFrom(from);
-        reconciliation.setTo(to);
-        reconciliation.setCreatedBy(performedBy);
-        reconciliation.setStatus(Reconciliation.STATUS_PENDING);
-
-        reconciliationRepository.save(reconciliation);
-    }
-
+ * Create reconciliation snapshot
+ */
+private void createReconciliation(
+        Account account,
+        LocalDateTime from,
+        LocalDateTime to,
+        BigDecimal slipsTotal,
+        BigDecimal paymentsTotal,
+        String performedBy
+) {
+    Reconciliation reconciliation = new Reconciliation();
+    
+    // Use existing database columns
+    reconciliation.setAccountId(account.getId());
+    reconciliation.setReconciliationDate(LocalDate.now());
+    reconciliation.setStatementBalance(paymentsTotal);  // payments from bank
+    reconciliation.setSystemBalance(slipsTotal);       // slips from system
+    reconciliation.setVariance(paymentsTotal.subtract(slipsTotal));
+    reconciliation.setStatus("BALANCED");
+    reconciliation.setReconciled(false);
+    reconciliation.setNotes(String.format("Fuel month close: %s to %s", from.toLocalDate(), to.toLocalDate()));
+    
+    // Store additional data in notes or use JSON
+    reconciliation.setFromDate(from);
+    reconciliation.setToDate(to);
+    reconciliation.setSlipsTotal(slipsTotal);
+    reconciliation.setPaymentsTotal(paymentsTotal);
+    
+    reconciliationRepository.save(reconciliation);
+}
     /**
      * Update fuel slip fields
      */

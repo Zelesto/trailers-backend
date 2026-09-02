@@ -28,7 +28,6 @@ public interface AccountTransactionRepository extends JpaRepository<AccountTrans
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end
     );
-}
 
     @Query("SELECT a FROM AccountTransaction a WHERE a.sourceType = :sourceType AND a.sourceId = :sourceId")
     List<AccountTransaction> findBySourceTypeAndSourceId(

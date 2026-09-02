@@ -1,7 +1,6 @@
 package com.pgsa.trailers.service.finance;
 
 import com.pgsa.trailers.entity.finance.Payable;
-import com.pgsa.trailers.entity.finance.PayableStatus;
 import com.pgsa.trailers.repository.finance.PayableRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,9 +13,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class PayableService {
 
     private final PayableRepository payableRepository;
@@ -27,7 +26,7 @@ public class PayableService {
             payable.setPayableNumber(generatePayableNumber());
         }
         if (payable.getStatus() == null) {
-            payable.setStatus(PayableStatus.PENDING);
+            payable.setStatus("PENDING");  // ✅ Use String
         }
         if (payable.getBalanceDue() == null) {
             payable.setBalanceDue(payable.getOriginalAmount());
@@ -53,9 +52,9 @@ public class PayableService {
         payable.setBalanceDue(newBalance);
 
         if (newBalance.compareTo(BigDecimal.ZERO) == 0) {
-            payable.setStatus(PayableStatus.PAID);
+            payable.setStatus("PAID");  // ✅ Use String
         } else if (newPaidAmount.compareTo(BigDecimal.ZERO) > 0) {
-            payable.setStatus(PayableStatus.PARTIAL);
+            payable.setStatus("PARTIAL");  // ✅ Use String
         }
 
         payable.setUpdatedAt(LocalDateTime.now());
@@ -79,8 +78,8 @@ public class PayableService {
     public void markOverduePayables() {
         List<Payable> payables = payableRepository.findOverduePayables(LocalDate.now());
         for (Payable payable : payables) {
-            if (payable.getStatus() != PayableStatus.PAID) {
-                payable.setStatus(PayableStatus.OVERDUE);
+            if (!"PAID".equals(payable.getStatus())) {  // ✅ Use String
+                payable.setStatus("OVERDUE");  // ✅ Use String
                 payable.setUpdatedAt(LocalDateTime.now());
             }
         }

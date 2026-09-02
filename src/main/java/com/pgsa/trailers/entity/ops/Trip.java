@@ -552,6 +552,14 @@ public void setDistanceCalculationError(String distanceCalculationError) { this.
         return loadId;
     }
 
+        public String getOriginLocation() {
+            return originLocation;
+        }
+        
+        public String getDestinationLocation() {
+            return destinationLocation;
+        }
+
     /* ========================
        EXPLICIT SETTERS (if Lombok fails)
        ======================== */

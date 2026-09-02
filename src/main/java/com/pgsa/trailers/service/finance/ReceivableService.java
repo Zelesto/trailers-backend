@@ -1,7 +1,6 @@
 package com.pgsa.trailers.service.finance;
 
 import com.pgsa.trailers.entity.finance.Receivable;
-import com.pgsa.trailers.entity.finance.ReceivableStatus;
 import com.pgsa.trailers.repository.finance.ReceivableRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,12 +9,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.List;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class ReceivableService {
 
     private final ReceivableRepository receivableRepository;
@@ -26,7 +25,7 @@ public class ReceivableService {
             receivable.setReceivableNumber(generateReceivableNumber());
         }
         if (receivable.getStatus() == null) {
-            receivable.setStatus(ReceivableStatus.PENDING);
+            receivable.setStatus("PENDING");  // ✅ Use String
         }
         if (receivable.getBalanceDue() == null) {
             receivable.setBalanceDue(receivable.getOriginalAmount());
@@ -49,9 +48,9 @@ public class ReceivableService {
         receivable.setBalanceDue(newBalance);
 
         if (newBalance.compareTo(BigDecimal.ZERO) == 0) {
-            receivable.setStatus(ReceivableStatus.PAID);
+            receivable.setStatus("PAID");  // ✅ Use String
         } else if (newPaidAmount.compareTo(BigDecimal.ZERO) > 0) {
-            receivable.setStatus(ReceivableStatus.PARTIAL);
+            receivable.setStatus("PARTIAL");  // ✅ Use String
         }
 
         receivable.setUpdatedAt(LocalDateTime.now());
@@ -64,8 +63,8 @@ public class ReceivableService {
                 .orElseThrow(() -> new RuntimeException("Receivable not found"));
         
         if (receivable.getDueDate().isBefore(LocalDate.now()) && 
-            receivable.getStatus() != ReceivableStatus.PAID) {
-            receivable.setStatus(ReceivableStatus.OVERDUE);
+            !"PAID".equals(receivable.getStatus())) {  // ✅ Use String
+            receivable.setStatus("OVERDUE");  // ✅ Use String
             receivable.setUpdatedAt(LocalDateTime.now());
             receivableRepository.save(receivable);
         }

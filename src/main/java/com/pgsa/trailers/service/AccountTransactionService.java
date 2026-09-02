@@ -1,46 +1,108 @@
 package com.pgsa.trailers.service;
 
+import com.pgsa.trailers.entity.finance.Account;
 import com.pgsa.trailers.entity.finance.AccountTransaction;
-import com.pgsa.trailers.repository.*;
+import com.pgsa.trailers.repository.AccountRepository;
+import com.pgsa.trailers.repository.AccountTransactionRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import java.util.List;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class AccountTransactionService {
 
-    private final AccountTransactionRepository transactionRepo;
+    private final AccountTransactionRepository transactionRepository;
+    private final AccountRepository accountRepository;
 
-    public AccountTransactionService(AccountTransactionRepository transactionRepo) {
-        this.transactionRepo = transactionRepo;
+    @Transactional
+    public AccountTransaction createTransaction(AccountTransaction transaction) {
+        log.info("Creating transaction for account: {}", transaction.getAccount().getId());
+        
+        // Generate transaction number if not provided
+        if (transaction.getTransactionNumber() == null) {
+            transaction.setTransactionNumber(generateTransactionNumber());
+        }
+        
+        // Set default payment status
+        if (transaction.getPaymentStatus() == null) {
+            transaction.setPaymentStatus("PENDING");
+        }
+        
+        // Set transaction date if not provided
+        if (transaction.getTransactionDate() == null) {
+            transaction.setTransactionDate(LocalDateTime.now());
+        }
+        
+        // Update account balance
+        Account account = transaction.getAccount();
+        BigDecimal newBalance = account.getBalance();
+        
+        if ("CREDIT".equals(transaction.getDirection())) {
+            newBalance = newBalance.add(transaction.getAmount());
+        } else if ("DEBIT".equals(transaction.getDirection())) {
+            newBalance = newBalance.subtract(transaction.getAmount());
+        }
+        
+        account.setBalance(newBalance);
+        transaction.setBalanceAfter(newBalance);
+        account.setUpdatedAt(LocalDateTime.now());
+        
+        accountRepository.save(account);
+        
+        transaction.setCreatedAt(LocalDateTime.now());
+        transaction.setUpdatedAt(LocalDateTime.now());
+        
+        return transactionRepository.save(transaction);
     }
 
-    public AccountTransaction create(AccountTransaction tx) {
-        return transactionRepo.save(tx);
+    @Transactional
+    public AccountTransaction reverseTransaction(Long transactionId, String reason) {
+        AccountTransaction original = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new RuntimeException("Transaction not found"));
+        
+        // Create reversal transaction
+        AccountTransaction reversal = new AccountTransaction();
+        reversal.setAccount(original.getAccount());
+        reversal.setTransactionNumber(generateTransactionNumber());
+        reversal.setTransactionDate(LocalDateTime.now());
+        reversal.setPostingDate(LocalDateTime.now().toLocalDate());
+        reversal.setAmount(original.getAmount());
+        reversal.setDirection("DEBIT".equals(original.getDirection()) ? "CREDIT" : "DEBIT");
+        reversal.setBalanceAfter(original.getBalanceAfter());
+        reversal.setTransactionType("REVERSAL");
+        reversal.setSourceType(original.getSourceType());
+        reversal.setSourceId(original.getSourceId());
+        reversal.setDescription("Reversal of " + original.getTransactionNumber() + ": " + reason);
+        reversal.setPaymentStatus("COMPLETED");
+        reversal.setCurrency(original.getCurrency());
+        
+        return createTransaction(reversal);
     }
 
-    public List<AccountTransaction> getAll() {
-        return transactionRepo.findAll();
+    @Transactional(readOnly = true)
+    public List<AccountTransaction> getTransactionsByAccount(Long accountId) {
+        return transactionRepository.findByAccount_Id(accountId);
     }
 
-    public AccountTransaction getById(Long id) {
-        return transactionRepo.findById(id).orElse(null);
+    @Transactional(readOnly = true)
+    public BigDecimal getBalanceForAccount(Long accountId) {
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+        return account.getBalance();
     }
 
-    public List<AccountTransaction> getByAccount(Long accountId) {
-        return transactionRepo.findByAccount_Id(accountId);
-    }
-
-    public List<AccountTransaction> getPendingForReconciliation(Long accountId) {
-        return transactionRepo.findByAccountIdAndReconciledFalse(accountId);
-    }
-
-
-
-    public AccountTransaction update(AccountTransaction tx) {
-        return transactionRepo.save(tx);
-    }
-
-    public void delete(Long id) {
-        transactionRepo.deleteById(id);
+    private String generateTransactionNumber() {
+        return "TXN-" + LocalDateTime.now().getYear() + 
+               String.format("%02d", LocalDateTime.now().getMonthValue()) +
+               String.format("%02d", LocalDateTime.now().getDayOfMonth()) + "-" +
+               UUID.randomUUID().toString().substring(0, 6).toUpperCase();
     }
 }

@@ -118,14 +118,4 @@ public class AccountTransaction {
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
-
-    // Helper method to check if credit
-    public boolean isCredit() {
-        return "CREDIT".equals(direction);
-    }
-
-    // Helper method to check if debit
-    public boolean isDebit() {
-        return "DEBIT".equals(direction);
-    }
 }

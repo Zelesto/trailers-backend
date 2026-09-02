@@ -9,7 +9,7 @@ import com.pgsa.trailers.entity.finance.*;
 import com.pgsa.trailers.entity.ops.FuelSlip;
 import com.pgsa.trailers.repository.AccountStatementRepository;
 import com.pgsa.trailers.repository.FuelSlipRepository;
-import com.pgsa.trailers.repository.ReconciliationRepository;
+import com.pgsa.trailers.repository.finance.ReconciliationRepository;  // ✅ FIXED import
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,7 +30,7 @@ public class FuelMonthCloseService {
     // Repositories
     private final FuelSlipRepository fuelSlipRepository;
     private final AccountStatementRepository accountStatementRepository;
-    private final ReconciliationRepository reconciliationRepository;
+    private final ReconciliationRepository reconciliationRepository;  // ✅ Now resolves
 
     // Utilities
     private final ObjectMapper objectMapper;
@@ -349,7 +349,6 @@ public class FuelMonthCloseService {
     ) {
         BigDecimal closingBalance = openingBalance.add(paymentsTotal).subtract(slipsTotal);
 
-        // Use manual builder since entity might not have @Builder annotation
         AccountStatement statement = new AccountStatement();
         statement.setAccount(account);
         statement.setPeriodStart(periodStart);
@@ -375,7 +374,6 @@ public class FuelMonthCloseService {
             BigDecimal paymentsTotal,
             String performedBy
     ) {
-        // Use manual builder since entity might not have @Builder annotation
         Reconciliation reconciliation = new Reconciliation();
         reconciliation.setAccountName(account.getName());
         reconciliation.setSlipsTotal(slipsTotal);
@@ -384,6 +382,7 @@ public class FuelMonthCloseService {
         reconciliation.setFrom(from);
         reconciliation.setTo(to);
         reconciliation.setCreatedBy(performedBy);
+        reconciliation.setStatus(Reconciliation.STATUS_PENDING);
 
         reconciliationRepository.save(reconciliation);
     }
@@ -475,10 +474,8 @@ public class FuelMonthCloseService {
     @SuppressWarnings("unchecked")
     private Map<String, Object> convertStringToAuditTrail(String auditTrailString) {
         try {
-            // Try to parse as Map
             return objectMapper.readValue(auditTrailString, new TypeReference<Map<String, Object>>() {});
         } catch (Exception e) {
-            // If parsing fails, create new audit trail with legacy content as note
             Map<String, Object> newAuditTrail = createInitialAuditTrail();
             newAuditTrail.put("legacyContent", auditTrailString);
             return newAuditTrail;
@@ -509,7 +506,6 @@ public class FuelMonthCloseService {
 
         } catch (Exception e) {
             log.warn("Could not add audit entry for slip {}: {}", slip.getId(), e.getMessage());
-            // Fallback: add simple audit trail
             slip.setAuditTrail(createInitialAuditTrail());
         }
     }
@@ -526,4 +522,3 @@ public class FuelMonthCloseService {
         return entry;
     }
 }
-

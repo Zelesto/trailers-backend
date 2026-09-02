@@ -1,4 +1,4 @@
-package com.pgsa.trailers.repository.finance;
+package com.pgsa.trailers.repository;
 
 import com.pgsa.trailers.entity.finance.Invoice;
 import org.springframework.data.jpa.repository.JpaRepository;

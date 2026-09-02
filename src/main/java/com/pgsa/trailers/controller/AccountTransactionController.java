@@ -30,11 +30,7 @@ public class AccountTransactionController {
 
     @GetMapping("/{id}")
     public ResponseEntity<AccountTransaction> getTransactionById(@PathVariable Long id) {
-        AccountTransaction transaction = transactionService.getById(id);
-        if (transaction == null) {
-            return ResponseEntity.notFound().build();
-        }
-        return ResponseEntity.ok(transaction);
+        return ResponseEntity.ok(transactionService.getById(id));
     }
 
     @PostMapping

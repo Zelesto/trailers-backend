@@ -12,11 +12,11 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @Entity
-@Table(name = "reconciliation")
+@Table(name = "reconciliations")
 public class Reconciliation extends BaseEntity {
 
     // ============================================================
-    // CONSTANTS FOR STATUS VALUES (from enum_master table)
+    // CONSTANTS
     // ============================================================
     public static final String STATUS_PENDING = "PENDING";
     public static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
@@ -24,138 +24,87 @@ public class Reconciliation extends BaseEntity {
     public static final String STATUS_FAILED = "FAILED";
     public static final String STATUS_CANCELLED = "CANCELLED";
 
+    // ============================================================
+    // FIELDS - Matches database columns
+    // ============================================================
+    
     @Column(name = "reconciliation_date", nullable = false)
     private LocalDate reconciliationDate;
 
     @Column(name = "account_id")
     private Long accountId;
 
-    @Column(name = "statement_balance", precision = 15, scale = 2)
+    @Column(name = "statement_balance", precision = 19, scale = 2)
     private BigDecimal statementBalance;
 
-    @Column(name = "system_balance", precision = 15, scale = 2)
+    @Column(name = "system_balance", precision = 19, scale = 2)
     private BigDecimal systemBalance;
 
-    @Column(name = "variance", precision = 15, scale = 2)
+    @Column(name = "variance", precision = 19, scale = 2)
     private BigDecimal variance;
 
-    @Column(name = "status")
+    @Column(name = "status", length = 50)
     private String status;
 
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
 
-    // Add these fields for the FuelMonthCloseService
-    @Column(name = "account_name")
-    private String accountName;
+    // ✅ These fields exist in your database but not in the entity - ADD THEM
+    @Column(name = "reconciled")
+    private Boolean reconciled = false;
 
-    @Column(name = "slips_total", precision = 15, scale = 2)
-    private BigDecimal slipsTotal;
+    @Column(name = "reconciled_by")
+    private Long reconciledBy;
 
-    @Column(name = "payments_total", precision = 15, scale = 2)
-    private BigDecimal paymentsTotal;
+    @Column(name = "reconciled_date")
+    private LocalDateTime reconciledDate;
 
     @Column(name = "from_date")
-    private LocalDateTime from;
+    private LocalDateTime fromDate;
 
     @Column(name = "to_date")
-    private LocalDateTime to;
+    private LocalDateTime toDate;
 
-    // ========== GETTERS AND SETTERS ==========
+    @Column(name = "slips_total", precision = 19, scale = 2)
+    private BigDecimal slipsTotal;
 
-    public String getStatus() {
-        return status;
-    }
-    
-    public void setStatus(String status) {
-        this.status = status;
-    }
+    @Column(name = "payments_total", precision = 19, scale = 2)
+    private BigDecimal paymentsTotal;
 
-    // ========== HELPER METHODS ==========
+    // ============================================================
+    // METHODS THAT DON'T REQUIRE reconciliationNumber
+    // ============================================================
 
-    /**
-     * Check if the reconciliation is completed
-     */
     public boolean isCompleted() {
-        return STATUS_COMPLETED.equals(status);
+        return "COMPLETED".equals(status) || "BALANCED".equals(status);
     }
 
-    /**
-     * Check if the reconciliation is pending
-     */
     public boolean isPending() {
-        return STATUS_PENDING.equals(status) || STATUS_IN_PROGRESS.equals(status);
+        return "PENDING".equals(status) || "IN_PROGRESS".equals(status);
     }
 
-    /**
-     * Check if the reconciliation is in progress
-     */
     public boolean isInProgress() {
-        return STATUS_IN_PROGRESS.equals(status);
+        return "IN_PROGRESS".equals(status);
     }
 
-    /**
-     * Check if the reconciliation failed or was cancelled
-     */
-    public boolean isFailed() {
-        return STATUS_FAILED.equals(status) || STATUS_CANCELLED.equals(status);
+    public boolean isBalanced() {
+        return variance != null && variance.compareTo(BigDecimal.ZERO) == 0;
     }
 
-    /**
-     * Check if the reconciliation can be started
-     */
-    public boolean canBeStarted() {
-        return STATUS_PENDING.equals(status);
+    public boolean hasVariance() {
+        return variance != null && variance.compareTo(BigDecimal.ZERO) != 0;
     }
 
-    /**
-     * Check if the reconciliation can be completed
-     */
-    public boolean canBeCompleted() {
-        return STATUS_IN_PROGRESS.equals(status);
+    public BigDecimal getAbsoluteVariance() {
+        return variance != null ? variance.abs() : BigDecimal.ZERO;
     }
 
-    /**
-     * Check if the reconciliation can be cancelled
-     */
-    public boolean canBeCancelled() {
-        return STATUS_PENDING.equals(status) || STATUS_IN_PROGRESS.equals(status);
-    }
-
-    /**
-     * Calculate variance if not already set
-     */
     public void calculateVariance() {
         if (statementBalance != null && systemBalance != null) {
             this.variance = statementBalance.subtract(systemBalance);
         }
     }
 
-    /**
-     * Check if the reconciliation is balanced (variance is zero)
-     */
-    public boolean isBalanced() {
-        return variance != null && variance.compareTo(BigDecimal.ZERO) == 0;
-    }
-
-    /**
-     * Check if the reconciliation has a variance
-     */
-    public boolean hasVariance() {
-        return variance != null && variance.compareTo(BigDecimal.ZERO) != 0;
-    }
-
-    /**
-     * Get the variance as a positive or negative value
-     */
-    public BigDecimal getAbsoluteVariance() {
-        return variance != null ? variance.abs() : BigDecimal.ZERO;
-    }
-
-    /**
-     * Check if the reconciliation is within the allowed variance threshold
-     * @param threshold The allowed variance threshold (e.g., 100 for R100)
-     */
     public boolean isWithinThreshold(BigDecimal threshold) {
         if (variance == null || threshold == null) {
             return false;
@@ -163,19 +112,6 @@ public class Reconciliation extends BaseEntity {
         return variance.abs().compareTo(threshold) <= 0;
     }
 
-    /**
-     * Check if the reconciliation has all required data
-     */
-    public boolean hasCompleteData() {
-        return reconciliationDate != null && 
-               accountId != null && 
-               statementBalance != null && 
-               systemBalance != null;
-    }
-
-    /**
-     * Calculate the total difference between slips and payments
-     */
     public BigDecimal calculateTotalDifference() {
         if (slipsTotal == null && paymentsTotal == null) {
             return BigDecimal.ZERO;
@@ -185,36 +121,30 @@ public class Reconciliation extends BaseEntity {
         return slips.subtract(payments);
     }
 
-    /**
-     * Get status display name (using the status value itself as display)
-     */
     public String getStatusDisplay() {
-        if (status == null) {
-            return "UNKNOWN";
-        }
-        
-        switch (status) {
-            case STATUS_PENDING:
-                return "Pending";
-            case STATUS_IN_PROGRESS:
-                return "In Progress";
-            case STATUS_COMPLETED:
-                return "Completed";
-            case STATUS_FAILED:
-                return "Failed";
-            case STATUS_CANCELLED:
-                return "Cancelled";
-            default:
-                return status;
-        }
+        if (status == null) return "UNKNOWN";
+        return switch (status) {
+            case "PENDING" -> "Pending";
+            case "IN_PROGRESS" -> "In Progress";
+            case "COMPLETED" -> "Completed";
+            case "BALANCED" -> "Balanced";
+            case "FAILED" -> "Failed";
+            case "CANCELLED" -> "Cancelled";
+            default -> status;
+        };
     }
 
-    // ========== LIFECYCLE CALLBACKS ==========
+    // ============================================================
+    // LIFECYCLE CALLBACKS
+    // ============================================================
 
     @PrePersist
     protected void onCreate() {
         if (status == null) {
-            status = STATUS_PENDING;
+            status = "PENDING";
+        }
+        if (reconciled == null) {
+            reconciled = false;
         }
         if (variance == null && statementBalance != null && systemBalance != null) {
             calculateVariance();

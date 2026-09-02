@@ -1,7 +1,6 @@
 package com.pgsa.trailers.service.finance;
 
 import com.pgsa.trailers.entity.finance.Expense;
-import com.pgsa.trailers.entity.finance.ExpenseStatus;
 import com.pgsa.trailers.repository.finance.ExpenseRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,12 +10,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class ExpenseService {
 
     private final ExpenseRepository expenseRepository;
@@ -27,7 +25,7 @@ public class ExpenseService {
             expense.setExpenseNumber(generateExpenseNumber());
         }
         if (expense.getStatus() == null) {
-            expense.setStatus(ExpenseStatus.PENDING);
+            expense.setStatus("PENDING");  // ✅ Use String
         }
         if (expense.getApprovalStatus() == null) {
             expense.setApprovalStatus("PENDING");
@@ -70,7 +68,7 @@ public class ExpenseService {
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new RuntimeException("Expense not found"));
         
-        expense.setStatus(ExpenseStatus.PAID);
+        expense.setStatus("PAID");  // ✅ Use String
         expense.setUpdatedAt(LocalDateTime.now());
         
         return expenseRepository.save(expense);
@@ -81,7 +79,7 @@ public class ExpenseService {
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new RuntimeException("Expense not found"));
         
-        if (expense.getStatus() == ExpenseStatus.PAID) {
+        if ("PAID".equals(expense.getStatus())) {  // ✅ Use String
             throw new RuntimeException("Cannot delete a paid expense");
         }
         

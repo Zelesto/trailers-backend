@@ -18,6 +18,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class LeaveController {
 
+    private static final Logger log = LoggerFactory.getLogger(LeaveController.class);
+    
     private final LeaveService leaveService;
 
     @PostMapping("/request")

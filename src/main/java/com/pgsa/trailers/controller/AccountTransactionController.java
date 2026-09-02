@@ -2,56 +2,56 @@ package com.pgsa.trailers.controller;
 
 import com.pgsa.trailers.entity.finance.AccountTransaction;
 import com.pgsa.trailers.service.AccountTransactionService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/account-transactions")
+@RequiredArgsConstructor
+@Slf4j
+@CrossOrigin(origins = "*")
 public class AccountTransactionController {
 
     private final AccountTransactionService transactionService;
 
-    public AccountTransactionController(AccountTransactionService transactionService) {
-        this.transactionService = transactionService;
-    }
-
-    @PostMapping
-    public AccountTransaction create(@RequestBody AccountTransaction tx) {
-        return transactionService.create(tx);
-    }
-
     @GetMapping
-    public List<AccountTransaction> getAll() {
-        return transactionService.getAll();
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<AccountTransaction> getById(@PathVariable Long id) {
-        AccountTransaction tx = transactionService.getById(id);
-        return tx != null ? ResponseEntity.ok(tx) : ResponseEntity.notFound().build();
+    public ResponseEntity<List<AccountTransaction>> getAllTransactions() {
+        return ResponseEntity.ok(transactionService.getAll());
     }
 
     @GetMapping("/account/{accountId}")
-    public List<AccountTransaction> getByAccount(@PathVariable Long accountId) {
-        return transactionService.getByAccount(accountId);
+    public ResponseEntity<List<AccountTransaction>> getTransactionsByAccount(@PathVariable Long accountId) {
+        return ResponseEntity.ok(transactionService.getByAccount(accountId));
     }
 
-    @GetMapping("/account/{accountId}/pending")
-    public List<AccountTransaction> getPending(@PathVariable Long accountId) {
-        return transactionService.getPendingForReconciliation(accountId);
+    @GetMapping("/{id}")
+    public ResponseEntity<AccountTransaction> getTransactionById(@PathVariable Long id) {
+        AccountTransaction transaction = transactionService.getById(id);
+        if (transaction == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(transaction);
     }
 
+    @PostMapping
+    public ResponseEntity<AccountTransaction> createTransaction(@RequestBody AccountTransaction transaction) {
+        return ResponseEntity.ok(transactionService.create(transaction));
+    }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<AccountTransaction> update(@PathVariable Long id, @RequestBody AccountTransaction tx) {
-        tx.setId(id);
-        AccountTransaction updated = transactionService.update(tx);
-        return updated != null ? ResponseEntity.ok(updated) : ResponseEntity.notFound().build();
+    @PostMapping("/{id}/reverse")
+    public ResponseEntity<AccountTransaction> reverseTransaction(
+            @PathVariable Long id,
+            @RequestParam String reason) {
+        return ResponseEntity.ok(transactionService.reverseTransaction(id, reason));
     }
 
     @DeleteMapping("/{id}")
-    public void delete(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteTransaction(@PathVariable Long id) {
         transactionService.delete(id);
+        return ResponseEntity.noContent().build();
     }
 }

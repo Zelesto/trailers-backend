@@ -26,6 +26,7 @@ public class Invoice {
     @Column(name = "invoice_type", length = 50)
     private String invoiceType = "RECEIVABLE";
 
+    // ✅ customer_id exists in database - ADDED
     @Column(name = "customer_id")
     private Long customerId;
 
@@ -69,13 +70,44 @@ public class Invoice {
     private String status = "DRAFT";
 
     @Column(name = "source", length = 50)
-    private String source = "MANUAL"; // MANUAL, BILLING
+    private String source = "MANUAL";
 
     @Column(name = "reference_id", length = 50)
-    private String referenceId; // loadId or tripId
+    private String referenceId;
 
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
+
+    // ✅ ADD THESE - they exist in database
+    @Column(name = "account_id")
+    private Long accountId;
+
+    @Column(name = "load_id")
+    private Long loadId;
+
+    @Column(name = "trip_id")
+    private Long tripId;
+
+    @Column(name = "tax_amount", precision = 15, scale = 2)
+    private BigDecimal taxAmount = BigDecimal.ZERO;
+
+    @Column(name = "net_amount", precision = 15, scale = 2)
+    private BigDecimal netAmount = BigDecimal.ZERO;
+
+    @Column(name = "payment_date")
+    private LocalDateTime paymentDate;
+
+    @Column(name = "received_date")
+    private LocalDateTime receivedDate;
+
+    @Column(name = "recon_status", length = 50)
+    private String reconStatus;
+
+    @Column(name = "variance_amount", precision = 15, scale = 2)
+    private BigDecimal varianceAmount = BigDecimal.ZERO;
+
+    @Column(name = "audit_trail", columnDefinition = "jsonb")
+    private String auditTrail;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -105,6 +137,9 @@ public class Invoice {
         if (totalAmount == null) totalAmount = BigDecimal.ZERO;
         if (paidAmount == null) paidAmount = BigDecimal.ZERO;
         if (vatRate == null) vatRate = new BigDecimal("15.00");
+        if (taxAmount == null) taxAmount = BigDecimal.ZERO;
+        if (netAmount == null) netAmount = BigDecimal.ZERO;
+        if (varianceAmount == null) varianceAmount = BigDecimal.ZERO;
     }
 
     @PreUpdate
@@ -114,17 +149,19 @@ public class Invoice {
     }
 
     public void recalculateTotals() {
-        this.subtotal = items.stream()
-            .map(InvoiceItem::getLineTotal)
-            .filter(total -> total != null)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        
-        this.taxTotal = items.stream()
-            .map(InvoiceItem::getTaxAmount)
-            .filter(tax -> tax != null)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        
-        this.totalAmount = this.subtotal.add(this.taxTotal);
+        if (items != null && !items.isEmpty()) {
+            this.subtotal = items.stream()
+                .map(InvoiceItem::getLineTotal)
+                .filter(total -> total != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            this.taxTotal = items.stream()
+                .map(InvoiceItem::getTaxAmount)
+                .filter(tax -> tax != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            this.totalAmount = this.subtotal.add(this.taxTotal);
+        }
     }
 
     public BigDecimal getBalance() {

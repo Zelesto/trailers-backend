@@ -13,8 +13,8 @@ import java.util.Optional;
 @Repository
 public interface ReconciliationRepository extends JpaRepository<Reconciliation, Long> {
 
-    @Query("SELECT r FROM Reconciliation r WHERE r.reconciliationNumber = :reconciliationNumber")
-    Optional<Reconciliation> findByReconciliationNumber(@Param("reconciliationNumber") String reconciliationNumber);
+    // ❌ REMOVE THIS - column doesn't exist in database
+    // Optional<Reconciliation> findByReconciliationNumber(String reconciliationNumber);
 
     @Query("SELECT r FROM Reconciliation r WHERE r.accountId = :accountId")
     List<Reconciliation> findByAccountId(@Param("accountId") Long accountId);

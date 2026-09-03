@@ -274,36 +274,46 @@ public class InvoiceBillingService {
     /**
      * Get billing summary for a load (preview before generating invoice)
      */
-    public LoadBillingSummary getLoadBillingSummary(String loadId) {
-        Load load = loadRepository.findByLoadNumber(loadId)
-            .orElseThrow(() -> new RuntimeException("Load not found: " + loadId));
-
-        LoadBilling loadBilling = loadBillingRepository.findByLoadId(loadId)
-            .orElse(null);
-
-        List<TripBilling> tripBillings = tripBillingRepository.findByTrip_LoadId(loadId);
-
-        return LoadBillingSummary.builder()
-            .loadId(loadId)
-            .loadDescription(load.getDescription())
-            .customerId(load.getCustomerId())
-            .customerName(load.getCustomer() != null ? load.getCustomer().getName() : null)
-            .totalTrips(tripBillings.size())
-            .totalBillable(tripBillings.stream()
-                .filter(tb -> "CALCULATED".equals(tb.getStatus()))
-                .count())
-            .totalInvoiced(tripBillings.stream()
-                .filter(tb -> "INVOICED".equals(tb.getStatus()))
-                .count())
-            .totalAmount(loadBilling != null ? loadBilling.getTotal() : BigDecimal.ZERO)
-            .subtotal(loadBilling != null ? loadBilling.getSubtotal() : BigDecimal.ZERO)
-            .vat(loadBilling != null ? loadBilling.getVat() : BigDecimal.ZERO)
-            .trips(tripBillings)
-            .canInvoice(loadBilling != null && 
-                loadBilling.getInvoiceId() == null && 
-                !tripBillings.isEmpty())
-            .build();
-    }
+    @Transactional(readOnly = true)  // ✅ Add this annotation
+        public LoadBillingSummary getLoadBillingSummary(String loadId) {
+            log.info("📊 Getting billing summary for Load: {}", loadId);
+    
+            Load load = loadRepository.findByLoadNumber(loadId)
+                    .orElseThrow(() -> new RuntimeException("Load not found: " + loadId));
+    
+            LoadBilling loadBilling = loadBillingRepository.findByLoadId(loadId)
+                    .orElse(null);
+    
+            List<TripBilling> tripBillings = tripBillingRepository.findByTrip_LoadId(loadId);
+    
+            // ✅ Fetch customer name safely within the transaction
+            String customerName = null;
+            if (load.getCustomerId() != null) {
+                customerRepository.findById(load.getCustomerId())
+                        .ifPresent(customer -> customerName = customer.getName());
+            }
+    
+            return LoadBillingSummary.builder()
+                    .loadId(loadId)
+                    .loadDescription(load.getDescription())
+                    .customerId(load.getCustomerId())
+                    .customerName(customerName)  // ✅ Use the fetched name
+                    .totalTrips(tripBillings.size())
+                    .totalBillable(tripBillings.stream()
+                            .filter(tb -> "CALCULATED".equals(tb.getStatus()))
+                            .count())
+                    .totalInvoiced(tripBillings.stream()
+                            .filter(tb -> "INVOICED".equals(tb.getStatus()))
+                            .count())
+                    .totalAmount(loadBilling != null ? loadBilling.getTotal() : BigDecimal.ZERO)
+                    .subtotal(loadBilling != null ? loadBilling.getSubtotal() : BigDecimal.ZERO)
+                    .vat(loadBilling != null ? loadBilling.getVat() : BigDecimal.ZERO)
+                    .trips(tripBillings)
+                    .canInvoice(loadBilling != null && 
+                            loadBilling.getInvoiceId() == null && 
+                            !tripBillings.isEmpty())
+                    .build();
+        }
 
     // ========== Helper Methods ==========
 

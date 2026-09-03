@@ -136,6 +136,7 @@ public class BillingCalculatorService {
     
     public List<LoadBilling> getBillableLoads() {
         try {
+            // ✅ Return all loads with status CALCULATED or DRAFT and no invoice
             return loadBillingRepository.findBillableLoads();
         } catch (Exception e) {
             log.error("Error fetching billable loads: {}", e.getMessage());

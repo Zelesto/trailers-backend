@@ -453,6 +453,14 @@ public class Trip {
         return from.add(to);
     }
 
+
+        public Boolean getCraneUsed() {
+            return craneUsed != null ? craneUsed : false;
+        }
+        
+        public void setCraneUsed(Boolean craneUsed) {
+            this.craneUsed = craneUsed;
+        }
     /* ========================
        LOAD MANAGEMENT METHODS - ADDED FOR COMPILATION
        ======================== */

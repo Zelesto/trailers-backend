@@ -42,6 +42,17 @@ public class CreateTripMapper {
         trip.setPlannedDurationHours(request.getPlannedDurationHours());
         trip.setEstimatedDurationHours(request.getEstimatedDurationHours());
 
+        // ======================== CRANE USAGE ========================
+        trip.setCraneUsed(request.getCraneUsed() != null ? request.getCraneUsed() : false);
+    
+        // Auto-detect from trip_type if not explicitly set
+        if (!trip.getCraneUsed() && request.getTripType() != null) {
+            String tripType = request.getTripType().toUpperCase();
+            if (tripType.contains("CRANE") || tripType.contains("LIFT") || tripType.contains("HEAVY")) {
+                trip.setCraneUsed(true);
+            }
+        }
+
         // ======================== COSTS ========================
         trip.setTollCost(request.getTollCost());
         trip.setOtherExpenses(request.getOtherExpenses());

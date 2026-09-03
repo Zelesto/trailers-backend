@@ -411,14 +411,4 @@ private TripBilling createDefaultTripBilling(Long tripId, Long userId) {
         return updateLoadBilling(loadId, userId);
     }
     
-        // ============================================================
-        // ✅ NEW: Calculate billing in a new transaction
-        // ============================================================
-        
-        @Transactional(propagation = Propagation.REQUIRES_NEW)
-        public TripBilling calculateTripBillingInNewTransaction(Long tripId, Long userId) {
-            log.info("💰 Calculating billing in new transaction for Trip: {}", tripId);
-            return calculateTripBilling(tripId, userId);
-        }
-    
 }

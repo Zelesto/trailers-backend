@@ -61,8 +61,9 @@ public class Trip {
     private Customer customer;
 
 
-        @Column(name = "crane_used")
-        private Boolean craneUsed;
+    @Column(name = "crane_used", columnDefinition = "boolean default false")
+    private Boolean craneUsed;
+
 
     /* ========================
        Load Relationship

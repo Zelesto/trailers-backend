@@ -93,10 +93,11 @@ public class VehicleIssueService {
 
     /**
      * Swap an item - return damaged and issue replacement
+     * Supports both vehicle and driver swaps based on issueType
      */
     @Transactional
     public VehicleIssueResponseDTO swapItem(Long oldIssueId, SwapItemRequestDTO swapRequest, Long userId) {
-        log.info("🔄 Swapping item from vehicle issue: {}", oldIssueId);
+        log.info("🔄 Swapping item from issue: {}, Type: {}", oldIssueId, swapRequest.getIssueType());
         
         // Validate request
         validateSwapRequest(swapRequest);
@@ -110,6 +111,48 @@ public class VehicleIssueService {
         
         // Process the swap
         return executeSwap(oldIssue, oldItem, swapRequest, userId);
+    }
+
+    /**
+     * Cancel a vehicle issue
+     */
+    @Transactional
+    public VehicleIssueResponseDTO cancelIssue(Long issueId, String reason, Long userId) {
+        log.info("❌ Cancelling vehicle issue: {}", issueId);
+        
+        VehicleIssue issue = getIssueOrThrow(issueId);
+        
+        if (STATUS_RETURNED.equals(issue.getStatus())) {
+            throw new InvalidOperationException("Cannot cancel a fully returned issue");
+        }
+        
+        // Return all items that haven't been returned
+        List<VehicleIssueItem> items = vehicleIssueItemRepository.findByIssueId(issueId);
+        
+        for (VehicleIssueItem item : items) {
+            BigDecimal outstanding = item.getQuantityIssued().subtract(item.getQuantityReturned());
+            if (outstanding.compareTo(BigDecimal.ZERO) > 0) {
+                // Return outstanding items to inventory
+                InventoryItem inventoryItem = findInventoryItemOrThrow(item.getItemId());
+                inventoryItem.setQuantity(inventoryItem.getQuantity() + outstanding.intValue());
+                inventoryItemRepository.save(inventoryItem);
+                
+                // Mark as returned
+                item.setQuantityReturned(item.getQuantityIssued());
+                item.setConditionReturned("CANCELLED");
+                item.setUpdatedAt(LocalDateTime.now());
+                vehicleIssueItemRepository.save(item);
+            }
+        }
+        
+        issue.setStatus(STATUS_CANCELLED);
+        issue.setNotes(issue.getNotes() + " | Cancelled: " + reason);
+        issue.setUpdatedAt(LocalDateTime.now());
+        issue.setUpdatedBy(userId);
+        vehicleIssueRepository.save(issue);
+        
+        log.info("✅ Vehicle issue cancelled: {}", issue.getIssueNumber());
+        return mapToResponseDTO(issue);
     }
 
     // ==================== Query Methods ====================
@@ -142,6 +185,15 @@ public class VehicleIssueService {
     public List<VehicleIssueResponseDTO> getIssuesByDriver(Long driverId) {
         log.info("👤 Fetching issues for driver: {}", driverId);
         return vehicleIssueRepository.findByDriverIdOrderByIssueDateDesc(driverId)
+                .stream()
+                .map(this::mapToResponseDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<VehicleIssueResponseDTO> getActiveIssues() {
+        log.info("📋 Fetching active vehicle issues");
+        return vehicleIssueRepository.findByStatusNotIn(List.of(STATUS_RETURNED, STATUS_CANCELLED))
                 .stream()
                 .map(this::mapToResponseDTO)
                 .collect(Collectors.toList());
@@ -182,6 +234,7 @@ public class VehicleIssueService {
         summary.put("outstandingItems", items.stream()
             .filter(item -> item.getQuantityIssued().compareTo(item.getQuantityReturned()) > 0)
             .count());
+        summary.put("returnPercentage", calculateReturnPercentage(items));
         
         return summary;
     }
@@ -218,7 +271,7 @@ public class VehicleIssueService {
         if (swapRequest.getNewItemId() == null) {
             throw new InvalidOperationException("New item ID is required");
         }
-        if (swapRequest.getNewQuantity() <= 0) {
+        if (swapRequest.getNewQuantity() == null || swapRequest.getNewQuantity() <= 0) {
             throw new InvalidOperationException("New quantity must be greater than 0");
         }
         if (swapRequest.getDamagedCondition() == null || swapRequest.getDamagedCondition().trim().isEmpty()) {
@@ -243,6 +296,13 @@ public class VehicleIssueService {
             throw new InsufficientStockException(
                 String.format("Insufficient stock for new item: %s. Available: %d, Requested: %d",
                     newItem.getName(), newItem.getQuantity(), swapRequest.getNewQuantity())
+            );
+        }
+        
+        // Check if new item is issuable
+        if (!Boolean.TRUE.equals(newItem.getIsVehicleIssuable())) {
+            throw new InvalidOperationException(
+                String.format("Item %s is not issuable to vehicles", newItem.getName())
             );
         }
     }
@@ -272,6 +332,7 @@ public class VehicleIssueService {
                 .quantityReturned(BigDecimal.ZERO)
                 .conditionIssued(itemReq.getCondition())
                 .notes(itemReq.getNotes())
+                .isSwap(false)
                 .build();
         
         vehicleIssueItemRepository.save(issueItem);
@@ -354,14 +415,23 @@ public class VehicleIssueService {
         BigDecimal returnQuantity = swapRequest.getReturnQuantity() != null ? 
                 swapRequest.getReturnQuantity() : oldItem.getQuantityIssued();
         
+        // Validate return quantity doesn't exceed issued quantity
+        if (returnQuantity.compareTo(oldItem.getQuantityIssued()) > 0) {
+            throw new InvalidOperationException(
+                String.format("Return quantity (%s) cannot exceed issued quantity (%s)",
+                    returnQuantity, oldItem.getQuantityIssued())
+            );
+        }
+        
         oldItem.setQuantityReturned(oldItem.getQuantityReturned().add(returnQuantity));
         oldItem.setConditionReturned(swapRequest.getDamagedCondition());
         oldItem.setIsSwap(true);
-        oldItem.setSwapReason(swapRequest.getDamagedCondition());
+        oldItem.setSwapReason(swapRequest.getDamagedCondition() + 
+            (swapRequest.getDamageNotes() != null ? ": " + swapRequest.getDamageNotes() : ""));
         oldItem.setUpdatedAt(LocalDateTime.now());
         vehicleIssueItemRepository.save(oldItem);
         
-        // 2. Create hold/damage record
+        // 2. Create hold/damage record on inventory item
         InventoryItem inventoryItem = findInventoryItemOrThrow(swapRequest.getOldItemId());
         inventoryItem.setHoldCode(swapRequest.getDamagedCondition());
         inventoryItem.setHoldReason(swapRequest.getDamageNotes());
@@ -376,7 +446,9 @@ public class VehicleIssueService {
                 .quantity(returnQuantity.intValue())
                 .movementType("IN")
                 .reason("Vehicle Swap Return - " + swapRequest.getDamagedCondition())
-                .notes("Damaged item returned from vehicle. Hold code: " + swapRequest.getDamagedCondition())
+                .notes(String.format("Damaged item returned from vehicle. Hold code: %s, Notes: %s",
+                    swapRequest.getDamagedCondition(), 
+                    swapRequest.getDamageNotes() != null ? swapRequest.getDamageNotes() : "N/A"))
                 .referenceNumber(oldIssue.getIssueNumber())
                 .performedBy(String.valueOf(userId))
                 .referenceType("VEHICLE_SWAP_RETURN")
@@ -405,13 +477,14 @@ public class VehicleIssueService {
         request.setDriverId(oldIssue.getDriverId());
         request.setTripId(oldIssue.getTripId());
         request.setIssueDate(LocalDateTime.now());
-        request.setNotes("SWAP: Replacing damaged item. Original Issue: " + oldIssue.getIssueNumber());
+        request.setNotes(String.format("SWAP: Replacing damaged item. Original Issue: %s, Damage: %s",
+            oldIssue.getIssueNumber(), swapRequest.getDamagedCondition()));
         
         VehicleIssueItemRequestDTO itemRequest = new VehicleIssueItemRequestDTO();
         itemRequest.setItemId(swapRequest.getNewItemId());
         itemRequest.setQuantity(BigDecimal.valueOf(swapRequest.getNewQuantity()));
         itemRequest.setCondition("NEW");
-        itemRequest.setNotes("Swap replacement for " + swapRequest.getDamagedCondition());
+        itemRequest.setNotes(String.format("Swap replacement for %s", swapRequest.getDamagedCondition()));
         
         request.setItems(List.of(itemRequest));
         return request;
@@ -427,6 +500,9 @@ public class VehicleIssueService {
         Set<Long> validItemIds = issueItemMap.keySet();
         
         for (ReturnItemRequestDTO returnReq : returns) {
+            if (returnReq.getItemId() == null) {
+                throw new InvalidOperationException("Item ID cannot be null");
+            }
             if (!validItemIds.contains(returnReq.getItemId())) {
                 throw new EntityNotFoundException(
                     String.format("Item %d is not associated with vehicle issue %d. Valid items: %s",
@@ -467,6 +543,27 @@ public class VehicleIssueService {
         
         issue.setUpdatedAt(LocalDateTime.now());
         vehicleIssueRepository.save(issue);
+    }
+
+    private BigDecimal calculateReturnPercentage(List<VehicleIssueItem> items) {
+        if (items.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        
+        BigDecimal totalIssued = items.stream()
+                .map(VehicleIssueItem::getQuantityIssued)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        BigDecimal totalReturned = items.stream()
+                .map(VehicleIssueItem::getQuantityReturned)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        if (totalIssued.compareTo(BigDecimal.ZERO) == 0) {
+            return BigDecimal.ZERO;
+        }
+        
+        return totalReturned.divide(totalIssued, 2, BigDecimal.ROUND_HALF_UP)
+                .multiply(BigDecimal.valueOf(100));
     }
 
     // ==================== Utility Methods ====================

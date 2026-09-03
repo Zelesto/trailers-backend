@@ -60,6 +60,10 @@ public class Trip {
     @JoinColumn(name = "customer_id", insertable = false, updatable = false)
     private Customer customer;
 
+
+        @Column(name = "crane_used")
+        private Boolean craneUsed;
+
     /* ========================
        Load Relationship
        ======================== */

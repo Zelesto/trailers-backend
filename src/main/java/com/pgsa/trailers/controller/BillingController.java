@@ -54,11 +54,13 @@ public class BillingController {
         return ResponseEntity.ok(billingCalculatorService.updateLoadBilling(loadId, userId));
     }
 
-    @PostMapping("/load/{loadId}/recalculate")
+   @PostMapping("/load/{loadId}/recalculate")
     public ResponseEntity<LoadBilling> recalculateLoadBilling(
-            @PathVariable String loadId, 
+            @PathVariable String loadId,
             @RequestParam Long userId) {
-        return ResponseEntity.ok(billingCalculatorService.recalculateLoadBilling(loadId, userId));
+        log.info("🔄 Recalculating billing for load: {}", loadId);
+        LoadBilling billing = billingCalculatorService.recalculateLoadBilling(loadId, userId);
+        return ResponseEntity.ok(billing);
     }
 
     // ========== TRIP BILLING ==========

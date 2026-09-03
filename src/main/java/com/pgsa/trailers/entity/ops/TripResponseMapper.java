@@ -61,6 +61,9 @@ public class TripResponseMapper {
             response.setVehicleModel(trip.getVehicle().getModel());
         }
 
+        // ======================== CRANE USAGE ========================
+        response.setCraneUsed(trip.getCraneUsed());
+
         // ======================== DRIVER ========================
         response.setDriver(toDriverDTO(trip.getDriver()));
         if (trip.getDriver() != null) {

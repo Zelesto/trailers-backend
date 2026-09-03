@@ -13,6 +13,7 @@ import com.pgsa.trailers.repository.billing.TripBillingRepository;
 import com.pgsa.trailers.repository.finance.InvoiceRepository;
 import com.pgsa.trailers.repository.LoadRepository;
 import com.pgsa.trailers.repository.CustomerRepository;
+import com.pgsa.trailers.repository.TripRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,7 @@ public class InvoiceBillingService {
     private final InvoiceRepository invoiceRepository;
     private final LoadRepository loadRepository;
     private final CustomerRepository customerRepository;
+    private final TripRepository tripRepository;
 
     /**
      * Generate an invoice from a Load's billing

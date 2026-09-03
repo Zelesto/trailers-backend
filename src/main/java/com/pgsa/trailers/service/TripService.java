@@ -632,6 +632,16 @@ public CompletableFuture<Trip> calculateTripDistance(Long tripId) {
         log.info("💾 Saving trip to database...");
         Trip saved = tripRepository.save(trip);
 
+        // ✅ Calculate estimated billing immediately after creation
+        try {
+            billingCalculatorService.calculateTripBilling(saved.getId(), userId);
+            log.info("💰 Estimated billing calculated for trip {}", saved.getId());
+        } catch (Exception e) {
+            log.error("❌ Failed to calculate estimated billing: {}", e.getMessage(), e);
+            // Don't fail trip creation
+        }
+
+
         if (load != null && load.getId() != null) {
             load.setTripsCount(load.getTrips().size());
             load.setUpdatedAt(LocalDateTime.now());

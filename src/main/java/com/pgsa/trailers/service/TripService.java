@@ -640,7 +640,7 @@ public CompletableFuture<Trip> calculateTripDistance(Long tripId) {
         log.info("   - Customer ID: {}", trip.getCustomerId());
         log.info("   - Load ID: {}", trip.getLoadId());
         log.info("   - Crane Used: {}", trip.getCraneUsed());
-        log.info("   - Crane Type: {}", trip.getCraneType());
+
         
         if (trip.getTripNumber() == null || trip.getTripNumber().trim().isEmpty()) {
             throw new TripValidationException("Trip number is null or empty before saving!");

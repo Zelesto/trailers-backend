@@ -37,6 +37,18 @@ public class CreateTripRequest {
     private String tripType;
 
     /* ========================
+       CRANE
+       ======================== */
+     // Add crane_used field
+    @Builder.Default
+    private Boolean craneUsed = false;
+    
+    // Optional: If you want to track crane details
+    //private String craneType;
+    //private Double craneHours;
+
+    
+    /* ========================
        WORKFLOW
        ======================== */
     private String status;

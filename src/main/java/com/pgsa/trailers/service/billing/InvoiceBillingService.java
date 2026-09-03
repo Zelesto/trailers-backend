@@ -274,46 +274,69 @@ public class InvoiceBillingService {
     /**
      * Get billing summary for a load (preview before generating invoice)
      */
-    @Transactional(readOnly = true)  // ✅ Add this annotation
-        public LoadBillingSummary getLoadBillingSummary(String loadId) {
-            log.info("📊 Getting billing summary for Load: {}", loadId);
-    
-            Load load = loadRepository.findByLoadNumber(loadId)
-                    .orElseThrow(() -> new RuntimeException("Load not found: " + loadId));
-    
-            LoadBilling loadBilling = loadBillingRepository.findByLoadId(loadId)
-                    .orElse(null);
-    
-            List<TripBilling> tripBillings = tripBillingRepository.findByTrip_LoadId(loadId);
-    
-            // ✅ Fetch customer name safely within the transaction
-            String customerName = null;
-            if (load.getCustomerId() != null) {
-                customerRepository.findById(load.getCustomerId())
-                        .ifPresent(customer -> customerName = customer.getName());
-            }
-    
-            return LoadBillingSummary.builder()
-                    .loadId(loadId)
-                    .loadDescription(load.getDescription())
-                    .customerId(load.getCustomerId())
-                    .customerName(customerName)  // ✅ Use the fetched name
-                    .totalTrips(tripBillings.size())
-                    .totalBillable(tripBillings.stream()
-                            .filter(tb -> "CALCULATED".equals(tb.getStatus()))
-                            .count())
-                    .totalInvoiced(tripBillings.stream()
-                            .filter(tb -> "INVOICED".equals(tb.getStatus()))
-                            .count())
-                    .totalAmount(loadBilling != null ? loadBilling.getTotal() : BigDecimal.ZERO)
-                    .subtotal(loadBilling != null ? loadBilling.getSubtotal() : BigDecimal.ZERO)
-                    .vat(loadBilling != null ? loadBilling.getVat() : BigDecimal.ZERO)
-                    .trips(tripBillings)
-                    .canInvoice(loadBilling != null && 
-                            loadBilling.getInvoiceId() == null && 
-                            !tripBillings.isEmpty())
-                    .build();
+    @Transactional(readOnly = true)
+    public LoadBillingSummary getLoadBillingSummary(String loadId) {
+        log.info("📊 Getting billing summary for Load: {}", loadId);
+
+        Load load = loadRepository.findByLoadNumber(loadId)
+                .orElseThrow(() -> new RuntimeException("Load not found: " + loadId));
+
+        LoadBilling loadBilling = loadBillingRepository.findByLoadId(loadId)
+                .orElse(null);
+
+        List<TripBilling> tripBillings = tripBillingRepository.findByTrip_LoadId(loadId);
+
+        // ✅ Get customer name safely
+        String customerName = null;
+        if (load.getCustomerId() != null) {
+            customerRepository.findById(load.getCustomerId())
+                    .ifPresent(customer -> customerName = customer.getName());
         }
+
+        // ✅ Calculate totals WITHOUT modifying variables inside lambdas
+        BigDecimal subtotal = BigDecimal.ZERO;
+        BigDecimal vat = BigDecimal.ZERO;
+        BigDecimal totalAmount = BigDecimal.ZERO;
+
+        if (loadBilling != null) {
+            subtotal = loadBilling.getSubtotal() != null ? loadBilling.getSubtotal() : BigDecimal.ZERO;
+            vat = loadBilling.getVat() != null ? loadBilling.getVat() : BigDecimal.ZERO;
+            totalAmount = loadBilling.getTotal() != null ? loadBilling.getTotal() : BigDecimal.ZERO;
+        } else {
+            // ✅ Calculate from trip billings using stream (no variable modification)
+            totalAmount = tripBillings.stream()
+                    .map(TripBilling::getTotal)
+                    .filter(total -> total != null)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+        }
+
+        // ✅ Count totals without modifying variables inside lambdas
+        long totalBillable = tripBillings.stream()
+                .filter(tb -> "CALCULATED".equals(tb.getStatus()))
+                .count();
+
+        long totalInvoiced = tripBillings.stream()
+                .filter(tb -> "INVOICED".equals(tb.getStatus()))
+                .count();
+
+        return LoadBillingSummary.builder()
+                .loadId(loadId)
+                .loadDescription(load.getDescription())
+                .customerId(load.getCustomerId())
+                .customerName(customerName)
+                .totalTrips(tripBillings.size())
+                .totalBillable(totalBillable)
+                .totalInvoiced(totalInvoiced)
+                .totalAmount(totalAmount)
+                .subtotal(subtotal)
+                .vat(vat)
+                .trips(tripBillings)
+                .status(loadBilling != null ? loadBilling.getStatus() : "DRAFT")
+                .canInvoice(loadBilling != null && 
+                        loadBilling.getInvoiceId() == null && 
+                        !tripBillings.isEmpty())
+                .build();
+    }
 
     // ========== Helper Methods ==========
 

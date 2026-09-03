@@ -547,39 +547,67 @@ public CompletableFuture<Trip> calculateTripDistance(Long tripId) {
     public TripResponse createTrip(CreateTripRequest request, Long userId) {
         log.debug("Creating trip for vehicle: {}, user: {}", request.getVehicleId(), userId);
         log.info("📝 Creating trip with reference number: {}", request.getReferenceNumber());
-
+    
         tripValidator.validateCreateRequest(request);
-
+    
         Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
                 .orElseThrow(() -> new TripValidationException(
                         "Vehicle not found with ID: " + request.getVehicleId()));
-
+    
         Driver driver = null;
         if (request.getDriverId() != null) {
             driver = driverRepository.findById(request.getDriverId())
                     .orElseThrow(() -> new TripValidationException(
                             "Driver not found with ID: " + request.getDriverId()));
         }
-
+    
         Driver supervisor = null;
         if (request.getSupervisorId() != null) {
             supervisor = driverRepository.findById(request.getSupervisorId())
                     .orElseThrow(() -> new TripValidationException(
                             "Supervisor not found with ID: " + request.getSupervisorId()));
         }
-
+    
         Customer customer = validateAndGetCustomer(request);
         Long customerId = customer.getId();
         log.info("✅ Customer validated: {} (ID: {})", customer.getName(), customerId);
-
+    
         Trip trip = createTripMapper.toEntity(request);
         log.info("🔍 Trip created by mapper, hash: {}", System.identityHashCode(trip));
-
+    
         trip.setVehicle(vehicle);
         trip.setDriver(driver);
         trip.setSupervisor(supervisor);
         trip.setCustomerId(customerId);
-
+    
+        // ============================================================
+        // Set crane_used and related fields
+        // ============================================================
+        Boolean craneUsed = request.getCraneUsed() != null ? request.getCraneUsed() : false;
+        trip.setCraneUsed(craneUsed);
+        
+        // If crane is used, set crane type and hours if provided
+        if (craneUsed) {
+            if (request.getCraneType() != null) {
+                trip.setCraneType(request.getCraneType());
+            }
+            if (request.getCraneHours() != null) {
+                trip.setCraneHours(request.getCraneHours());
+            }
+            log.info("🏗️ Crane used for trip: Type={}, Hours={}", 
+                trip.getCraneType(), trip.getCraneHours());
+        }
+        
+        // Optional: Auto-detect crane usage from trip_type if not explicitly set
+        if (!craneUsed && request.getTripType() != null) {
+            String tripType = request.getTripType().toUpperCase();
+            if (tripType.contains("CRANE") || tripType.contains("LIFT") || tripType.contains("HEAVY")) {
+                trip.setCraneUsed(true);
+                log.info("🏗️ Crane usage auto-detected from trip_type: {}", request.getTripType());
+            }
+        }
+        // ============================================================
+    
         if (request.getFromDepotKm() != null) {
             trip.setFromDepotKm(request.getFromDepotKm());
         }
@@ -593,14 +621,14 @@ public CompletableFuture<Trip> calculateTripDistance(Long tripId) {
             trip.setDepartureLocation(request.getDepartureLocation());
         }
         trip.setIsFromDepot(request.getIsFromDepot() != null ? request.getIsFromDepot() : false);
-
+    
         Load load = handleLoad(request, customer, trip, userId);
-
+    
         String status = request.getStatus() != null ? request.getStatus() : STATUS_DRAFT;
         trip.setStatus(status);
         trip.setCreatedBy(userId);
         trip.setLastStatusUpdate(LocalDateTime.now());
-
+    
         log.info("========================================");
         log.info("🔢 GENERATING TRIP NUMBER");
         log.info("========================================");
@@ -613,12 +641,14 @@ public CompletableFuture<Trip> calculateTripDistance(Long tripId) {
             log.error("🚨 Emergency trip number set: {}", trip.getTripNumber());
         }
         log.info("========================================");
-
+    
         log.info("🚀 Pre-save validation:");
         log.info("   - Trip Number: '{}'", trip.getTripNumber());
         log.info("   - Reference Number: '{}'", trip.getReferenceNumber());
         log.info("   - Customer ID: {}", trip.getCustomerId());
         log.info("   - Load ID: {}", trip.getLoadId());
+        log.info("   - Crane Used: {}", trip.getCraneUsed());
+        log.info("   - Crane Type: {}", trip.getCraneType());
         
         if (trip.getTripNumber() == null || trip.getTripNumber().trim().isEmpty()) {
             throw new TripValidationException("Trip number is null or empty before saving!");
@@ -629,10 +659,10 @@ public CompletableFuture<Trip> calculateTripDistance(Long tripId) {
         if (trip.getReferenceNumber() == null || trip.getReferenceNumber().trim().isEmpty()) {
             throw new TripValidationException("Reference number cannot be null before saving");
         }
-
+    
         log.info("💾 Saving trip to database...");
         Trip saved = tripRepository.save(trip);
-
+    
         // ✅ Calculate estimated billing immediately after creation
         try {
             billingCalculatorService.calculateTripBilling(saved.getId(), userId);
@@ -641,8 +671,7 @@ public CompletableFuture<Trip> calculateTripDistance(Long tripId) {
             log.error("❌ Failed to calculate estimated billing: {}", e.getMessage(), e);
             // Don't fail trip creation
         }
-
-
+    
         if (load != null && load.getId() != null) {
             load.setTripsCount(load.getTrips().size());
             load.setUpdatedAt(LocalDateTime.now());
@@ -651,26 +680,27 @@ public CompletableFuture<Trip> calculateTripDistance(Long tripId) {
             loadRepository.save(load);
             log.info("📦 Updated existing load {} with new trip {}", load.getLoadNumber(), saved.getId());
         }
-
+    
         entityManager.flush();
-
-        log.info("✅ Created trip with ID: {}, Number: {}, Reference: {}, Customer: {}, Load: {}",
+    
+        log.info("✅ Created trip with ID: {}, Number: {}, Reference: {}, Customer: {}, Load: {}, Crane: {}",
                 saved.getId(),
                 saved.getTripNumber(),
                 saved.getReferenceNumber(),
                 customer.getName(),
-                load != null ? load.getLoadNumber() : "None"
+                load != null ? load.getLoadNumber() : "None",
+                saved.getCraneUsed() ? "Yes" : "No"
         );
-
+    
         tripMetricsService.initializeMetrics(saved.getId());
-
+    
         if (STATUS_PLANNED.equals(saved.getStatus())) {
             eventPublisher.publishEvent(new TripPlannedEvent(saved.getId()));
         }
-
+    
         // ✅ Trigger distance calculation
         calculateTripDistance(saved.getId());
-
+    
         return tripResponseMapper.toResponse(saved);
     }
 

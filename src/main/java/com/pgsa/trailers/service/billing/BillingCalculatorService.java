@@ -188,6 +188,31 @@ public class BillingCalculatorService {
         return defaultHours;
     }
 
+
+    /**
+ * Recalculate all billings for a load
+ */
+@Transactional
+public LoadBilling recalculateLoadBilling(String loadId, Long userId) {
+    log.info("🔄 Recalculating all billings for Load: {}", loadId);
+
+    // Delete existing trip billings
+    List<Trip> trips = tripRepository.findByLoadId(loadId);
+    
+    for (Trip trip : trips) {
+        // Delete existing billing
+        TripBilling existing = tripBillingRepository.findByTripId(trip.getId());
+        if (existing != null) {
+            tripBillingRepository.delete(existing);
+        }
+        // Recalculate
+        calculateTripBilling(trip.getId(), userId);
+    }
+
+    // Update load billing
+    return updateLoadBilling(loadId, userId);
+}
+    
     // ==================== CHARGE CALCULATIONS ====================
 
     private BigDecimal calculateDistanceCharge(Rate rate, BigDecimal distance) {

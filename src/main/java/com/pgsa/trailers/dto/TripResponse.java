@@ -49,6 +49,8 @@ public class TripResponse {
     private String vehicleMake;
     private String vehicleModel;
 
+    private Boolean craneUsed;
+
     // ======================== DRIVER ========================
     private Long driverId;
     private String driverName;

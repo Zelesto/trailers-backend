@@ -294,23 +294,15 @@ public class InvoiceBillingService {
         }
     
         // ✅ Use separate variables - DO NOT reassign
-        BigDecimal subtotal;
-        BigDecimal vat;
-        BigDecimal totalAmount;
-        
-        if (loadBilling != null) {
-            subtotal = loadBilling.getSubtotal() != null ? loadBilling.getSubtotal() : BigDecimal.ZERO;
-            vat = loadBilling.getVat() != null ? loadBilling.getVat() : BigDecimal.ZERO;
-            totalAmount = loadBilling.getTotal() != null ? loadBilling.getTotal() : BigDecimal.ZERO;
-        } else {
-            subtotal = BigDecimal.ZERO;
-            vat = BigDecimal.ZERO;
-            BigDecimal calculatedTotal = tripBillings.stream()
-                    .map(TripBilling::getTotal)
-                    .filter(t -> t != null)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            totalAmount = calculatedTotal; // assign once
-        }
+BigDecimal subtotal = loadBilling != null && loadBilling.getSubtotal() != null ? loadBilling.getSubtotal() : BigDecimal.ZERO;
+BigDecimal vat = loadBilling != null && loadBilling.getVat() != null ? loadBilling.getVat() : BigDecimal.ZERO;
+BigDecimal totalAmount = loadBilling != null && loadBilling.getTotal() != null
+        ? loadBilling.getTotal()
+        : tripBillings.stream()
+            .map(TripBilling::getTotal)
+            .filter(t -> t != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
 
     
         // ✅ Count totals without modifying variables inside lambdas

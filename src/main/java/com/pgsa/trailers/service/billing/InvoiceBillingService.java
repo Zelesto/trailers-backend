@@ -297,7 +297,7 @@ public class InvoiceBillingService {
         BigDecimal subtotal;
         BigDecimal vat;
         BigDecimal totalAmount;
-    
+        
         if (loadBilling != null) {
             subtotal = loadBilling.getSubtotal() != null ? loadBilling.getSubtotal() : BigDecimal.ZERO;
             vat = loadBilling.getVat() != null ? loadBilling.getVat() : BigDecimal.ZERO;
@@ -305,13 +305,13 @@ public class InvoiceBillingService {
         } else {
             subtotal = BigDecimal.ZERO;
             vat = BigDecimal.ZERO;
-            // ✅ Use a separate variable for the stream result
             BigDecimal calculatedTotal = tripBillings.stream()
                     .map(TripBilling::getTotal)
-                    .filter(t -> t != null)  // ✅ Use 't' instead of 'total' to avoid confusion
+                    .filter(t -> t != null)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            totalAmount = calculatedTotal;
+            totalAmount = calculatedTotal; // assign once
         }
+
     
         // ✅ Count totals without modifying variables inside lambdas
         long totalBillable = tripBillings.stream()

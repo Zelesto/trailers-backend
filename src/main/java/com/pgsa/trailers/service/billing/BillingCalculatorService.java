@@ -37,6 +37,7 @@ public class BillingCalculatorService {
 
     private static final BigDecimal VAT_RATE = new BigDecimal("0.15");
     private static final BigDecimal TON_CONVERSION = new BigDecimal("1000");
+    private static final BigDecimal CRANE_BASE_CHARGE = new BigDecimal("150.00");
 
     /**
      * Calculate billing for a single trip
@@ -188,29 +189,17 @@ public class BillingCalculatorService {
      * Calculate crane charge
      */
     private BigDecimal calculateCraneCharge(Trip trip) {
-        // First check the crane_used field
+        // Check crane_used field
         Boolean craneUsed = trip.getCraneUsed();
         if (craneUsed != null && craneUsed) {
-            log.info("Crane used for trip: {}", trip.getTripNumber());
-            
-            // If we have crane hours field
-            try {
-                Double craneHours = trip.getCraneHours();
-                if (craneHours != null && craneHours > 0) {
-                    return CRANE_BASE_CHARGE.add(CRANE_HOURLY_RATE.multiply(BigDecimal.valueOf(craneHours)))
-                            .setScale(2, RoundingMode.HALF_UP);
-                }
-            } catch (Exception e) {
-                // craneHours field doesn't exist
-                log.debug("No crane hours field, using base charge only");
-            }
+            log.info("🏗️ Crane used for trip: {}", trip.getTripNumber());
             return CRANE_BASE_CHARGE;
         }
         
-        // If crane_used is false or null, check trip_type as fallback
+        // Fallback: check trip_type
         String tripType = trip.getTripType();
         if (tripType != null && tripType.toUpperCase().contains("CRANE")) {
-            log.info("Crane detected in trip_type: {}", tripType);
+            log.info("🏗️ Crane detected in trip_type: {}", tripType);
             return CRANE_BASE_CHARGE;
         }
         
@@ -301,39 +290,46 @@ public class BillingCalculatorService {
     }
 
     /**
-     * Create a default TripBilling when calculation fails
-     */
-    private TripBilling createDefaultTripBilling(Long tripId, Long userId) {
-        try {
-            Trip trip = tripRepository.findById(tripId)
-                    .orElseThrow(() -> new RuntimeException("Trip not found: " + tripId));
+ * Create a default TripBilling when calculation fails
+ */
+private TripBilling createDefaultTripBilling(Long tripId, Long userId) {
+    log.info("📝 Creating default billing for Trip ID: {}", tripId);
+    try {
+        Trip trip = tripRepository.findByIdWithAllRelations(tripId)
+                .orElseThrow(() -> new RuntimeException("Trip not found: " + tripId));
 
-            TripBilling billing = TripBilling.builder()
-                    .trip(trip)
-                    .customerId(trip.getCustomerId() != null ? trip.getCustomerId() : 0L)
-                    .distanceKm(BigDecimal.ZERO)
-                    .tonnage(BigDecimal.ZERO)
-                    .days(1)
-                    .labourHours(BigDecimal.ZERO)
-                    .craneHours(BigDecimal.ZERO)
-                    .baseRate(BigDecimal.ZERO)
-                    .distanceCharge(BigDecimal.ZERO)
-                    .tonnageCharge(BigDecimal.ZERO)
-                    .dailyRateCharge(BigDecimal.ZERO)
-                    .labourCharge(BigDecimal.ZERO)
-                    .craneCharge(BigDecimal.ZERO)
-                    .fixedSurcharge(BigDecimal.ZERO)
-                    .status("DRAFT")
-                    .calculatedAt(LocalDateTime.now())
-                    .calculatedBy(userId)
-                    .build();
-            billing.calculateTotals();
-            return tripBillingRepository.save(billing);
-        } catch (Exception e) {
-            log.error("❌ Even default billing failed: {}", e.getMessage(), e);
-            return null;
-        }
+        TripBilling billing = TripBilling.builder()
+                .trip(trip)
+                .customerId(trip.getCustomerId() != null ? trip.getCustomerId() : 0L)
+                .distanceKm(BigDecimal.ZERO)
+                .tonnage(BigDecimal.ZERO)
+                .days(1)
+                .labourHours(BigDecimal.ZERO)
+                .craneHours(BigDecimal.ZERO)
+                .baseRate(BigDecimal.ZERO)
+                .distanceCharge(BigDecimal.ZERO)
+                .tonnageCharge(BigDecimal.ZERO)
+                .dailyRateCharge(BigDecimal.ZERO)
+                .labourCharge(BigDecimal.ZERO)
+                .craneCharge(BigDecimal.ZERO)
+                .fixedSurcharge(BigDecimal.ZERO)
+                .status("DRAFT")
+                .calculatedAt(LocalDateTime.now())
+                .calculatedBy(userId)
+                .build();
+        
+        // ✅ Calculate totals before saving
+        billing.calculateTotals();
+        
+        TripBilling saved = tripBillingRepository.save(billing);
+        log.info("✅ Default billing created for trip {}", tripId);
+        return saved;
+        
+    } catch (Exception e) {
+        log.error("❌ Default billing creation failed for trip {}: {}", tripId, e.getMessage(), e);
+        return null;
     }
+}
 
     /**
      * Get billing for a load

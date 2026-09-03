@@ -190,30 +190,7 @@ public CompletableFuture<Trip> calculateTripDistance(Long tripId) {
         return CompletableFuture.failedFuture(e);
     }
 }
-
-
-    private BigDecimal calculateCraneCharge(Trip trip) {
-    // Check crane_used field first
-        Boolean craneUsed = trip.getCraneUsed();
-        if (craneUsed != null && craneUsed) {
-            return CRANE_BASE_CHARGE;
-        }
-        
-        // Fallback to text checks
-        String[] fieldsToCheck = {
-            trip.getTripType(),
-            trip.getLoadType(),
-            trip.getCommodityType()
-        };
-        
-        for (String field : fieldsToCheck) {
-            if (field != null && field.toUpperCase().contains("CRANE")) {
-                return CRANE_BASE_CHARGE;
-            }
-        }
-        return BigDecimal.ZERO;
-    }
-    
+   
 
     @Transactional
     public void processPendingDistanceCalculations() {

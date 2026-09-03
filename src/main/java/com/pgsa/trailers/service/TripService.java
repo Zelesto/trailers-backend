@@ -581,18 +581,16 @@ public CompletableFuture<Trip> calculateTripDistance(Long tripId) {
         trip.setCustomerId(customerId);
     
         // ============================================================
-        // Set crane_used and related fields
+        // Set crane_used only (no craneType or craneHours)
         // ============================================================
         Boolean craneUsed = request.getCraneUsed() != null ? request.getCraneUsed() : false;
         trip.setCraneUsed(craneUsed);
         
-        // If crane is used, set crane type and hours if provided
         if (craneUsed) {
-           if (Boolean.TRUE.equals(request.getCraneUsed())) {
             log.info("🏗️ Crane used for trip");
         }
         
-        // Optional: Auto-detect crane usage from trip_type if not explicitly set
+        // Optional: Auto-detect crane usage from trip_type
         if (!craneUsed && request.getTripType() != null) {
             String tripType = request.getTripType().toUpperCase();
             if (tripType.contains("CRANE") || tripType.contains("LIFT") || tripType.contains("HEAVY")) {

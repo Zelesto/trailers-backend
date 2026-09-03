@@ -692,51 +692,49 @@ public CompletableFuture<Trip> calculateTripDistance(Long tripId) {
     // ============================================================
 
     @Transactional
-    public TripResponse endTrip(Long tripId, BigDecimal actualEndOdometer, Long userId) {
-        log.debug("Ending trip ID: {} with odometer: {}", tripId, actualEndOdometer);
-        
-        Trip trip = findTripOrThrow(tripId);
-        tripValidator.validateCanEnd(trip, actualEndOdometer);
+public TripResponse endTrip(Long tripId, BigDecimal actualEndOdometer, Long userId) {
+    log.debug("Ending trip ID: {} with odometer: {}", tripId, actualEndOdometer);
+    
+    Trip trip = findTripOrThrow(tripId);
+    tripValidator.validateCanEnd(trip, actualEndOdometer);
 
-        BigDecimal startOdo = trip.getActualStartOdometer();
-        
-        trip.setActualEndOdometer(actualEndOdometer);
-        trip.setActualEndDate(LocalDateTime.now());
-        trip.setStatus(STATUS_COMPLETED);
-        trip.setLastStatusUpdate(LocalDateTime.now());
-        trip.setUpdatedAt(LocalDateTime.now());
-        trip.setUpdatedBy(userId);
-        trip.setActualDistanceKm(actualEndOdometer.subtract(startOdo));
-        
-        if (trip.getActualStartDate() != null && trip.getActualEndDate() != null) {
-            long hours = java.time.Duration.between(trip.getActualStartDate(), trip.getActualEndDate()).toHours();
-            trip.setActualDurationHours(BigDecimal.valueOf(hours));
-        }
+    BigDecimal startOdo = trip.getActualStartOdometer();
+    
+    trip.setActualEndOdometer(actualEndOdometer);
+    trip.setActualEndDate(LocalDateTime.now());
+    trip.setStatus(STATUS_COMPLETED);
+    trip.setLastStatusUpdate(LocalDateTime.now());
+    trip.setUpdatedAt(LocalDateTime.now());
+    trip.setUpdatedBy(userId);
+    trip.setActualDistanceKm(actualEndOdometer.subtract(startOdo));
+    
+    if (trip.getActualStartDate() != null && trip.getActualEndDate() != null) {
+        long hours = java.time.Duration.between(trip.getActualStartDate(), trip.getActualEndDate()).toHours();
+        trip.setActualDurationHours(BigDecimal.valueOf(hours));
+    }
 
-        Trip updated = tripRepository.save(trip);
+    // ✅ Save trip first - this ensures the trip is updated even if billing fails
+    Trip updated = tripRepository.save(trip);
     eventPublisher.publishEvent(new TripCompletedEvent(tripId));
     log.info("Trip {} completed. Distance: {} km", tripId, trip.getActualDistanceKm());
 
-    // ✅ NEW: Calculate billing automatically (with null safety)
-    if (billingCalculatorService != null) {
-        try {
-            TripBilling billing = billingCalculatorService.calculateTripBilling(tripId, userId);
-            log.info("💰 Billing calculated for trip {}: {}", tripId, billing.getTotal());
-        } catch (Exception e) {
-            log.error("❌ Failed to calculate billing for trip {}: {}", tripId, e.getMessage(), e);
-        }
+    // ✅ Calculate billing in a separate transaction to avoid rollback issues
+    try {
+        // Use a new transaction for billing calculation
+        billingCalculatorService.calculateTripBillingInNewTransaction(tripId, userId);
+        log.info("💰 Billing calculated for trip {}", tripId);
+    } catch (Exception e) {
+        // ✅ Log error but don't rollback the trip transaction
+        log.error("❌ Failed to calculate billing for trip {}: {}", tripId, e.getMessage(), e);
     }
 
     return tripResponseMapper.toResponse(updated);
 }
-// Add method to manually trigger billing recalculation (with null safety)
-@Transactional
-public TripBilling recalculateBilling(Long tripId, Long userId) {
-    log.info("🔄 Manually recalculating billing for Trip: {}", tripId);
-    if (billingCalculatorService == null) {
-        throw new RuntimeException("Billing service not available");
-    }
-    return billingCalculatorService.calculateTripBilling(tripId, userId);
+
+// ✅ NEW: Add this method to BillingCalculatorService
+@Transactional(propagation = Propagation.REQUIRES_NEW)
+public TripBilling calculateTripBillingInNewTransaction(Long tripId, Long userId) {
+    return calculateTripBilling(tripId, userId);
 }
 
     // ============================================================

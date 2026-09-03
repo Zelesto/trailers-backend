@@ -12,8 +12,8 @@ import com.pgsa.trailers.repository.TripRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -121,6 +121,8 @@ public TripBilling calculateTripBilling(Long tripId, Long userId) {
         return createDefaultTripBilling(tripId, userId);
     }
 }
+
+
 /**
  * ✅ Create a default rate with sensible defaults
  */
@@ -408,4 +410,15 @@ private TripBilling createDefaultTripBilling(Long tripId, Long userId) {
 
         return updateLoadBilling(loadId, userId);
     }
+    
+        // ============================================================
+        // ✅ NEW: Calculate billing in a new transaction
+        // ============================================================
+        
+        @Transactional(propagation = Propagation.REQUIRES_NEW)
+        public TripBilling calculateTripBillingInNewTransaction(Long tripId, Long userId) {
+            log.info("💰 Calculating billing in new transaction for Trip: {}", tripId);
+            return calculateTripBilling(tripId, userId);
+        }
+    
 }

@@ -2,6 +2,9 @@ package com.pgsa.trailers.service.inventory;
 
 import com.pgsa.trailers.dto.*;
 import com.pgsa.trailers.entity.inventory.*;
+import com.pgsa.trailers.exception.EntityNotFoundException;
+import com.pgsa.trailers.exception.InsufficientStockException;
+import com.pgsa.trailers.exception.InvalidOperationException;
 import com.pgsa.trailers.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,8 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -20,7 +23,11 @@ import java.util.stream.Collectors;
 @Transactional
 public class VehicleIssueService {
 
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(VehicleIssueService.class);
+    private static final String ISSUE_NUMBER_PREFIX = "ISS-";
+    private static final String STATUS_ISSUED = "ISSUED";
+    private static final String STATUS_RETURNED = "RETURNED";
+    private static final String STATUS_PARTIALLY_RETURNED = "PARTIALLY_RETURNED";
+    private static final String STATUS_CANCELLED = "CANCELLED";
 
     private final VehicleIssueRepository vehicleIssueRepository;
     private final VehicleIssueItemRepository vehicleIssueItemRepository;
@@ -28,231 +35,53 @@ public class VehicleIssueService {
     private final InventoryLocationRepository inventoryLocationRepository;
     private final StockMovementRepository stockMovementRepository;
 
-    private static final String ISSUE_NUMBER_PREFIX = "ISS-";
+    // ==================== Core Business Methods ====================
 
     /**
      * Issue items to a vehicle
      */
+    @Transactional
     public VehicleIssueResponseDTO issueItemsToVehicle(VehicleIssueRequestDTO request, Long userId) {
         log.info("🚗 Issuing items to vehicle: {}", request.getVehicleId());
 
-        // Validate items
-        for (VehicleIssueItemRequestDTO itemReq : request.getItems()) {
-            InventoryItem item = inventoryItemRepository.findById(itemReq.getItemId())
-                    .orElseThrow(() -> new RuntimeException("Item not found: " + itemReq.getItemId()));
+        // Validate request
+        validateIssueRequest(request);
 
-            if (item.getQuantity() < itemReq.getQuantity().intValue()) {
-                throw new RuntimeException("Insufficient stock for item: " + item.getName() +
-                        ". Available: " + item.getQuantity() + ", Requested: " + itemReq.getQuantity());
-            }
+        // Create and save the issue
+        VehicleIssue issue = createVehicleIssue(request, userId);
+        
+        // Process all items
+        List<VehicleIssueItem> issueItems = new ArrayList<>();
+        for (VehicleIssueItemRequestDTO itemReq : request.getItems()) {
+            VehicleIssueItem issueItem = processIssueItem(issue, itemReq, userId);
+            issueItems.add(issueItem);
         }
 
-        // Create Vehicle Issue
-        VehicleIssue issue = VehicleIssue.builder()
-                .issueNumber(generateIssueNumber())
-                .vehicleId(request.getVehicleId())
-                .driverId(request.getDriverId())
-                .tripId(request.getTripId())
-                .issueDate(request.getIssueDate() != null ? request.getIssueDate() : LocalDateTime.now())
-                .status("ISSUED")
-                .notes(request.getNotes())
-                .createdBy(userId)
-                .updatedBy(userId)
-                .build();
-
-        vehicleIssueRepository.save(issue);
-
-        // Process items
-        for (VehicleIssueItemRequestDTO itemReq : request.getItems()) {
-            // Create issue item
-            VehicleIssueItem issueItem = VehicleIssueItem.builder()
-                    .issue(issue)
-                    .itemId(itemReq.getItemId())
-                    .quantityIssued(itemReq.getQuantity())
-                    .quantityReturned(BigDecimal.ZERO)
-                    .conditionIssued(itemReq.getCondition())
-                    .notes(itemReq.getNotes())
-                    .build();
-
-            vehicleIssueItemRepository.save(issueItem);
-
-            // Update inventory (deduct from main stock)
-            InventoryItem item = inventoryItemRepository.findById(itemReq.getItemId())
-                    .orElseThrow(() -> new RuntimeException("Item not found: " + itemReq.getItemId()));
-            
-            int newQuantity = item.getQuantity() - itemReq.getQuantity().intValue();
-            item.setQuantity(newQuantity);
-            inventoryItemRepository.save(item);
-
-            // Create stock movement
-            StockMovement movement = StockMovement.builder()
-                    .itemId(itemReq.getItemId())
-                    .quantity(itemReq.getQuantity().intValue())
-                    .movementType("OUT")
-                    .reason("Vehicle Issue")
-                    .notes("Issued to vehicle: " + request.getVehicleId() + 
-                           ", Driver: " + request.getDriverId() +
-                           ", Trip: " + request.getTripId())
-                    .referenceNumber(issue.getIssueNumber())
-                    .performedBy(String.valueOf(userId))
-                    .tripId(request.getTripId())
-                    .referenceType("VEHICLE_ISSUE")
-                    .requiresApproval(false)
-                    .approvalStatus("APPROVED")
-                    .build();
-
-            stockMovementRepository.save(movement);
-        }
-
-        log.info("✅ Items issued successfully. Issue Number: {}", issue.getIssueNumber());
+        log.info("✅ Items issued successfully. Issue Number: {}, Items: {}", 
+            issue.getIssueNumber(), issueItems.size());
         return mapToResponseDTO(issue);
     }
 
     /**
- * Swap an item - return damaged and issue replacement for vehicle
- */
-@Transactional
-public VehicleIssueResponseDTO swapItem(Long oldIssueId, SwapItemRequestDTO swapRequest, Long userId) {
-    log.info("🔄 Swapping item from vehicle issue: {}", oldIssueId);
-    
-    // 1. Find the existing issue
-    VehicleIssue oldIssue = vehicleIssueRepository.findById(oldIssueId)
-            .orElseThrow(() -> new RuntimeException("Vehicle issue not found: " + oldIssueId));
-    
-    // 2. Find the specific item in the issue
-    VehicleIssueItem oldItem = vehicleIssueItemRepository
-            .findByIssueIdAndItemId(oldIssueId, swapRequest.getOldItemId())
-            .orElseThrow(() -> new RuntimeException("Item not found in issue: " + swapRequest.getOldItemId()));
-    
-    // 3. Validate old item is not already returned
-    if (oldItem.getQuantityReturned().compareTo(oldItem.getQuantityIssued()) >= 0) {
-        throw new RuntimeException("Item already returned, cannot swap");
-    }
-    
-    // 4. Validate new item has sufficient stock
-    InventoryItem newItem = inventoryItemRepository.findById(swapRequest.getNewItemId())
-            .orElseThrow(() -> new RuntimeException("New item not found: " + swapRequest.getNewItemId()));
-    
-    if (newItem.getQuantity() < swapRequest.getNewQuantity()) {
-        throw new RuntimeException("Insufficient stock for new item: " + newItem.getName() +
-                ". Available: " + newItem.getQuantity() + ", Requested: " + swapRequest.getNewQuantity());
-    }
-    
-    // 5. Process the old item return
-    BigDecimal returnQuantity = swapRequest.getReturnQuantity() != null ? 
-            swapRequest.getReturnQuantity() : oldItem.getQuantityIssued();
-    
-    // Mark old item as returned
-    oldItem.setQuantityReturned(oldItem.getQuantityReturned().add(returnQuantity));
-    oldItem.setConditionReturned(swapRequest.getDamagedCondition());
-    oldItem.setIsSwap(true);
-    oldItem.setSwapReason(swapRequest.getDamagedCondition());
-    oldItem.setUpdatedAt(LocalDateTime.now());
-    vehicleIssueItemRepository.save(oldItem);
-    
-    // 6. Create hold/damage record on the old item
-    InventoryItem inventoryItem = inventoryItemRepository.findById(swapRequest.getOldItemId())
-            .orElseThrow(() -> new RuntimeException("Inventory item not found"));
-    
-    inventoryItem.setHoldCode(swapRequest.getDamagedCondition());
-    inventoryItem.setHoldReason(swapRequest.getDamageNotes());
-    inventoryItem.setHoldDate(LocalDateTime.now());
-    inventoryItem.setHeldBy(String.valueOf(userId));
-    inventoryItemRepository.save(inventoryItem);
-    
-    // 7. Return old item to inventory with hold status
-    int currentQuantity = inventoryItem.getQuantity() != null ? inventoryItem.getQuantity() : 0;
-    inventoryItem.setQuantity(currentQuantity + returnQuantity.intValue());
-    inventoryItemRepository.save(inventoryItem);
-    
-    // 8. Create stock movement for return
-    StockMovement returnMovement = StockMovement.builder()
-            .itemId(swapRequest.getOldItemId())
-            .quantity(returnQuantity.intValue())
-            .movementType("IN")
-            .reason("Vehicle Swap Return - " + swapRequest.getDamagedCondition())
-            .notes("Damaged item returned from vehicle. Hold code: " + swapRequest.getDamagedCondition())
-            .referenceNumber(oldIssue.getIssueNumber())
-            .performedBy(String.valueOf(userId))
-            .referenceType("VEHICLE_SWAP_RETURN")
-            .requiresApproval(false)
-            .approvalStatus("APPROVED")
-            .build();
-    stockMovementRepository.save(returnMovement);
-    
-    // 9. Create new issue for the replacement item
-    VehicleIssueRequestDTO newIssueRequest = new VehicleIssueRequestDTO();
-    newIssueRequest.setVehicleId(oldIssue.getVehicleId());
-    newIssueRequest.setDriverId(oldIssue.getDriverId());
-    newIssueRequest.setTripId(oldIssue.getTripId());
-    newIssueRequest.setIssueDate(LocalDateTime.now());
-    newIssueRequest.setNotes("SWAP: Replacing damaged item. Original Issue: " + oldIssue.getIssueNumber());
-    
-    VehicleIssueItemRequestDTO newItemRequest = new VehicleIssueItemRequestDTO();
-    newItemRequest.setItemId(swapRequest.getNewItemId());
-    newItemRequest.setQuantity(BigDecimal.valueOf(swapRequest.getNewQuantity()));
-    newItemRequest.setCondition("NEW");
-    newItemRequest.setNotes("Swap replacement for " + swapRequest.getDamagedCondition());
-    
-    newIssueRequest.setItems(List.of(newItemRequest));
-    
-    // 10. Create the new issue
-    VehicleIssueResponseDTO newIssue = issueItemsToVehicle(newIssueRequest, userId);
-    
-    // 11. Link the new issue to the old one
-    oldItem.setSwapIssueId(newIssue.getId());
-    vehicleIssueItemRepository.save(oldItem);
-    
-    log.info("✅ Vehicle swap completed: Old issue {} returned, New issue {} created", oldIssueId, newIssue.getId());
-    
-    return newIssue;
-}
-
-    /**
      * Return items from vehicle
      */
+    @Transactional
     public VehicleIssueResponseDTO returnItemsFromVehicle(Long issueId, List<ReturnItemRequestDTO> returns, Long userId) {
         log.info("🔄 Returning items from vehicle issue: {}", issueId);
 
-        VehicleIssue issue = vehicleIssueRepository.findById(issueId)
-                .orElseThrow(() -> new RuntimeException("Vehicle issue not found: " + issueId));
+        // Validate and fetch issue
+        VehicleIssue issue = getIssueOrThrow(issueId);
+        
+        // Build lookup map for issue items
+        Map<Long, VehicleIssueItem> issueItemMap = buildIssueItemMap(issueId);
+        
+        // Validate all return items exist
+        validateReturnItems(returns, issueItemMap, issueId);
 
+        // Process each return
         for (ReturnItemRequestDTO returnReq : returns) {
-            VehicleIssueItem issueItem = vehicleIssueItemRepository
-                    .findByIssueIdAndItemId(issueId, returnReq.getItemId())
-                    .orElseThrow(() -> new RuntimeException("Item not found in issue: " + returnReq.getItemId()));
-
-            // Update return quantity
-            BigDecimal newReturned = issueItem.getQuantityReturned().add(returnReq.getQuantity());
-            issueItem.setQuantityReturned(newReturned);
-            issueItem.setConditionReturned(returnReq.getCondition());
-            issueItem.setUpdatedAt(LocalDateTime.now());
-            vehicleIssueItemRepository.save(issueItem);
-
-            // Return to inventory
-            InventoryItem item = inventoryItemRepository.findById(returnReq.getItemId())
-                    .orElseThrow(() -> new RuntimeException("Item not found: " + returnReq.getItemId()));
-            
-            int newQuantity = item.getQuantity() + returnReq.getQuantity().intValue();
-            item.setQuantity(newQuantity);
-            inventoryItemRepository.save(item);
-
-            // Create stock movement
-            StockMovement movement = StockMovement.builder()
-                    .itemId(returnReq.getItemId())
-                    .quantity(returnReq.getQuantity().intValue())
-                    .movementType("IN")
-                    .reason("Vehicle Return")
-                    .notes("Returned from vehicle: " + issue.getVehicleId() +
-                           ", Condition: " + returnReq.getCondition())
-                    .referenceNumber(issue.getIssueNumber())
-                    .performedBy(String.valueOf(userId))
-                    .referenceType("VEHICLE_RETURN")
-                    .requiresApproval(false)
-                    .approvalStatus("APPROVED")
-                    .build();
-
-            stockMovementRepository.save(movement);
+            VehicleIssueItem issueItem = issueItemMap.get(returnReq.getItemId());
+            processReturnItem(issueItem, returnReq, issue, userId);
         }
 
         // Update issue status
@@ -262,35 +91,41 @@ public VehicleIssueResponseDTO swapItem(Long oldIssueId, SwapItemRequestDTO swap
         return mapToResponseDTO(issue);
     }
 
+    /**
+     * Swap an item - return damaged and issue replacement
+     */
+    @Transactional
+    public VehicleIssueResponseDTO swapItem(Long oldIssueId, SwapItemRequestDTO swapRequest, Long userId) {
+        log.info("🔄 Swapping item from vehicle issue: {}", oldIssueId);
+        
+        // Validate request
+        validateSwapRequest(swapRequest);
+        
+        // Fetch old issue and item
+        VehicleIssue oldIssue = getIssueOrThrow(oldIssueId);
+        VehicleIssueItem oldItem = getIssueItemOrThrow(oldIssueId, swapRequest.getOldItemId());
+        
+        // Validate swap conditions
+        validateSwapConditions(oldItem, swapRequest);
+        
+        // Process the swap
+        return executeSwap(oldIssue, oldItem, swapRequest, userId);
+    }
+
+    // ==================== Query Methods ====================
+
     @Transactional(readOnly = true)
     public List<VehicleIssueResponseDTO> getAllVehicleIssues() {
         log.info("📋 Fetching all vehicle issues");
         try {
             List<VehicleIssue> issues = vehicleIssueRepository.findAllByOrderByIssueDateDesc();
-            log.info("📋 Found {} vehicle issues in database", issues.size());
-            
-            if (issues.isEmpty()) {
-                log.warn("⚠️ No vehicle issues found in database");
-                return new ArrayList<>();
-            }
-            
-            // Log each issue for debugging
-            for (VehicleIssue issue : issues) {
-                log.debug("📋 Issue: ID={}, Number={}, Vehicle={}, Driver={}, Status={}", 
-                    issue.getId(), 
-                    issue.getIssueNumber(), 
-                    issue.getVehicleId(), 
-                    issue.getDriverId(),
-                    issue.getStatus()
-                );
-            }
-            
+            log.info("📋 Found {} vehicle issues", issues.size());
             return issues.stream()
                     .map(this::mapToResponseDTO)
                     .collect(Collectors.toList());
         } catch (Exception e) {
             log.error("❌ Error fetching vehicle issues: {}", e.getMessage(), e);
-            return new ArrayList<>();
+            return Collections.emptyList();
         }
     }
 
@@ -315,54 +150,358 @@ public VehicleIssueResponseDTO swapItem(Long oldIssueId, SwapItemRequestDTO swap
     @Transactional(readOnly = true)
     public VehicleIssueResponseDTO getIssueById(Long issueId) {
         log.info("📋 Fetching vehicle issue: {}", issueId);
-        VehicleIssue issue = vehicleIssueRepository.findById(issueId)
-                .orElseThrow(() -> new RuntimeException("Vehicle issue not found: " + issueId));
+        VehicleIssue issue = getIssueOrThrow(issueId);
         return mapToResponseDTO(issue);
     }
 
-    // ==================== Helper Methods ====================
+    @Transactional(readOnly = true)
+    public List<VehicleIssueItemResponseDTO> getIssueItems(Long issueId) {
+        log.info("📦 Fetching items for issue: {}", issueId);
+        getIssueOrThrow(issueId); // Validate issue exists
+        return vehicleIssueItemRepository.findByIssueId(issueId)
+                .stream()
+                .map(this::mapItemToResponseDTO)
+                .collect(Collectors.toList());
+    }
 
-    private String generateIssueNumber() {
-        String timestamp = String.valueOf(System.currentTimeMillis()).substring(5);
-        return ISSUE_NUMBER_PREFIX + timestamp;
+    @Transactional(readOnly = true)
+    public Map<String, Object> getIssueSummary(Long issueId) {
+        log.info("📊 Fetching summary for issue: {}", issueId);
+        VehicleIssue issue = getIssueOrThrow(issueId);
+        List<VehicleIssueItem> items = vehicleIssueItemRepository.findByIssueId(issueId);
+        
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("issue", mapToResponseDTO(issue));
+        summary.put("totalItems", items.size());
+        summary.put("totalIssued", items.stream()
+            .map(VehicleIssueItem::getQuantityIssued)
+            .reduce(BigDecimal.ZERO, BigDecimal::add));
+        summary.put("totalReturned", items.stream()
+            .map(VehicleIssueItem::getQuantityReturned)
+            .reduce(BigDecimal.ZERO, BigDecimal::add));
+        summary.put("outstandingItems", items.stream()
+            .filter(item -> item.getQuantityIssued().compareTo(item.getQuantityReturned()) > 0)
+            .count());
+        
+        return summary;
+    }
+
+    // ==================== Private Helper Methods ====================
+
+    private void validateIssueRequest(VehicleIssueRequestDTO request) {
+        if (request.getItems() == null || request.getItems().isEmpty()) {
+            throw new InvalidOperationException("At least one item must be issued");
+        }
+        
+        for (VehicleIssueItemRequestDTO itemReq : request.getItems()) {
+            InventoryItem item = findInventoryItemOrThrow(itemReq.getItemId());
+            
+            if (item.getQuantity() < itemReq.getQuantity().intValue()) {
+                throw new InsufficientStockException(
+                    String.format("Insufficient stock for item: %s. Available: %d, Requested: %d",
+                        item.getName(), item.getQuantity(), itemReq.getQuantity().intValue())
+                );
+            }
+            
+            if (!Boolean.TRUE.equals(item.getIsVehicleIssuable())) {
+                throw new InvalidOperationException(
+                    String.format("Item %s is not issuable to vehicles", item.getName())
+                );
+            }
+        }
+    }
+
+    private void validateSwapRequest(SwapItemRequestDTO swapRequest) {
+        if (swapRequest.getOldItemId() == null) {
+            throw new InvalidOperationException("Old item ID is required");
+        }
+        if (swapRequest.getNewItemId() == null) {
+            throw new InvalidOperationException("New item ID is required");
+        }
+        if (swapRequest.getNewQuantity() <= 0) {
+            throw new InvalidOperationException("New quantity must be greater than 0");
+        }
+        if (swapRequest.getDamagedCondition() == null || swapRequest.getDamagedCondition().trim().isEmpty()) {
+            throw new InvalidOperationException("Damaged condition is required");
+        }
+    }
+
+    private void validateSwapConditions(VehicleIssueItem oldItem, SwapItemRequestDTO swapRequest) {
+        // Check if already returned
+        if (oldItem.getQuantityReturned().compareTo(oldItem.getQuantityIssued()) >= 0) {
+            throw new InvalidOperationException("Item already returned, cannot swap");
+        }
+        
+        // Check if already swapped
+        if (Boolean.TRUE.equals(oldItem.getIsSwap())) {
+            throw new InvalidOperationException("Item has already been swapped");
+        }
+        
+        // Check new item stock
+        InventoryItem newItem = findInventoryItemOrThrow(swapRequest.getNewItemId());
+        if (newItem.getQuantity() < swapRequest.getNewQuantity()) {
+            throw new InsufficientStockException(
+                String.format("Insufficient stock for new item: %s. Available: %d, Requested: %d",
+                    newItem.getName(), newItem.getQuantity(), swapRequest.getNewQuantity())
+            );
+        }
+    }
+
+    private VehicleIssue createVehicleIssue(VehicleIssueRequestDTO request, Long userId) {
+        VehicleIssue issue = VehicleIssue.builder()
+                .issueNumber(generateIssueNumber())
+                .vehicleId(request.getVehicleId())
+                .driverId(request.getDriverId())
+                .tripId(request.getTripId())
+                .issueDate(request.getIssueDate() != null ? request.getIssueDate() : LocalDateTime.now())
+                .status(STATUS_ISSUED)
+                .notes(request.getNotes())
+                .createdBy(userId)
+                .updatedBy(userId)
+                .build();
+        
+        return vehicleIssueRepository.save(issue);
+    }
+
+    private VehicleIssueItem processIssueItem(VehicleIssue issue, VehicleIssueItemRequestDTO itemReq, Long userId) {
+        // Create issue item
+        VehicleIssueItem issueItem = VehicleIssueItem.builder()
+                .issue(issue)
+                .itemId(itemReq.getItemId())
+                .quantityIssued(itemReq.getQuantity())
+                .quantityReturned(BigDecimal.ZERO)
+                .conditionIssued(itemReq.getCondition())
+                .notes(itemReq.getNotes())
+                .build();
+        
+        vehicleIssueItemRepository.save(issueItem);
+        
+        // Update inventory
+        InventoryItem item = findInventoryItemOrThrow(itemReq.getItemId());
+        item.setQuantity(item.getQuantity() - itemReq.getQuantity().intValue());
+        inventoryItemRepository.save(item);
+        
+        // Create stock movement
+        StockMovement movement = StockMovement.builder()
+                .itemId(itemReq.getItemId())
+                .quantity(itemReq.getQuantity().intValue())
+                .movementType("OUT")
+                .reason("Vehicle Issue")
+                .notes(String.format("Issued to vehicle: %d, Driver: %d, Trip: %d",
+                    issue.getVehicleId(), issue.getDriverId(), issue.getTripId()))
+                .referenceNumber(issue.getIssueNumber())
+                .performedBy(String.valueOf(userId))
+                .tripId(issue.getTripId())
+                .referenceType("VEHICLE_ISSUE")
+                .requiresApproval(false)
+                .approvalStatus("APPROVED")
+                .build();
+        
+        stockMovementRepository.save(movement);
+        
+        return issueItem;
+    }
+
+    private void processReturnItem(VehicleIssueItem issueItem, ReturnItemRequestDTO returnReq, 
+                                   VehicleIssue issue, Long userId) {
+        // Validate return quantity
+        if (returnReq.getQuantity().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new InvalidOperationException("Return quantity must be greater than 0");
+        }
+        
+        BigDecimal remainingOutstanding = issueItem.getQuantityIssued()
+                .subtract(issueItem.getQuantityReturned());
+        
+        if (returnReq.getQuantity().compareTo(remainingOutstanding) > 0) {
+            throw new InvalidOperationException(
+                String.format("Cannot return more than outstanding quantity. Outstanding: %s, Requested: %s",
+                    remainingOutstanding, returnReq.getQuantity())
+            );
+        }
+        
+        // Update return quantity
+        issueItem.setQuantityReturned(issueItem.getQuantityReturned().add(returnReq.getQuantity()));
+        issueItem.setConditionReturned(returnReq.getCondition());
+        issueItem.setUpdatedAt(LocalDateTime.now());
+        vehicleIssueItemRepository.save(issueItem);
+        
+        // Return to inventory
+        InventoryItem item = findInventoryItemOrThrow(returnReq.getItemId());
+        item.setQuantity(item.getQuantity() + returnReq.getQuantity().intValue());
+        inventoryItemRepository.save(item);
+        
+        // Create stock movement
+        StockMovement movement = StockMovement.builder()
+                .itemId(returnReq.getItemId())
+                .quantity(returnReq.getQuantity().intValue())
+                .movementType("IN")
+                .reason("Vehicle Return")
+                .notes(String.format("Returned from vehicle: %d, Condition: %s",
+                    issue.getVehicleId(), returnReq.getCondition()))
+                .referenceNumber(issue.getIssueNumber())
+                .performedBy(String.valueOf(userId))
+                .referenceType("VEHICLE_RETURN")
+                .requiresApproval(false)
+                .approvalStatus("APPROVED")
+                .build();
+        
+        stockMovementRepository.save(movement);
+    }
+
+    private VehicleIssueResponseDTO executeSwap(VehicleIssue oldIssue, VehicleIssueItem oldItem,
+                                                SwapItemRequestDTO swapRequest, Long userId) {
+        // 1. Process old item return
+        BigDecimal returnQuantity = swapRequest.getReturnQuantity() != null ? 
+                swapRequest.getReturnQuantity() : oldItem.getQuantityIssued();
+        
+        oldItem.setQuantityReturned(oldItem.getQuantityReturned().add(returnQuantity));
+        oldItem.setConditionReturned(swapRequest.getDamagedCondition());
+        oldItem.setIsSwap(true);
+        oldItem.setSwapReason(swapRequest.getDamagedCondition());
+        oldItem.setUpdatedAt(LocalDateTime.now());
+        vehicleIssueItemRepository.save(oldItem);
+        
+        // 2. Create hold/damage record
+        InventoryItem inventoryItem = findInventoryItemOrThrow(swapRequest.getOldItemId());
+        inventoryItem.setHoldCode(swapRequest.getDamagedCondition());
+        inventoryItem.setHoldReason(swapRequest.getDamageNotes());
+        inventoryItem.setHoldDate(LocalDateTime.now());
+        inventoryItem.setHeldBy(String.valueOf(userId));
+        inventoryItem.setQuantity(inventoryItem.getQuantity() + returnQuantity.intValue());
+        inventoryItemRepository.save(inventoryItem);
+        
+        // 3. Create stock movement for return
+        StockMovement returnMovement = StockMovement.builder()
+                .itemId(swapRequest.getOldItemId())
+                .quantity(returnQuantity.intValue())
+                .movementType("IN")
+                .reason("Vehicle Swap Return - " + swapRequest.getDamagedCondition())
+                .notes("Damaged item returned from vehicle. Hold code: " + swapRequest.getDamagedCondition())
+                .referenceNumber(oldIssue.getIssueNumber())
+                .performedBy(String.valueOf(userId))
+                .referenceType("VEHICLE_SWAP_RETURN")
+                .requiresApproval(false)
+                .approvalStatus("APPROVED")
+                .build();
+        stockMovementRepository.save(returnMovement);
+        
+        // 4. Create new issue for replacement
+        VehicleIssueRequestDTO newIssueRequest = buildSwapIssueRequest(oldIssue, swapRequest);
+        VehicleIssueResponseDTO newIssue = issueItemsToVehicle(newIssueRequest, userId);
+        
+        // 5. Link new issue to old one
+        oldItem.setSwapIssueId(newIssue.getId());
+        vehicleIssueItemRepository.save(oldItem);
+        
+        log.info("✅ Vehicle swap completed: Old issue {} returned, New issue {} created", 
+            oldIssue.getId(), newIssue.getId());
+        
+        return newIssue;
+    }
+
+    private VehicleIssueRequestDTO buildSwapIssueRequest(VehicleIssue oldIssue, SwapItemRequestDTO swapRequest) {
+        VehicleIssueRequestDTO request = new VehicleIssueRequestDTO();
+        request.setVehicleId(oldIssue.getVehicleId());
+        request.setDriverId(oldIssue.getDriverId());
+        request.setTripId(oldIssue.getTripId());
+        request.setIssueDate(LocalDateTime.now());
+        request.setNotes("SWAP: Replacing damaged item. Original Issue: " + oldIssue.getIssueNumber());
+        
+        VehicleIssueItemRequestDTO itemRequest = new VehicleIssueItemRequestDTO();
+        itemRequest.setItemId(swapRequest.getNewItemId());
+        itemRequest.setQuantity(BigDecimal.valueOf(swapRequest.getNewQuantity()));
+        itemRequest.setCondition("NEW");
+        itemRequest.setNotes("Swap replacement for " + swapRequest.getDamagedCondition());
+        
+        request.setItems(List.of(itemRequest));
+        return request;
+    }
+
+    private void validateReturnItems(List<ReturnItemRequestDTO> returns, 
+                                     Map<Long, VehicleIssueItem> issueItemMap, 
+                                     Long issueId) {
+        if (returns == null || returns.isEmpty()) {
+            throw new InvalidOperationException("At least one item must be returned");
+        }
+        
+        Set<Long> validItemIds = issueItemMap.keySet();
+        
+        for (ReturnItemRequestDTO returnReq : returns) {
+            if (!validItemIds.contains(returnReq.getItemId())) {
+                throw new EntityNotFoundException(
+                    String.format("Item %d is not associated with vehicle issue %d. Valid items: %s",
+                        returnReq.getItemId(), issueId, validItemIds)
+                );
+            }
+        }
+    }
+
+    private Map<Long, VehicleIssueItem> buildIssueItemMap(Long issueId) {
+        List<VehicleIssueItem> issueItems = vehicleIssueItemRepository.findByIssueId(issueId);
+        if (issueItems.isEmpty()) {
+            throw new EntityNotFoundException("No items found for vehicle issue: " + issueId);
+        }
+        return issueItems.stream()
+                .collect(Collectors.toMap(VehicleIssueItem::getItemId, Function.identity()));
     }
 
     private void updateIssueStatus(VehicleIssue issue) {
         List<VehicleIssueItem> items = vehicleIssueItemRepository.findByIssueId(issue.getId());
         
-        boolean allReturned = true;
-        boolean anyReturned = false;
-        
-        for (VehicleIssueItem item : items) {
-            if (item.getQuantityReturned().compareTo(item.getQuantityIssued()) < 0) {
-                allReturned = false;
-            }
-            if (item.getQuantityReturned().compareTo(BigDecimal.ZERO) > 0) {
-                anyReturned = true;
-            }
-        }
-        
-        if (allReturned) {
-            issue.setStatus("RETURNED");
-        } else if (anyReturned) {
-            issue.setStatus("PARTIALLY_RETURNED");
+        if (items.isEmpty()) {
+            issue.setStatus(STATUS_CANCELLED);
         } else {
-            issue.setStatus("ISSUED");
+            boolean allReturned = items.stream()
+                    .allMatch(item -> item.getQuantityReturned().compareTo(item.getQuantityIssued()) >= 0);
+            boolean anyReturned = items.stream()
+                    .anyMatch(item -> item.getQuantityReturned().compareTo(BigDecimal.ZERO) > 0);
+            
+            if (allReturned) {
+                issue.setStatus(STATUS_RETURNED);
+            } else if (anyReturned) {
+                issue.setStatus(STATUS_PARTIALLY_RETURNED);
+            } else {
+                issue.setStatus(STATUS_ISSUED);
+            }
         }
         
         issue.setUpdatedAt(LocalDateTime.now());
         vehicleIssueRepository.save(issue);
     }
 
+    // ==================== Utility Methods ====================
+
+    private String generateIssueNumber() {
+        String timestamp = String.valueOf(System.currentTimeMillis()).substring(5);
+        return ISSUE_NUMBER_PREFIX + timestamp;
+    }
+
+    private VehicleIssue getIssueOrThrow(Long issueId) {
+        return vehicleIssueRepository.findById(issueId)
+                .orElseThrow(() -> new EntityNotFoundException("Vehicle issue not found: " + issueId));
+    }
+
+    private VehicleIssueItem getIssueItemOrThrow(Long issueId, Long itemId) {
+        return vehicleIssueItemRepository
+                .findByIssueIdAndItemId(issueId, itemId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                    String.format("Item %d not found in vehicle issue %d", itemId, issueId)
+                ));
+    }
+
+    private InventoryItem findInventoryItemOrThrow(Long itemId) {
+        return inventoryItemRepository.findById(itemId)
+                .orElseThrow(() -> new EntityNotFoundException("Inventory item not found: " + itemId));
+    }
+
+    // ==================== Mapping Methods ====================
+
     private VehicleIssueResponseDTO mapToResponseDTO(VehicleIssue issue) {
         if (issue == null) {
             return null;
         }
         
-        log.debug("🔄 Mapping issue: {}", issue.getId());
-        
         List<VehicleIssueItem> items = vehicleIssueItemRepository.findByIssueId(issue.getId());
-        log.debug("📦 Issue has {} items", items.size());
         
         List<VehicleIssueItemResponseDTO> itemDTOs = items.stream()
                 .map(this::mapItemToResponseDTO)
@@ -396,6 +535,9 @@ public VehicleIssueResponseDTO swapItem(Long oldIssueId, SwapItemRequestDTO swap
                 .quantityOutstanding(item.getQuantityIssued().subtract(item.getQuantityReturned()))
                 .conditionIssued(item.getConditionIssued())
                 .conditionReturned(item.getConditionReturned())
+                .isSwap(item.getIsSwap())
+                .swapReason(item.getSwapReason())
+                .swapIssueId(item.getSwapIssueId())
                 .notes(item.getNotes())
                 .build();
     }

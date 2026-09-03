@@ -23,4 +23,9 @@ public class VehicleIssueItemResponseDTO {
     private String conditionIssued;
     private String conditionReturned;
     private String notes;
+    
+    // Swap-related fields (added for swap functionality)
+    private Boolean isSwap;
+    private String swapReason;
+    private Long swapIssueId;
 }

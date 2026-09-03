@@ -732,11 +732,7 @@ public TripResponse endTrip(Long tripId, BigDecimal actualEndOdometer, Long user
     return tripResponseMapper.toResponse(updated);
 }
 
-// ✅ NEW: Add this method to BillingCalculatorService
-@Transactional(propagation = Propagation.REQUIRES_NEW)
-public TripBilling calculateTripBillingInNewTransaction(Long tripId, Long userId) {
-    return calculateTripBilling(tripId, userId);
-}
+
 
     // ============================================================
     // READ METHODS

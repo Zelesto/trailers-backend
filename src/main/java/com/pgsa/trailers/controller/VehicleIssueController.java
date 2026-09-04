@@ -66,6 +66,16 @@ public ResponseEntity<VehicleIssueResponseDTO> swapItem(
     return ResponseEntity.ok(response);
 }
 
+    @GetMapping("/stock-on-hand")
+public ResponseEntity<List<StockOnHandDTO>> getStockOnHand(@RequestBody(required = false) StockOnHandFilterDTO filter) {
+    log.info("📊 Fetching stock on hand");
+    if (filter == null) {
+        filter = new StockOnHandFilterDTO();
+    }
+    List<StockOnHandDTO> results = vehicleIssueService.getStockOnHand(filter);
+    return ResponseEntity.ok(results);
+}
+    
     /**
      * Create a new vehicle issue (issue items to vehicle)
      */

@@ -3,7 +3,7 @@ package com.pgsa.trailers.controller;
 
 import com.pgsa.trailers.dto.StockOnHandDTO;
 import com.pgsa.trailers.dto.StockOnHandFilterDTO;
-import com.pgsa.trailers.service.inventory.StockOnHandService;
+import com.pgsa.trailers.service.StockOnHandService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;

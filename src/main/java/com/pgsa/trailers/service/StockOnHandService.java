@@ -1,5 +1,4 @@
-// src/main/java/com/pgsa/trailers/service/StockOnHandService.java
-package com.pgsa.trailers.service;
+package com.pgsa.trailers.service.inventory;
 
 import com.pgsa.trailers.dto.StockOnHandDTO;
 import com.pgsa.trailers.dto.StockOnHandFilterDTO;
@@ -11,6 +10,8 @@ import com.pgsa.trailers.repository.InventoryItemRepository;
 import com.pgsa.trailers.repository.InventoryLocationRepository;
 import com.pgsa.trailers.repository.VehicleIssueItemRepository;
 import com.pgsa.trailers.repository.VehicleIssueRepository;
+import com.pgsa.trailers.service.DriverService;
+import com.pgsa.trailers.service.VehicleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,13 +35,15 @@ public class StockOnHandService {
     private final VehicleIssueItemRepository vehicleIssueItemRepository;
     private final InventoryItemRepository inventoryItemRepository;
     private final InventoryLocationRepository inventoryLocationRepository;
+    private final VehicleService vehicleService;
+    private final DriverService driverService;
 
     public List<StockOnHandDTO> getStockOnHand(StockOnHandFilterDTO filter) {
         log.info("📊 Fetching stock on hand with filter: {}", filter);
         
         List<StockOnHandDTO> results = new ArrayList<>();
         
-        // 1. Get all active issues with outstanding items
+        // Get all active issues with outstanding items
         List<VehicleIssue> activeIssues = vehicleIssueRepository.findByStatusNotIn(
                 List.of(STATUS_RETURNED, STATUS_CANCELLED)
         );
@@ -59,22 +62,50 @@ public class StockOnHandService {
                     continue;
                 }
                 
-                // Determine holder type and name
+                // Get holder details
                 String holderType;
                 String holderName;
                 String holderIdentifier;
+                String holderDetails;
                 Long holderId;
                 
                 if (issue.getVehicleId() != null) {
                     holderType = "VEHICLE";
                     holderId = issue.getVehicleId();
-                    holderIdentifier = "Vehicle #" + holderId;
-                    holderName = "Vehicle #" + holderId;
+                    
+                    // Get vehicle details - use registration number as identifier
+                    var vehicle = vehicleService.getVehicleById(issue.getVehicleId());
+                    if (vehicle != null) {
+                        holderIdentifier = vehicle.getRegistrationNumber() != null ? 
+                                vehicle.getRegistrationNumber() : "Vehicle #" + holderId;
+                        holderName = vehicle.getRegistrationNumber() != null ? 
+                                vehicle.getRegistrationNumber() : "Vehicle #" + holderId;
+                        holderDetails = String.format("%s %s", 
+                                vehicle.getMake() != null ? vehicle.getMake() : "", 
+                                vehicle.getModel() != null ? vehicle.getModel() : "");
+                    } else {
+                        holderIdentifier = "Vehicle #" + holderId;
+                        holderName = "Vehicle #" + holderId;
+                        holderDetails = "";
+                    }
                 } else if (issue.getDriverId() != null) {
                     holderType = "DRIVER";
                     holderId = issue.getDriverId();
-                    holderIdentifier = "Driver #" + holderId;
-                    holderName = "Driver #" + holderId;
+                    
+                    // Get driver details
+                    var driver = driverService.getDriverById(issue.getDriverId());
+                    if (driver != null) {
+                        holderIdentifier = driver.getFullName() != null ? 
+                                driver.getFullName() : "Driver #" + holderId;
+                        holderName = driver.getFullName() != null ? 
+                                driver.getFullName() : "Driver #" + holderId;
+                        holderDetails = driver.getEmployeeId() != null ? 
+                                "Employee #" + driver.getEmployeeId() : "";
+                    } else {
+                        holderIdentifier = "Driver #" + holderId;
+                        holderName = "Driver #" + holderId;
+                        holderDetails = "";
+                    }
                 } else {
                     continue; // Skip if no holder
                 }
@@ -108,6 +139,7 @@ public class StockOnHandService {
                                       inventoryItem.getName().toLowerCase().contains(searchLower)) ||
                                      (inventoryItem.getSku() != null && 
                                       inventoryItem.getSku().toLowerCase().contains(searchLower)) ||
+                                     holderIdentifier.toLowerCase().contains(searchLower) ||
                                      holderName.toLowerCase().contains(searchLower);
                     if (!matches) continue;
                 }
@@ -130,6 +162,9 @@ public class StockOnHandService {
                         .holderId(holderId)
                         .holderName(holderName)
                         .holderIdentifier(holderIdentifier)
+                        .holderDetails(holderDetails)
+                        .holderDisplayName(holderIdentifier + (holderDetails != null && !holderDetails.isEmpty() ? 
+                                " (" + holderDetails + ")" : ""))
                         .quantityOnHand(inventoryItem.getQuantity() != null ? inventoryItem.getQuantity() : 0)
                         .quantityIssued(issueItem.getQuantityIssued().intValue())
                         .quantityReturned(issueItem.getQuantityReturned().intValue())
@@ -151,98 +186,8 @@ public class StockOnHandService {
             }
         }
         
-        // 2. Add warehouse/location stock for items not issued
-        addLocationStock(results, filter);
-        
         log.info("📊 Found {} stock on hand records", results.size());
         return results;
-    }
-
-    private void addLocationStock(List<StockOnHandDTO> results, StockOnHandFilterDTO filter) {
-        // Only add location stock if not filtering by specific holder type (except LOCATION)
-        if (!"ALL".equals(filter.getHolderType()) && !"LOCATION".equals(filter.getHolderType())) {
-            return;
-        }
-        
-        List<InventoryItem> allItems = inventoryItemRepository.findAll();
-        
-        // Get IDs of items that are already in results (issued)
-        Set<Long> issuedItemIds = results.stream()
-                .map(StockOnHandDTO::getItemId)
-                .collect(Collectors.toSet());
-        
-        for (InventoryItem inventoryItem : allItems) {
-            // Skip if item is already issued (already in results)
-            if (issuedItemIds.contains(inventoryItem.getId())) {
-                continue;
-            }
-            
-            // Skip if item has no stock
-            if (inventoryItem.getQuantity() == null || inventoryItem.getQuantity() <= 0) {
-                continue;
-            }
-            
-            // Apply filters
-            if (filter.getSearch() != null && !filter.getSearch().isEmpty()) {
-                String searchLower = filter.getSearch().toLowerCase();
-                boolean matches = (inventoryItem.getName() != null && 
-                                  inventoryItem.getName().toLowerCase().contains(searchLower)) ||
-                                 (inventoryItem.getSku() != null && 
-                                  inventoryItem.getSku().toLowerCase().contains(searchLower));
-                if (!matches) continue;
-            }
-            
-            if (!"ALL".equals(filter.getCategory()) && filter.getCategory() != null &&
-                !filter.getCategory().equals(inventoryItem.getCategory())) {
-                continue;
-            }
-            
-            // Get location name
-            String locationName = "Warehouse";
-            if (inventoryItem.getLocationId() != null) {
-                Optional<InventoryLocation> location = inventoryLocationRepository.findById(
-                        inventoryItem.getLocationId()
-                );
-                if (location.isPresent()) {
-                    locationName = location.get().getName();
-                }
-            }
-            
-            String status = determineStockStatus(inventoryItem);
-            if (!"ALL".equals(filter.getStatus()) && !filter.getStatus().equals(status)) {
-                continue;
-            }
-            
-            // Build DTO for location stock
-            StockOnHandDTO dto = StockOnHandDTO.builder()
-                    .id(inventoryItem.getId())
-                    .itemId(inventoryItem.getId())
-                    .itemName(inventoryItem.getName())
-                    .itemSku(inventoryItem.getSku())
-                    .category(inventoryItem.getCategory())
-                    .unitOfMeasure(inventoryItem.getUnitOfMeasure())
-                    .holderType("LOCATION")
-                    .holderId(inventoryItem.getLocationId())
-                    .holderName(locationName)
-                    .holderIdentifier(locationName)
-                    .quantityOnHand(inventoryItem.getQuantity())
-                    .quantityIssued(0)
-                    .quantityReturned(0)
-                    .quantityOutstanding(0)
-                    .unitCost(inventoryItem.getUnitCost())
-                    .totalValue(inventoryItem.getUnitCost() != null ? 
-                        inventoryItem.getUnitCost().multiply(BigDecimal.valueOf(inventoryItem.getQuantity())) : 
-                        BigDecimal.ZERO)
-                    .status(status)
-                    .isHeld(inventoryItem.getIsHeld() != null ? inventoryItem.getIsHeld() : false)
-                    .holdReason(inventoryItem.getHoldReason())
-                    .condition("AVAILABLE")
-                    .lastUpdated(inventoryItem.getUpdatedAt())
-                    .notes(inventoryItem.getNotes())
-                    .build();
-            
-            results.add(dto);
-        }
     }
 
     private String determineStockStatus(InventoryItem item) {

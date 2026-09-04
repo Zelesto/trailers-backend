@@ -37,21 +37,14 @@ public class VehicleIssueService {
 
     // ==================== Core Business Methods ====================
 
-    /**
-     * Issue items to a vehicle
-     */
     @Transactional
     public VehicleIssueResponseDTO issueItemsToVehicle(VehicleIssueRequestDTO request, Long userId) {
         log.info("🚗 Issuing items to vehicle: {}", request.getVehicleId());
-
-        // Validate request
         validateIssueRequest(request);
 
-        // Create and save the issue
         VehicleIssue issue = createVehicleIssue(request, userId);
-        
-        // Process all items
         List<VehicleIssueItem> issueItems = new ArrayList<>();
+        
         for (VehicleIssueItemRequestDTO itemReq : request.getItems()) {
             VehicleIssueItem issueItem = processIssueItem(issue, itemReq, userId);
             issueItems.add(issueItem);
@@ -63,24 +56,45 @@ public class VehicleIssueService {
     }
 
     /**
-     * Return items from vehicle
+     * Return items from vehicle with improved error handling and logging
      */
     @Transactional
     public VehicleIssueResponseDTO returnItemsFromVehicle(Long issueId, List<ReturnItemRequestDTO> returns, Long userId) {
         log.info("🔄 Returning items from vehicle issue: {}", issueId);
+        log.debug("📦 Return request: {}", returns);
 
         // Validate and fetch issue
         VehicleIssue issue = getIssueOrThrow(issueId);
-        
+        log.debug("📋 Found issue: {} with status: {}", issue.getIssueNumber(), issue.getStatus());
+
+        // Get all items associated with this issue
+        List<VehicleIssueItem> issueItems = vehicleIssueItemRepository.findByIssueId(issueId);
+        log.debug("📦 Issue has {} items: {}", issueItems.size(), 
+            issueItems.stream().map(i -> "ItemID:" + i.getItemId() + " Qty:" + i.getQuantityIssued())
+                .collect(Collectors.joining(", ")));
+
+        if (issueItems.isEmpty()) {
+            throw new EntityNotFoundException("No items found for vehicle issue: " + issueId);
+        }
+
         // Build lookup map for issue items
-        Map<Long, VehicleIssueItem> issueItemMap = buildIssueItemMap(issueId);
+        Map<Long, VehicleIssueItem> issueItemMap = issueItems.stream()
+                .collect(Collectors.toMap(
+                    VehicleIssueItem::getItemId, 
+                    Function.identity(),
+                    (existing, replacement) -> existing // Keep first if duplicate
+                ));
         
+        log.debug("🗺️ Issue item map keys: {}", issueItemMap.keySet());
+
         // Validate all return items exist
         validateReturnItems(returns, issueItemMap, issueId);
 
         // Process each return
         for (ReturnItemRequestDTO returnReq : returns) {
             VehicleIssueItem issueItem = issueItemMap.get(returnReq.getItemId());
+            log.debug("🔄 Processing return for item: {}, quantity: {}", 
+                returnReq.getItemId(), returnReq.getQuantity());
             processReturnItem(issueItem, returnReq, issue, userId);
         }
 
@@ -91,31 +105,20 @@ public class VehicleIssueService {
         return mapToResponseDTO(issue);
     }
 
-    /**
-     * Swap an item - return damaged and issue replacement
-     * Supports both vehicle and driver swaps based on issueType
-     */
     @Transactional
     public VehicleIssueResponseDTO swapItem(Long oldIssueId, SwapItemRequestDTO swapRequest, Long userId) {
         log.info("🔄 Swapping item from issue: {}, Type: {}", oldIssueId, swapRequest.getIssueType());
         
-        // Validate request
         validateSwapRequest(swapRequest);
         
-        // Fetch old issue and item
         VehicleIssue oldIssue = getIssueOrThrow(oldIssueId);
         VehicleIssueItem oldItem = getIssueItemOrThrow(oldIssueId, swapRequest.getOldItemId());
         
-        // Validate swap conditions
         validateSwapConditions(oldItem, swapRequest);
         
-        // Process the swap
         return executeSwap(oldIssue, oldItem, swapRequest, userId);
     }
 
-    /**
-     * Cancel a vehicle issue
-     */
     @Transactional
     public VehicleIssueResponseDTO cancelIssue(Long issueId, String reason, Long userId) {
         log.info("❌ Cancelling vehicle issue: {}", issueId);
@@ -126,18 +129,15 @@ public class VehicleIssueService {
             throw new InvalidOperationException("Cannot cancel a fully returned issue");
         }
         
-        // Return all items that haven't been returned
         List<VehicleIssueItem> items = vehicleIssueItemRepository.findByIssueId(issueId);
         
         for (VehicleIssueItem item : items) {
             BigDecimal outstanding = item.getQuantityIssued().subtract(item.getQuantityReturned());
             if (outstanding.compareTo(BigDecimal.ZERO) > 0) {
-                // Return outstanding items to inventory
                 InventoryItem inventoryItem = findInventoryItemOrThrow(item.getItemId());
                 inventoryItem.setQuantity(inventoryItem.getQuantity() + outstanding.intValue());
                 inventoryItemRepository.save(inventoryItem);
                 
-                // Mark as returned
                 item.setQuantityReturned(item.getQuantityIssued());
                 item.setConditionReturned("CANCELLED");
                 item.setUpdatedAt(LocalDateTime.now());
@@ -209,7 +209,7 @@ public class VehicleIssueService {
     @Transactional(readOnly = true)
     public List<VehicleIssueItemResponseDTO> getIssueItems(Long issueId) {
         log.info("📦 Fetching items for issue: {}", issueId);
-        getIssueOrThrow(issueId); // Validate issue exists
+        getIssueOrThrow(issueId);
         return vehicleIssueItemRepository.findByIssueId(issueId)
                 .stream()
                 .map(this::mapItemToResponseDTO)
@@ -280,17 +280,14 @@ public class VehicleIssueService {
     }
 
     private void validateSwapConditions(VehicleIssueItem oldItem, SwapItemRequestDTO swapRequest) {
-        // Check if already returned
         if (oldItem.getQuantityReturned().compareTo(oldItem.getQuantityIssued()) >= 0) {
             throw new InvalidOperationException("Item already returned, cannot swap");
         }
         
-        // Check if already swapped
         if (Boolean.TRUE.equals(oldItem.getIsSwap())) {
             throw new InvalidOperationException("Item has already been swapped");
         }
         
-        // Check new item stock
         InventoryItem newItem = findInventoryItemOrThrow(swapRequest.getNewItemId());
         if (newItem.getQuantity() < swapRequest.getNewQuantity()) {
             throw new InsufficientStockException(
@@ -299,7 +296,6 @@ public class VehicleIssueService {
             );
         }
         
-        // Check if new item is issuable
         if (!Boolean.TRUE.equals(newItem.getIsVehicleIssuable())) {
             throw new InvalidOperationException(
                 String.format("Item %s is not issuable to vehicles", newItem.getName())
@@ -324,7 +320,6 @@ public class VehicleIssueService {
     }
 
     private VehicleIssueItem processIssueItem(VehicleIssue issue, VehicleIssueItemRequestDTO itemReq, Long userId) {
-        // Create issue item
         VehicleIssueItem issueItem = VehicleIssueItem.builder()
                 .issue(issue)
                 .itemId(itemReq.getItemId())
@@ -337,12 +332,10 @@ public class VehicleIssueService {
         
         vehicleIssueItemRepository.save(issueItem);
         
-        // Update inventory
         InventoryItem item = findInventoryItemOrThrow(itemReq.getItemId());
         item.setQuantity(item.getQuantity() - itemReq.getQuantity().intValue());
         inventoryItemRepository.save(item);
         
-        // Create stock movement
         StockMovement movement = StockMovement.builder()
                 .itemId(itemReq.getItemId())
                 .quantity(itemReq.getQuantity().intValue())
@@ -365,7 +358,6 @@ public class VehicleIssueService {
 
     private void processReturnItem(VehicleIssueItem issueItem, ReturnItemRequestDTO returnReq, 
                                    VehicleIssue issue, Long userId) {
-        // Validate return quantity
         if (returnReq.getQuantity().compareTo(BigDecimal.ZERO) <= 0) {
             throw new InvalidOperationException("Return quantity must be greater than 0");
         }
@@ -380,18 +372,15 @@ public class VehicleIssueService {
             );
         }
         
-        // Update return quantity
         issueItem.setQuantityReturned(issueItem.getQuantityReturned().add(returnReq.getQuantity()));
         issueItem.setConditionReturned(returnReq.getCondition());
         issueItem.setUpdatedAt(LocalDateTime.now());
         vehicleIssueItemRepository.save(issueItem);
         
-        // Return to inventory
         InventoryItem item = findInventoryItemOrThrow(returnReq.getItemId());
         item.setQuantity(item.getQuantity() + returnReq.getQuantity().intValue());
         inventoryItemRepository.save(item);
         
-        // Create stock movement
         StockMovement movement = StockMovement.builder()
                 .itemId(returnReq.getItemId())
                 .quantity(returnReq.getQuantity().intValue())
@@ -411,11 +400,9 @@ public class VehicleIssueService {
 
     private VehicleIssueResponseDTO executeSwap(VehicleIssue oldIssue, VehicleIssueItem oldItem,
                                                 SwapItemRequestDTO swapRequest, Long userId) {
-        // 1. Process old item return
         BigDecimal returnQuantity = swapRequest.getReturnQuantity() != null ? 
                 swapRequest.getReturnQuantity() : oldItem.getQuantityIssued();
         
-        // Validate return quantity doesn't exceed issued quantity
         if (returnQuantity.compareTo(oldItem.getQuantityIssued()) > 0) {
             throw new InvalidOperationException(
                 String.format("Return quantity (%s) cannot exceed issued quantity (%s)",
@@ -431,7 +418,6 @@ public class VehicleIssueService {
         oldItem.setUpdatedAt(LocalDateTime.now());
         vehicleIssueItemRepository.save(oldItem);
         
-        // 2. Create hold/damage record on inventory item
         InventoryItem inventoryItem = findInventoryItemOrThrow(swapRequest.getOldItemId());
         inventoryItem.setHoldCode(swapRequest.getDamagedCondition());
         inventoryItem.setHoldReason(swapRequest.getDamageNotes());
@@ -440,7 +426,6 @@ public class VehicleIssueService {
         inventoryItem.setQuantity(inventoryItem.getQuantity() + returnQuantity.intValue());
         inventoryItemRepository.save(inventoryItem);
         
-        // 3. Create stock movement for return
         StockMovement returnMovement = StockMovement.builder()
                 .itemId(swapRequest.getOldItemId())
                 .quantity(returnQuantity.intValue())
@@ -457,11 +442,9 @@ public class VehicleIssueService {
                 .build();
         stockMovementRepository.save(returnMovement);
         
-        // 4. Create new issue for replacement
         VehicleIssueRequestDTO newIssueRequest = buildSwapIssueRequest(oldIssue, swapRequest);
         VehicleIssueResponseDTO newIssue = issueItemsToVehicle(newIssueRequest, userId);
         
-        // 5. Link new issue to old one
         oldItem.setSwapIssueId(newIssue.getId());
         vehicleIssueItemRepository.save(oldItem);
         
@@ -490,6 +473,9 @@ public class VehicleIssueService {
         return request;
     }
 
+    /**
+     * Validates return items with improved error message and logging
+     */
     private void validateReturnItems(List<ReturnItemRequestDTO> returns, 
                                      Map<Long, VehicleIssueItem> issueItemMap, 
                                      Long issueId) {
@@ -498,17 +484,50 @@ public class VehicleIssueService {
         }
         
         Set<Long> validItemIds = issueItemMap.keySet();
+        log.debug("🔍 Valid item IDs for issue {}: {}", issueId, validItemIds);
+        
+        // Collect all invalid items for a comprehensive error message
+        List<Long> invalidItems = new ArrayList<>();
+        List<String> invalidItemDetails = new ArrayList<>();
         
         for (ReturnItemRequestDTO returnReq : returns) {
             if (returnReq.getItemId() == null) {
                 throw new InvalidOperationException("Item ID cannot be null");
             }
             if (!validItemIds.contains(returnReq.getItemId())) {
-                throw new EntityNotFoundException(
-                    String.format("Item %d is not associated with vehicle issue %d. Valid items: %s",
-                        returnReq.getItemId(), issueId, validItemIds)
-                );
+                invalidItems.add(returnReq.getItemId());
+                // Get item name if possible for better error message
+                String itemName = "Unknown";
+                try {
+                    InventoryItem item = inventoryItemRepository.findById(returnReq.getItemId()).orElse(null);
+                    if (item != null) {
+                        itemName = item.getName();
+                    }
+                } catch (Exception e) {
+                    // Ignore
+                }
+                invalidItemDetails.add(String.format("Item %d (%s)", returnReq.getItemId(), itemName));
             }
+        }
+        
+        if (!invalidItems.isEmpty()) {
+            String errorMessage = String.format(
+                "The following items are not associated with vehicle issue %d: %s. Valid items: %s",
+                issueId,
+                String.join(", ", invalidItemDetails),
+                validItemIds.stream()
+                    .map(id -> {
+                        try {
+                            InventoryItem item = inventoryItemRepository.findById(id).orElse(null);
+                            return item != null ? id + " (" + item.getName() + ")" : String.valueOf(id);
+                        } catch (Exception e) {
+                            return String.valueOf(id);
+                        }
+                    })
+                    .collect(Collectors.joining(", "))
+            );
+            log.error("❌ Validation failed: {}", errorMessage);
+            throw new EntityNotFoundException(errorMessage);
         }
     }
 

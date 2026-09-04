@@ -3,6 +3,8 @@ package com.pgsa.trailers.controller.inventory;
 import com.pgsa.trailers.dto.ReturnItemRequestDTO;
 import com.pgsa.trailers.dto.VehicleIssueRequestDTO;
 import com.pgsa.trailers.dto.VehicleIssueResponseDTO;
+import com.pgsa.trailers.dto.StockOnHandFilterDTO;
+import com.pgsa.trailers.dto.StockOnHandDTO;
 import com.pgsa.trailers.entity.inventory.VehicleIssue;
 import com.pgsa.trailers.entity.security.AppUser;
 import com.pgsa.trailers.repository.AppUserRepository;

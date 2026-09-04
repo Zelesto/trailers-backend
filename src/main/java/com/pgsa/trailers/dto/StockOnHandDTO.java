@@ -21,10 +21,11 @@ public class StockOnHandDTO {
     private String unitOfMeasure;
     
     // Holder information
-    private String holderType; // VEHICLE, DRIVER, LOCATION, WAREHOUSE
+    private String holderType; // VEHICLE, DRIVER, LOCATION
     private Long holderId;
-    private String holderName;
-    private String holderIdentifier; // Registration number, driver name, location name
+    private String holderName;          // Driver name or Vehicle registration
+    private String holderIdentifier;    // Vehicle registration, driver name, location name
+    private String holderDetails;       // Additional details like vehicle make/model
     
     // Stock information
     private Integer quantityOnHand;
@@ -35,16 +36,17 @@ public class StockOnHandDTO {
     private BigDecimal totalValue;
     
     // Status
-    private String status; // IN_STOCK, LOW_STOCK, OUT_OF_STOCK, ON_HOLD
+    private String status; // IN_STOCK, LOW_STOCK, OUT_OF_STOCK, ON_HOLD, ISSUED
     private Boolean isHeld;
     private String holdReason;
-    private String condition; // NEW, GOOD, WORN, DAMAGED
+    private String condition;
     
     // Timestamps
     private LocalDateTime issueDate;
     private LocalDateTime expectedReturnDate;
     private LocalDateTime lastUpdated;
-    
-    // Additional info
     private String notes;
+    
+    // For grouping
+    private String holderDisplayName;   // Formatted display for the holder
 }

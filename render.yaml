@@ -6,7 +6,7 @@ services:
     dockerfilePath: ./Dockerfile
     envVars:
       - key: SPRING_PROFILES_ACTIVE
-        value: production
+        value: prod
       - key: APP_DB_INIT_ENABLED
         value: "true"
       - key: APP_DB_INIT_SEED

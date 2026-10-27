@@ -8,9 +8,9 @@ services:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
       - key: APP_DB_INIT_ENABLED
-        value: "true"
+        value: "false"
       - key: APP_DB_INIT_SEED
-        value: "true"
+        value: "false"
       - key: APP_DB_INIT_DROP
         value: "false"
       - key: OPENROUTESERVICE_API_KEY

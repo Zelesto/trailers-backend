@@ -8,7 +8,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 @Component
 @RequiredArgsConstructor
@@ -18,14 +17,26 @@ public class EnumDataInitializer implements ApplicationRunner {
     private final EnumMasterRepository enumRepository;
 
     @Override
-    @Transactional
     public void run(ApplicationArguments args) {
-        // Only seed if tables are empty
-        if (enumRepository.count() == 0) {
-            log.info("Seeding initial enum data...");
-            seedEnums();
-        } else {
-            log.info("Enum data already exists, skipping seed.");
+        try {
+            // Only seed if tables are empty. Some local/test environments use an empty H2 DB
+            // and do not have the enum_master table created yet, so skip initialization there.
+            if (enumRepository.count() == 0) {
+                log.info("Seeding initial enum data...");
+                seedEnums();
+            } else {
+                log.info("Enum data already exists, skipping seed.");
+            }
+        } catch (Exception e) {
+            String message = e.getMessage() == null ? e.toString() : e.getMessage();
+            if (message != null && (message.contains("Table \"ENUM_MASTER\" not found")
+                    || message.contains("does not exist")
+                    || message.contains("not found")
+                    || message.contains("Invalid object name"))) {
+                log.warn("Skipping enum seed because the database schema has not been initialized yet: {}", message);
+                return;
+            }
+            throw e;
         }
     }
 

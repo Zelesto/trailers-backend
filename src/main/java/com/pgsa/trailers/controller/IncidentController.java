@@ -1,4 +1,4 @@
-package com.pgsa.trailers.controller.ops;
+package com.pgsa.trailers.controller;
 
 import com.pgsa.trailers.dto.CreateIncidentRequest;  // ✅
 import com.pgsa.trailers.dto.IncidentDTO;  // ✅ Fixed typo

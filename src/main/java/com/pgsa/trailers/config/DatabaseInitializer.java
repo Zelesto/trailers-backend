@@ -84,6 +84,7 @@ public class DatabaseInitializer implements CommandLineRunner {
                 DROP TABLE IF EXISTS invoice CASCADE;
                 DROP TABLE IF EXISTS trip_metrics CASCADE;
                 DROP TABLE IF EXISTS trip CASCADE;
+                DROP TABLE IF EXISTS sequence CASCADE;
                 DROP TABLE IF EXISTS vehicle_metrics CASCADE;
                 DROP TABLE IF EXISTS vehicle CASCADE;
                 DROP TABLE IF EXISTS driver_metrics CASCADE;
@@ -356,7 +357,7 @@ public class DatabaseInitializer implements CommandLineRunner {
                 vin VARCHAR(100),
                 make VARCHAR(100),
                 model VARCHAR(100),
-                year INTEGER,
+                "year" INTEGER,
                 fuel_type VARCHAR(50),
                 current_mileage DECIMAL(10,2) DEFAULT 0,
                 status VARCHAR(50) DEFAULT 'ACTIVE',
@@ -387,6 +388,21 @@ public class DatabaseInitializer implements CommandLineRunner {
                 updated_by VARCHAR(255),
                 CHECK (id IS NOT NULL),
                 CHECK (load_number IS NOT NULL)
+            );
+        """);
+
+        // Create sequence table used by trip/load number generation
+        jdbcTemplate.execute("""
+            CREATE TABLE IF NOT EXISTS sequence (
+                id BIGSERIAL PRIMARY KEY,
+                table_name VARCHAR(50) NOT NULL,
+                "year" VARCHAR(4) NOT NULL,
+                next_number BIGINT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CHECK (table_name IS NOT NULL),
+                CHECK ("year" IS NOT NULL),
+                CHECK (next_number IS NOT NULL)
             );
         """);
 
@@ -1343,19 +1359,19 @@ public class DatabaseInitializer implements CommandLineRunner {
             WHERE NOT EXISTS (SELECT 1 FROM driver WHERE license_number='DL456789123');
             
             -- ==================== SEED VEHICLES ====================
-            INSERT INTO vehicle (registration_number, vin, make, model, year, fuel_type, current_mileage, status)
+            INSERT INTO vehicle (registration_number, vin, make, model, "year", fuel_type, current_mileage, status)
             SELECT 'ABC123GP', '1HGCM82633A123456', 'Volvo', 'FH16', 2022, 'DIESEL', 15000.50, 'ACTIVE'
             WHERE NOT EXISTS (SELECT 1 FROM vehicle WHERE registration_number='ABC123GP');
             
-            INSERT INTO vehicle (registration_number, vin, make, model, year, fuel_type, current_mileage, status)
+            INSERT INTO vehicle (registration_number, vin, make, model, "year", fuel_type, current_mileage, status)
             SELECT 'DEF456GP', '1FDXF46F69EA98765', 'Mercedes', 'Actros', 2021, 'DIESEL', 45000.75, 'ACTIVE'
             WHERE NOT EXISTS (SELECT 1 FROM vehicle WHERE registration_number='DEF456GP');
             
-            INSERT INTO vehicle (registration_number, vin, make, model, year, fuel_type, current_mileage, status)
+            INSERT INTO vehicle (registration_number, vin, make, model, "year", fuel_type, current_mileage, status)
             SELECT 'GHI789GP', '1N6BD06T45C456789', 'Scania', 'R500', 2023, 'DIESEL', 8000.25, 'ACTIVE'
             WHERE NOT EXISTS (SELECT 1 FROM vehicle WHERE registration_number='GHI789GP');
             
-            INSERT INTO vehicle (registration_number, vin, make, model, year, fuel_type, current_mileage, status)
+            INSERT INTO vehicle (registration_number, vin, make, model, "year", fuel_type, current_mileage, status)
             SELECT 'JKL012GP', '1HTMMAAL07H123987', 'MAN', 'TGX', 2020, 'DIESEL', 75000.00, 'MAINTENANCE'
             WHERE NOT EXISTS (SELECT 1 FROM vehicle WHERE registration_number='JKL012GP');
             

@@ -1,4 +1,4 @@
-package com.pgsa.trailers.controller.inventory;
+package com.pgsa.trailers.controller;
 
 import com.pgsa.trailers.dto.ReturnItemRequestDTO;
 import com.pgsa.trailers.dto.VehicleIssueRequestDTO;
@@ -9,7 +9,7 @@ import com.pgsa.trailers.entity.inventory.VehicleIssue;
 import com.pgsa.trailers.entity.security.AppUser;
 import com.pgsa.trailers.repository.AppUserRepository;
 import com.pgsa.trailers.repository.VehicleIssueRepository;
-import com.pgsa.trailers.service.inventory.VehicleIssueService;
+import com.pgsa.trailers.service.VehicleIssueService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

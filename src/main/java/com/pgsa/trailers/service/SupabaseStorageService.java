@@ -15,6 +15,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequ
 import software.amazon.awssdk.core.ResponseInputStream;
 
 import jakarta.annotation.PostConstruct;
+import org.springframework.util.StringUtils;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.UUID;
@@ -39,11 +40,23 @@ public class SupabaseStorageService {
     @Value("${supabase.s3.region}")
     private String region;
 
+    private boolean isConfigured() {
+        return StringUtils.hasText(endpoint)
+                && StringUtils.hasText(bucketName)
+                && StringUtils.hasText(supabaseUrl)
+                && StringUtils.hasText(region);
+    }
+
     /**
      * Test connection to Supabase bucket on startup
      */
     @PostConstruct
     public void testConnection() {
+        if (!isConfigured()) {
+            log.warn("Supabase storage is not configured; skipping startup connection check.");
+            return;
+        }
+
         log.info("========================================");
         log.info("🔌 Testing Supabase S3 Connection");
         log.info("========================================");
@@ -95,6 +108,10 @@ public class SupabaseStorageService {
      * Upload and convert file to PDF
      */
     public String uploadAndConvertFile(MultipartFile file, String podNumber, FileConversionService conversionService) {
+        if (!isConfigured()) {
+            throw new IllegalStateException("Supabase storage is not configured. Set SUPABASE_S3_ENDPOINT, SUPABASE_ACCESS_KEY, SUPABASE_SECRET_KEY, and SUPABASE_BUCKET to enable uploads.");
+        }
+
         log.info("Processing and uploading file for POD: {}", podNumber);
         
         try {
@@ -184,6 +201,10 @@ public class SupabaseStorageService {
      * Upload a file to Supabase Storage with detailed logging
      */
     public String uploadFile(MultipartFile file, String podNumber) {
+        if (!isConfigured()) {
+            throw new IllegalStateException("Supabase storage is not configured. Set SUPABASE_S3_ENDPOINT, SUPABASE_ACCESS_KEY, SUPABASE_SECRET_KEY, and SUPABASE_BUCKET to enable uploads.");
+        }
+
         log.info("========================================");
         log.info("📤 Starting file upload");
         log.info("========================================");
@@ -247,6 +268,10 @@ public class SupabaseStorageService {
      * Download a file from Supabase Storage
      */
     public byte[] downloadFile(String fileUrl) {
+        if (!isConfigured()) {
+            throw new IllegalStateException("Supabase storage is not configured. Set SUPABASE_S3_ENDPOINT, SUPABASE_ACCESS_KEY, SUPABASE_SECRET_KEY, and SUPABASE_BUCKET to enable downloads.");
+        }
+
         try {
             log.info("📥 Downloading file from: {}", fileUrl);
             
@@ -302,6 +327,11 @@ public class SupabaseStorageService {
      * Check if a file exists in Supabase Storage with logging
      */
     public boolean fileExists(String fileUrl) {
+        if (!isConfigured()) {
+            log.warn("Supabase storage is not configured; file existence checks are skipped.");
+            return false;
+        }
+
         if (fileUrl == null || fileUrl.isEmpty()) {
             log.debug("File URL is null or empty");
             return false;
@@ -414,6 +444,10 @@ public class SupabaseStorageService {
      * Generate a signed URL for private files with logging
      */
     public String generateSignedUrl(String fileUrl) {
+        if (!isConfigured()) {
+            throw new IllegalStateException("Supabase storage is not configured. Set SUPABASE_S3_ENDPOINT, SUPABASE_ACCESS_KEY, SUPABASE_SECRET_KEY, and SUPABASE_BUCKET to generate signed URLs.");
+        }
+
         try {
             String filePath = extractFilePath(fileUrl);
             log.debug("Generating signed URL for: {}", filePath);

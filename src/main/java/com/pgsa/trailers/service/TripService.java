@@ -367,9 +367,9 @@ public CompletableFuture<Trip> calculateTripDistance(Long tripId) {
             String prefix = "TRP-" + year + "-";
             
             Long nextNumber = jdbcTemplate.queryForObject(
-                "INSERT INTO sequence (table_name, year, next_number, created_at, updated_at) " +
+                "INSERT INTO sequence (table_name, \"year\", next_number, created_at, updated_at) " +
                 "VALUES (?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) " +
-                "ON CONFLICT (table_name, year) DO UPDATE SET next_number = sequence.next_number + 1 " +
+                "ON CONFLICT (table_name, \"year\") DO UPDATE SET next_number = sequence.next_number + 1 " +
                 "RETURNING next_number - 1",
                 new Object[]{TRIP_SEQUENCE_NAME, year},
                 Long.class
@@ -393,9 +393,9 @@ public CompletableFuture<Trip> calculateTripDistance(Long tripId) {
             String prefix = "REF-" + year + "-";
             
             Long nextNumber = jdbcTemplate.queryForObject(
-                "INSERT INTO sequence (table_name, year, next_number, created_at, updated_at) " +
+                "INSERT INTO sequence (table_name, \"year\", next_number, created_at, updated_at) " +
                 "VALUES (?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) " +
-                "ON CONFLICT (table_name, year) DO UPDATE SET next_number = sequence.next_number + 1 " +
+                "ON CONFLICT (table_name, \"year\") DO UPDATE SET next_number = sequence.next_number + 1 " +
                 "RETURNING next_number - 1",
                 new Object[]{LOAD_REF_SEQUENCE_NAME, year},
                 Long.class

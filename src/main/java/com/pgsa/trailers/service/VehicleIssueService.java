@@ -1,4 +1,4 @@
-package com.pgsa.trailers.service.inventory;
+package com.pgsa.trailers.service;
 
 import com.pgsa.trailers.dto.*;
 import com.pgsa.trailers.entity.inventory.*;

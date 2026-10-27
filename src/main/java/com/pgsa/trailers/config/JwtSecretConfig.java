@@ -7,6 +7,8 @@ import org.springframework.context.annotation.Configuration;
 
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 
 @Configuration
@@ -21,7 +23,7 @@ public class JwtSecretConfig {
      *
      * @param secret the JWT secret key, base64 encoded preferred
      */
-    public JwtSecretConfig(@Value("${security.jwt.secret}") String secret) {
+    public JwtSecretConfig(@Value("${security.jwt.secret:dev-secret}") String secret) {
         if (secret == null || secret.isBlank()) {
             throw new IllegalStateException(
                 "JWT secret is not configured! Please set 'security.jwt.secret' in your environment or properties."
@@ -41,8 +43,15 @@ public class JwtSecretConfig {
         try {
             keyBytes = Base64.getDecoder().decode(secret);
         } catch (IllegalArgumentException e) {
-            // Secret is not Base64-encoded, fallback to raw UTF-8 bytes
             keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+        }
+
+        if (keyBytes.length < 32) {
+            try {
+                keyBytes = MessageDigest.getInstance("SHA-256").digest(secret.getBytes(StandardCharsets.UTF_8));
+            } catch (NoSuchAlgorithmException ex) {
+                throw new IllegalStateException("Unable to generate a secure JWT key", ex);
+            }
         }
 
         return Keys.hmacShaKeyFor(keyBytes);

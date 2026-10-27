@@ -70,9 +70,9 @@ public class TestController {
             String year = String.valueOf(java.time.Year.now().getValue());
             String prefix = "TRP-" + year + "-";
             Long nextNumber = jdbcTemplate.queryForObject(
-                "INSERT INTO sequence (table_name, year, next_number, created_at, updated_at) " +
+                "INSERT INTO sequence (table_name, \"year\", next_number, created_at, updated_at) " +
                 "VALUES ('trip', ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) " +
-                "ON CONFLICT (table_name, year) DO UPDATE SET next_number = sequence.next_number + 1 " +
+                "ON CONFLICT (table_name, \"year\") DO UPDATE SET next_number = sequence.next_number + 1 " +
                 "RETURNING next_number - 1",
                 new Object[]{year},
                 Long.class

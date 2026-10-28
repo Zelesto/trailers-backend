@@ -43,41 +43,45 @@ public class DatabaseInitializer implements CommandLineRunner {
             return;
         }
 
+        logger.info("Starting database initialization...");
+
+        if (drop) {
+            runPhase("dropAll", this::dropAll);
+        }
+
+        runPhase("createEnums", this::createEnums);
+        runPhase("createTables", this::createTables);
+        runPhase("createConstraints", this::createConstraints);
+        runPhase("createIndexes", this::createIndexes);
+
+        if (seed) {
+            runPhase("seedData", this::seedData);
+        }
+
+        logger.info("Database initialization completed");
+    }
+
+    private void runPhase(String name, Runnable phase) {
         try {
-            logger.info("Starting database initialization...");
-
-            if (drop) {
-                dropAll();
-            }
-
-            createEnums();
-            createTables();
-            createConstraints();
-            createIndexes();
-
-            if (seed) {
-                seedData();
-            }
-
-            logger.info("Database initialization completed successfully");
-
+            phase.run();
         } catch (Exception e) {
-            logger.error("Database initialization failed: {}", e.getMessage());
-            e.printStackTrace();
+            logger.error("Database initialization phase '{}' failed: {}", name, e.getMessage(), e);
         }
     }
 
     /* ===================== DROP ALL ===================== */
     private void dropAll() {
-        logger.info("Dropping all existing tables and enums...");
+        logger.info("Dropping all existing tables, views and enums...");
         jdbcTemplate.execute("""
             DO $$ DECLARE
                 r RECORD;
             BEGIN
+                -- Drop views first (views are not tables)
+                DROP VIEW IF EXISTS finance_reconciliation_pending CASCADE;
+                DROP VIEW IF EXISTS finance_reconciliation_running_balance CASCADE;
+                DROP VIEW IF EXISTS finance_reconciliation_view CASCADE;
+
                 -- Drop tables in reverse dependency order
-                DROP TABLE IF EXISTS finance_reconciliation_pending CASCADE;
-                DROP TABLE IF EXISTS finance_reconciliation_running_balance CASCADE;
-                DROP TABLE IF EXISTS finance_reconciliation_view CASCADE;
                 DROP TABLE IF EXISTS reconciliation CASCADE;
                 DROP TABLE IF EXISTS payment_allocation CASCADE;
                 DROP TABLE IF EXISTS payment CASCADE;
@@ -227,6 +231,8 @@ public class DatabaseInitializer implements CommandLineRunner {
             normalizeIdColumnType("invoice", columnName, "BIGINT");
         }
 
+        normalizeJsonColumnType("invoice", "audit_trail");
+
         List<String> invoiceColumns = List.of(
                 "invoice_type VARCHAR(50) DEFAULT 'RECEIVABLE'",
                 "customer_id BIGINT",
@@ -299,6 +305,25 @@ public class DatabaseInitializer implements CommandLineRunner {
             }
         } catch (Exception e) {
             logger.warn("Could not normalize {}.{} to {}: {}", tableName, columnName, targetType, e.getMessage());
+        }
+    }
+
+    private void normalizeJsonColumnType(String tableName, String columnName) {
+        try {
+            String currentType = jdbcTemplate.queryForObject(
+                    "SELECT data_type FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?",
+                    String.class,
+                    tableName,
+                    columnName
+            );
+
+            if (currentType != null && !"jsonb".equalsIgnoreCase(currentType)) {
+                jdbcTemplate.execute(String.format("ALTER TABLE %s ALTER COLUMN %s TYPE JSONB USING %s::jsonb;",
+                        tableName, columnName, columnName));
+                logger.info("Normalized {}.{} from {} to JSONB", tableName, columnName, currentType);
+            }
+        } catch (Exception e) {
+            logger.warn("Could not normalize {}.{} to JSONB: {}", tableName, columnName, e.getMessage());
         }
     }
 
@@ -459,7 +484,7 @@ public class DatabaseInitializer implements CommandLineRunner {
 
         ensureAccountSchema();
 
-        // Create suppliers table (no additional columns from production)
+        // Create suppliers table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS suppliers (
                 id BIGSERIAL PRIMARY KEY,
@@ -479,7 +504,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create driver table with all production columns
+        // Create driver table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS driver (
                 id BIGSERIAL PRIMARY KEY,
@@ -517,7 +542,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create vehicle table (no additional columns from production)
+        // Create vehicle table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS vehicle (
                 id BIGSERIAL PRIMARY KEY,
@@ -539,7 +564,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create load table (no additional columns from production)
+        // Create load table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS load (
                 id BIGSERIAL PRIMARY KEY,
@@ -559,7 +584,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create sequence table used by trip/load number generation
+        // Create sequence table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS sequence (
                 id BIGSERIAL PRIMARY KEY,
@@ -574,7 +599,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create trip table (no additional columns from production)
+        // Create trip table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS trip (
                 id BIGSERIAL PRIMARY KEY,
@@ -595,7 +620,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create account_statement table with all production columns
+        // Create account_statement table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS account_statement (
                 id BIGSERIAL PRIMARY KEY,
@@ -624,7 +649,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create account_transaction table with all production columns
+        // Create account_transaction table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS account_transaction (
                 id BIGSERIAL PRIMARY KEY,
@@ -650,7 +675,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create fuel_source table (no additional columns from production)
+        // Create fuel_source table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS fuel_source (
                 id BIGSERIAL PRIMARY KEY,
@@ -665,7 +690,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create fuel_slip table (no additional columns from production)
+        // Create fuel_slip table (now includes trip_id, load_id, account_statement_id)
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS fuel_slip (
                 id BIGSERIAL PRIMARY KEY,
@@ -687,6 +712,9 @@ public class DatabaseInitializer implements CommandLineRunner {
                 created_by VARCHAR(255),
                 updated_by VARCHAR(255),
                 finalized BOOLEAN DEFAULT false,
+                trip_id BIGINT,
+                load_id BIGINT,
+                account_statement_id BIGINT,
                 CHECK (id IS NOT NULL),
                 CHECK (slip_number IS NOT NULL),
                 CHECK (quantity IS NOT NULL),
@@ -695,7 +723,12 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create inventory_location table (no additional columns from production)
+        // Ensure new fuel_slip columns exist on pre-existing tables
+        jdbcTemplate.execute("ALTER TABLE fuel_slip ADD COLUMN IF NOT EXISTS trip_id BIGINT");
+        jdbcTemplate.execute("ALTER TABLE fuel_slip ADD COLUMN IF NOT EXISTS load_id BIGINT");
+        jdbcTemplate.execute("ALTER TABLE fuel_slip ADD COLUMN IF NOT EXISTS account_statement_id BIGINT");
+
+        // Create inventory_location table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS inventory_location (
                 id BIGSERIAL PRIMARY KEY,
@@ -710,7 +743,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create inventory_item table (no additional columns from production)
+        // Create inventory_item table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS inventory_item (
                 id BIGSERIAL PRIMARY KEY,
@@ -730,7 +763,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create stock_count table (no additional columns from production)
+        // Create stock_count table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS stock_count (
                 id BIGSERIAL PRIMARY KEY,
@@ -750,7 +783,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create stock_count_line table (no additional columns from production)
+        // Create stock_count_line table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS stock_count_line (
                 id BIGSERIAL PRIMARY KEY,
@@ -767,7 +800,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create stock_movement table (no additional columns from production)
+        // Create stock_movement table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS stock_movement (
                 id BIGSERIAL PRIMARY KEY,
@@ -791,7 +824,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create driver_metrics table with all production columns
+        // Create driver_metrics table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS driver_metrics (
                 id BIGSERIAL PRIMARY KEY,
@@ -819,7 +852,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create vehicle_metrics table (no additional columns from production)
+        // Create vehicle_metrics table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS vehicle_metrics (
                 id BIGSERIAL PRIMARY KEY,
@@ -837,7 +870,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create trip_metrics table (no additional columns from production)
+        // Create trip_metrics table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS trip_metrics (
                 id BIGSERIAL PRIMARY KEY,
@@ -937,7 +970,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create payment_allocation table (no additional columns from production)
+        // Create payment_allocation table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS payment_allocation (
                 id BIGSERIAL PRIMARY KEY,
@@ -956,7 +989,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create reconciliation table with generated column (no additional columns from production)
+        // Create reconciliation table
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS reconciliation (
                 id BIGSERIAL PRIMARY KEY,
@@ -982,9 +1015,16 @@ public class DatabaseInitializer implements CommandLineRunner {
         createFinanceViews();
     }
 
+    /* ===================== FINANCE VIEWS ===================== */
     private void createFinanceViews() {
         logger.info("Creating finance reconciliation views...");
+        // Drop all views before recreating so column type/name/order changes are allowed.
+        // PostgreSQL CREATE OR REPLACE VIEW cannot change column types/order, so we drop first.
+        jdbcTemplate.execute("DROP VIEW IF EXISTS finance_reconciliation_pending CASCADE");
+        jdbcTemplate.execute("DROP VIEW IF EXISTS finance_reconciliation_running_balance CASCADE");
+        jdbcTemplate.execute("DROP VIEW IF EXISTS finance_reconciliation_view CASCADE");
 
+<<<<<<< HEAD
         jdbcTemplate.execute("DROP VIEW IF EXISTS finance_reconciliation_pending CASCADE;");
         jdbcTemplate.execute("DROP VIEW IF EXISTS finance_reconciliation_running_balance CASCADE;");
         jdbcTemplate.execute("DROP VIEW IF EXISTS finance_reconciliation_view CASCADE;");
@@ -997,41 +1037,64 @@ public class DatabaseInitializer implements CommandLineRunner {
                 a.name as account_name,
                 a.type as account_type,
                 ast.id as statement_id,
+=======
+        jdbcTemplate.execute("""
+            CREATE VIEW finance_reconciliation_view AS
+            SELECT
+                a.id                AS account_id,
+                a.name              AS account_name,
+                a.type              AS account_type,
+                ast.id              AS statement_id,
+>>>>>>> 563210e
                 ast.statement_date,
                 ast.opening_balance,
                 ast.closing_balance,
                 ast.total_debits,
                 ast.total_credits,
                 at.transaction_date,
-                CONCAT(at.source_type, ' - ', at.description) as transaction_type,
+                CONCAT(at.source_type, ' - ', at.description) AS transaction_type,
                 at.source_id,
+<<<<<<< HEAD
                 CAST(at.amount AS NUMERIC(15,2)) as amount,
                 at.direction,
                 at.description,
                 CAST(ast.variance_amount AS NUMERIC(15,2)) as variance_amount
+=======
+                CAST(at.amount AS NUMERIC(15,2)) AS amount,
+                at.direction,
+                at.description,
+                CAST(ast.variance_amount AS NUMERIC(15,2)) AS variance_amount
+>>>>>>> 563210e
             FROM account a
             LEFT JOIN account_statement ast ON a.id = ast.account_id
-            LEFT JOIN account_transaction at ON a.id = at.account_id 
+            LEFT JOIN account_transaction at ON a.id = at.account_id
                 AND (ast.id = at.account_statement_id OR at.account_statement_id IS NULL)
-            ORDER BY a.id, ast.statement_date DESC, at.transaction_date;
         """);
 
-        // Create finance_reconciliation_running_balance view
         jdbcTemplate.execute("""
             CREATE VIEW finance_reconciliation_running_balance AS
+<<<<<<< HEAD
             SELECT 
                 a.id as account_id,
                 a.name as account_name,
                 a.type as account_type,
                 ast.id as statement_id,
+=======
+            SELECT
+                a.id                AS account_id,
+                a.name              AS account_name,
+                a.type              AS account_type,
+                ast.id              AS statement_id,
+>>>>>>> 563210e
                 ast.statement_date,
                 ast.opening_balance,
                 ast.closing_balance,
                 ast.total_debits,
                 ast.total_credits,
                 at.transaction_date,
-                CONCAT(at.source_type, ' - ', at.description) as transaction_type,
+                CONCAT(at.source_type, ' - ', at.description) AS transaction_type,
                 at.source_id,
+<<<<<<< HEAD
                 CAST(at.amount AS NUMERIC(15,2)) as amount,
                 at.direction,
                 at.description,
@@ -1044,23 +1107,40 @@ public class DatabaseInitializer implements CommandLineRunner {
                     AS NUMERIC(15,2)
                 ) as running_balance,
                 CAST(ast.variance_amount AS NUMERIC(15,2)) as variance_amount
+=======
+                CAST(at.amount AS NUMERIC(15,2)) AS amount,
+                at.direction,
+                at.description,
+                SUM(CASE
+                    WHEN at.direction = 'DEBIT' THEN -at.amount
+                    WHEN at.direction = 'CREDIT' THEN at.amount
+                    ELSE 0
+                END) OVER (PARTITION BY a.id ORDER BY at.transaction_date) AS running_balance,
+                ast.variance_amount
+>>>>>>> 563210e
             FROM account a
             LEFT JOIN account_statement ast ON a.id = ast.account_id
-            LEFT JOIN account_transaction at ON a.id = at.account_id 
+            LEFT JOIN account_transaction at ON a.id = at.account_id
                 AND (ast.id = at.account_statement_id OR at.account_statement_id IS NULL)
-            ORDER BY a.id, at.transaction_date;
         """);
 
-        // Create finance_reconciliation_pending view
         jdbcTemplate.execute("""
             CREATE VIEW finance_reconciliation_pending AS
+<<<<<<< HEAD
             SELECT 
                 a.id as account_id,
                 a.name as account_name,
                 a.type as account_type,
+=======
+            SELECT
+                a.id                AS account_id,
+                a.name              AS account_name,
+                a.type              AS account_type,
+>>>>>>> 563210e
                 at.transaction_date,
-                CONCAT(at.source_type, ' - ', at.description) as transaction_type,
+                CONCAT(at.source_type, ' - ', at.description) AS transaction_type,
                 at.source_id,
+<<<<<<< HEAD
                 CAST(at.amount AS NUMERIC(15,2)) as amount,
                 at.direction,
                 at.description,
@@ -1072,16 +1152,27 @@ public class DatabaseInitializer implements CommandLineRunner {
                     WHEN at.account_statement_id IS NULL THEN TRUE 
                     ELSE FALSE 
                 END as pending_reconciliation
+=======
+                CAST(at.amount AS NUMERIC(15,2)) AS amount,
+                at.direction,
+                at.description,
+                rb.running_balance,
+                ast.closing_balance AS last_closing_balance,
+                a.balance           AS system_balance,
+                COALESCE(ast.closing_balance, 0) + rb.running_balance AS projected_closing_balance,
+                CASE WHEN at.account_statement_id IS NULL THEN TRUE ELSE FALSE END AS pending_reconciliation
+>>>>>>> 563210e
             FROM account a
-            LEFT JOIN account_statement ast ON a.id = ast.account_id 
+            LEFT JOIN account_statement ast ON a.id = ast.account_id
                 AND ast.status = 'CLOSED'
                 AND ast.statement_date = (
-                    SELECT MAX(statement_date) 
-                    FROM account_statement 
+                    SELECT MAX(statement_date)
+                    FROM account_statement
                     WHERE account_id = a.id AND status = 'CLOSED'
                 )
             LEFT JOIN account_transaction at ON a.id = at.account_id
             LEFT JOIN LATERAL (
+<<<<<<< HEAD
                 SELECT 
                     CAST(
                         SUM(CASE 
@@ -1091,20 +1182,48 @@ public class DatabaseInitializer implements CommandLineRunner {
                         END)
                         AS NUMERIC(15,2)
                     ) as running_balance
+=======
+                SELECT
+                    SUM(CASE
+                        WHEN at2.direction = 'DEBIT' THEN -at2.amount
+                        WHEN at2.direction = 'CREDIT' THEN at2.amount
+                        ELSE 0
+                    END) AS running_balance
+>>>>>>> 563210e
                 FROM account_transaction at2
-                WHERE at2.account_id = a.id 
-                    AND at2.transaction_date > COALESCE(ast.statement_date, '1900-01-01')
-                    AND at2.transaction_date <= at.transaction_date
+                WHERE at2.account_id = a.id
+                  AND at2.transaction_date > COALESCE(ast.statement_date, DATE '1900-01-01')
+                  AND at2.transaction_date <= at.transaction_date
             ) rb ON TRUE
             WHERE at.account_statement_id IS NULL
-            ORDER BY a.id, at.transaction_date;
         """);
     }
 
     /* ===================== CONSTRAINT CREATION ===================== */
+    /**
+     * Adds a constraint only if it does not already exist.
+     * PostgreSQL does NOT support "ALTER TABLE ... ADD CONSTRAINT IF NOT EXISTS",
+     * so we check pg_constraint first.
+     */
+    private void addConstraint(String table, String name, String definition) {
+        try {
+            Boolean exists = jdbcTemplate.queryForObject(
+                    "SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = ? AND conrelid = ?::regclass)",
+                    Boolean.class, name, table);
+            if (Boolean.TRUE.equals(exists)) {
+                return;
+            }
+            jdbcTemplate.execute("ALTER TABLE " + table + " ADD CONSTRAINT " + name + " " + definition);
+            logger.debug("Added constraint {} on {}", name, table);
+        } catch (Exception e) {
+            logger.warn("Could not add constraint {} on {}: {}", name, table, e.getMessage());
+        }
+    }
+
     private void createConstraints() {
         logger.info("Creating unique and foreign key constraints...");
 
+<<<<<<< HEAD
         ensureUniqueConstraint("enum_master", new String[]{"module_name", "category", "code"}, "uk_enum_module_category_code");
         ensureUniqueConstraint("app_user", "email", "app_user_email_key");
         ensureUniqueConstraint("role", "name", "role_name_key");
@@ -1210,6 +1329,115 @@ public class DatabaseInitializer implements CommandLineRunner {
                 END IF;
             END $$;
         """.formatted(constraintName, tableName, constraintName, columnName, targetTable, targetColumn, onDeleteAction));
+=======
+        // Unique constraints
+        addConstraint("app_user", "app_user_email_key", "UNIQUE (email)");
+        addConstraint("role", "role_name_key", "UNIQUE (name)");
+        addConstraint("permission", "permission_resource_action_key", "UNIQUE (resource, action)");
+        addConstraint("account", "account_name_key", "UNIQUE (name)");
+        addConstraint("suppliers", "suppliers_name_key", "UNIQUE (name)");
+        addConstraint("driver", "driver_license_number_key", "UNIQUE (license_number)");
+        addConstraint("vehicle", "vehicle_registration_number_key", "UNIQUE (registration_number)");
+        addConstraint("vehicle", "vehicle_vin_key", "UNIQUE (vin)");
+        addConstraint("load", "load_load_number_key", "UNIQUE (load_number)");
+        addConstraint("trip", "trip_trip_number_key", "UNIQUE (trip_number)");
+        addConstraint("account_statement", "account_statement_account_id_statement_date_key", "UNIQUE (account_id, statement_date)");
+        addConstraint("fuel_source", "fuel_source_name_key", "UNIQUE (name)");
+        addConstraint("fuel_slip", "fuel_slip_slip_number_key", "UNIQUE (slip_number)");
+        addConstraint("inventory_location", "inventory_location_name_key", "UNIQUE (name)");
+        addConstraint("inventory_item", "inventory_item_sku_key", "UNIQUE (sku)");
+        addConstraint("driver_metrics", "driver_metrics_driver_id_metric_date_key", "UNIQUE (driver_id, metric_date)");
+        addConstraint("vehicle_metrics", "vehicle_metrics_vehicle_id_metric_date_key", "UNIQUE (vehicle_id, metric_date)");
+        addConstraint("invoice", "invoice_invoice_number_key", "UNIQUE (invoice_number)");
+
+        // Foreign key constraints
+        addConstraint("user_role", "user_role_user_id_fkey",
+                "FOREIGN KEY (user_id) REFERENCES app_user(id) ON DELETE CASCADE");
+        addConstraint("user_role", "user_role_role_id_fkey",
+                "FOREIGN KEY (role_id) REFERENCES role(id) ON DELETE CASCADE");
+
+        addConstraint("role_permission", "role_permission_role_id_fkey",
+                "FOREIGN KEY (role_id) REFERENCES role(id) ON DELETE CASCADE");
+        addConstraint("role_permission", "role_permission_permission_id_fkey",
+                "FOREIGN KEY (permission_id) REFERENCES permission(id) ON DELETE CASCADE");
+
+        addConstraint("driver", "fk_driver_app_user",
+                "FOREIGN KEY (app_user_id) REFERENCES app_user(id) ON DELETE CASCADE");
+        addConstraint("driver", "fk_driver_vehicle",
+                "FOREIGN KEY (assigned_vehicle_id) REFERENCES vehicle(id) ON DELETE SET NULL");
+
+        addConstraint("vehicle", "fk_vehicle_driver",
+                "FOREIGN KEY (assigned_driver_id) REFERENCES driver(id) ON DELETE SET NULL");
+
+        addConstraint("account_statement", "fk_account_statement_account",
+                "FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE CASCADE");
+        addConstraint("account_statement", "fk_account_statement_recon_by",
+                "FOREIGN KEY (recon_by) REFERENCES app_user(id) ON DELETE SET NULL");
+
+        addConstraint("account_transaction", "account_transaction_account_id_fkey",
+                "FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE NO ACTION");
+        addConstraint("account_transaction", "account_transaction_account_statement_id_fkey",
+                "FOREIGN KEY (account_statement_id) REFERENCES account_statement(id) ON DELETE NO ACTION");
+
+        addConstraint("fuel_source", "fuel_source_account_id_fkey",
+                "FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE NO ACTION");
+
+        addConstraint("fuel_slip", "fuel_slip_fuel_source_id_fkey",
+                "FOREIGN KEY (fuel_source_id) REFERENCES fuel_source(id) ON DELETE NO ACTION");
+        addConstraint("fuel_slip", "fk_fuel_slip_trip",
+                "FOREIGN KEY (trip_id) REFERENCES trip(id) ON DELETE SET NULL");
+        addConstraint("fuel_slip", "fk_fuel_slip_load",
+                "FOREIGN KEY (load_id) REFERENCES load(id) ON DELETE SET NULL");
+        addConstraint("fuel_slip", "fk_fuel_slip_account_statement",
+                "FOREIGN KEY (account_statement_id) REFERENCES account_statement(id) ON DELETE SET NULL");
+
+        addConstraint("stock_count", "stock_count_location_id_fkey",
+                "FOREIGN KEY (location_id) REFERENCES inventory_location(id) ON DELETE NO ACTION");
+        addConstraint("stock_count_line", "stock_count_line_stock_count_id_fkey",
+                "FOREIGN KEY (stock_count_id) REFERENCES stock_count(id) ON DELETE NO ACTION");
+        addConstraint("stock_count_line", "stock_count_line_product_id_fkey",
+                "FOREIGN KEY (product_id) REFERENCES inventory_item(id) ON DELETE NO ACTION");
+
+        addConstraint("stock_movement", "stock_movement_product_id_fkey",
+                "FOREIGN KEY (product_id) REFERENCES inventory_item(id) ON DELETE NO ACTION");
+        addConstraint("stock_movement", "stock_movement_from_location_id_fkey",
+                "FOREIGN KEY (from_location_id) REFERENCES inventory_location(id) ON DELETE NO ACTION");
+        addConstraint("stock_movement", "stock_movement_to_location_id_fkey",
+                "FOREIGN KEY (to_location_id) REFERENCES inventory_location(id) ON DELETE NO ACTION");
+
+        addConstraint("driver_metrics", "driver_metrics_driver_id_fkey",
+                "FOREIGN KEY (driver_id) REFERENCES driver(id) ON DELETE NO ACTION");
+        addConstraint("vehicle_metrics", "vehicle_metrics_vehicle_id_fkey",
+                "FOREIGN KEY (vehicle_id) REFERENCES vehicle(id) ON DELETE NO ACTION");
+
+        addConstraint("trip", "trip_vehicle_id_fkey",
+                "FOREIGN KEY (vehicle_id) REFERENCES vehicle(id) ON DELETE NO ACTION");
+        addConstraint("trip", "trip_driver_id_fkey",
+                "FOREIGN KEY (driver_id) REFERENCES driver(id) ON DELETE NO ACTION");
+        addConstraint("trip", "fk_trip_load",
+                "FOREIGN KEY (load_id) REFERENCES load(id) ON DELETE SET NULL");
+
+        addConstraint("trip_metrics", "trip_metrics_trip_id_fkey",
+                "FOREIGN KEY (trip_id) REFERENCES trip(id) ON DELETE NO ACTION");
+
+        addConstraint("invoice", "fk_invoice_account",
+                "FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE CASCADE");
+        addConstraint("invoice", "fk_invoice_trip",
+                "FOREIGN KEY (trip_id) REFERENCES trip(id) ON DELETE SET NULL");
+        addConstraint("invoice", "fk_invoice_load",
+                "FOREIGN KEY (load_id) REFERENCES load(id) ON DELETE SET NULL");
+
+        addConstraint("payment", "payment_account_id_fkey",
+                "FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE NO ACTION");
+
+        addConstraint("payment_allocation", "payment_allocation_payment_id_fkey",
+                "FOREIGN KEY (payment_id) REFERENCES payment(id) ON DELETE NO ACTION");
+        addConstraint("payment_allocation", "payment_allocation_invoice_id_fkey",
+                "FOREIGN KEY (invoice_id) REFERENCES invoice(id) ON DELETE NO ACTION");
+
+        addConstraint("reconciliation", "reconciliation_account_id_fkey",
+                "FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE NO ACTION");
+>>>>>>> 563210e
     }
 
     /* ===================== INDEX CREATION ===================== */
@@ -1399,7 +1627,6 @@ public class DatabaseInitializer implements CommandLineRunner {
             WHERE NOT EXISTS (SELECT 1 FROM app_user WHERE email='driver@logistics.local');
             
             -- ==================== ASSIGN USER ROLES ====================
-            -- Admin gets SUPER_ADMIN
             INSERT INTO user_role (user_id, role_id)
             SELECT u.id, r.id
             FROM app_user u, role r
@@ -1410,7 +1637,6 @@ public class DatabaseInitializer implements CommandLineRunner {
                 WHERE ur.user_id = u.id AND ur.role_id = r.id
             );
             
-            -- Dispatcher gets DISPATCHER
             INSERT INTO user_role (user_id, role_id)
             SELECT u.id, r.id
             FROM app_user u, role r
@@ -1421,7 +1647,6 @@ public class DatabaseInitializer implements CommandLineRunner {
                 WHERE ur.user_id = u.id AND ur.role_id = r.id
             );
             
-            -- Finance gets FINANCE
             INSERT INTO user_role (user_id, role_id)
             SELECT u.id, r.id
             FROM app_user u, role r
@@ -1432,7 +1657,6 @@ public class DatabaseInitializer implements CommandLineRunner {
                 WHERE ur.user_id = u.id AND ur.role_id = r.id
             );
             
-            -- Driver gets DRIVER
             INSERT INTO user_role (user_id, role_id)
             SELECT u.id, r.id
             FROM app_user u, role r
@@ -1699,7 +1923,6 @@ public class DatabaseInitializer implements CommandLineRunner {
             AND NOT EXISTS (SELECT 1 FROM account_statement WHERE account_id=a.id AND statement_date='2024-01-31');
             
             -- ==================== SEED ACCOUNT TRANSACTIONS ====================
-            -- Fuel slip transactions
             INSERT INTO account_transaction (account_id, transaction_date, amount, direction, source_type, source_id, description, currency, account_statement_id)
             SELECT a.id, fs.transaction_date, fs.total_amount, 'DEBIT', 'FUEL_SLIP', fs.id, 'Fuel purchase - ' || fs.slip_number, 'ZAR', ast.id
             FROM account a, fuel_slip fs, account_statement ast
@@ -1721,7 +1944,6 @@ public class DatabaseInitializer implements CommandLineRunner {
             AND ast.account_id = a.id AND ast.statement_date = '2024-01-31'
             AND NOT EXISTS (SELECT 1 FROM account_transaction WHERE source_type='FUEL_SLIP' AND source_id=fs.id);
             
-            -- Payment transactions
             INSERT INTO account_transaction (account_id, transaction_date, amount, direction, source_type, source_id, description, currency, account_statement_id)
             SELECT a.id, p.payment_date, p.amount, 'CREDIT', 'PAYMENT', p.id, 'Payment - ' || p.reference_number, 'ZAR', ast.id
             FROM account a, payment p, account_statement ast
@@ -1750,7 +1972,6 @@ public class DatabaseInitializer implements CommandLineRunner {
             AND NOT EXISTS (SELECT 1 FROM reconciliation WHERE reconciliation_date='2024-01-31' AND account_id=a.id);
             
             -- ==================== SEED METRICS ====================
-            -- Driver metrics
             INSERT INTO driver_metrics (driver_id, metric_date, total_trips, total_distance_km, total_hours, fuel_consumption_liters, average_speed_kmh, safety_score, efficiency_score, idle_time_hours, incident_count, violations_count)
             SELECT d.id, '2024-01-31', 12, 4500.50, 120.25, 1250.75, 75.5, 8.7, 7.9, 15.5, 0, 1
             FROM driver d WHERE d.license_number='DL123456789'
@@ -1761,7 +1982,6 @@ public class DatabaseInitializer implements CommandLineRunner {
             FROM driver d WHERE d.license_number='DL987654321'
             AND NOT EXISTS (SELECT 1 FROM driver_metrics WHERE driver_id=d.id AND metric_date='2024-01-31');
             
-            -- Vehicle metrics
             INSERT INTO vehicle_metrics (vehicle_id, metric_date, distance_traveled, fuel_used, fuel_efficiency, maintenance_cost, downtime_hours)
             SELECT v.id, '2024-01-31', 5000.75, 1550.25, 3.23, 12500.00, 8.5
             FROM vehicle v WHERE v.registration_number='ABC123GP'
@@ -1772,7 +1992,6 @@ public class DatabaseInitializer implements CommandLineRunner {
             FROM vehicle v WHERE v.registration_number='DEF456GP'
             AND NOT EXISTS (SELECT 1 FROM vehicle_metrics WHERE vehicle_id=v.id AND metric_date='2024-01-31');
             
-            -- Trip metrics
             INSERT INTO trip_metrics (trip_id, total_distance, total_duration, fuel_used)
             SELECT t.id, 580.50, 10.25, 250.00
             FROM trip t WHERE t.trip_number='TRP2024001'
@@ -1789,7 +2008,6 @@ public class DatabaseInitializer implements CommandLineRunner {
             AND NOT EXISTS (SELECT 1 FROM trip_metrics WHERE trip_id=t.id);
             
             -- ==================== UPDATE ACCOUNT BALANCES ====================
-            -- Update account balances based on transactions
             UPDATE account a SET balance = (
                 SELECT COALESCE(SUM(
                     CASE 

@@ -412,7 +412,44 @@ public LoadBilling recalculateLoadBilling(String loadId, Long userId) {
 
     public List<LoadBilling> getBillableLoads() {
         try {
-            return loadBillingRepository.findBillableLoads();
+            List<LoadBilling> billableLoads = loadBillingRepository.findBillableLoads();
+            if (billableLoads != null && !billableLoads.isEmpty()) {
+                return billableLoads;
+            }
+
+            List<LoadBilling> generatedLoads = new ArrayList<>();
+            List<Load> loads = loadRepository.findAll();
+
+            for (Load load : loads) {
+                if (load == null || load.getLoadNumber() == null || load.getLoadNumber().isBlank()) {
+                    continue;
+                }
+
+                try {
+                    List<Trip> trips = tripRepository.findByLoadId(load.getLoadNumber());
+                    if (trips == null || trips.isEmpty()) {
+                        continue;
+                    }
+
+                    LoadBilling loadBilling = loadBillingRepository.findByLoadId(load.getLoadNumber())
+                            .orElse(null);
+
+                    if (loadBilling == null) {
+                        loadBilling = recalculateLoadBilling(load.getLoadNumber(), 0L);
+                    }
+
+                    if (loadBilling != null
+                            && loadBilling.getInvoiceId() == null
+                            && ("CALCULATED".equalsIgnoreCase(loadBilling.getStatus())
+                                || "DRAFT".equalsIgnoreCase(loadBilling.getStatus()))) {
+                        generatedLoads.add(loadBilling);
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to backfill billable load {}: {}", load.getLoadNumber(), e.getMessage());
+                }
+            }
+
+            return generatedLoads;
         } catch (Exception e) {
             log.error("Error fetching billable loads: {}", e.getMessage());
             return new ArrayList<>();

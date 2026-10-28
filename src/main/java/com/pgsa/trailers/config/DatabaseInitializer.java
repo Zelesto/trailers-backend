@@ -110,6 +110,7 @@ public class DatabaseInitializer implements CommandLineRunner {
                 DROP TABLE IF EXISTS permission CASCADE;
                 DROP TABLE IF EXISTS role CASCADE;
                 DROP TABLE IF EXISTS app_user CASCADE;
+                DROP TABLE IF EXISTS enum_master CASCADE;
 
                 -- Drop enums
                 DROP TYPE IF EXISTS account_type CASCADE;
@@ -199,9 +200,165 @@ public class DatabaseInitializer implements CommandLineRunner {
         }
     }
 
+    private void ensureInvoiceSchema() {
+        logger.info("Ensuring invoice tables match the JPA schema...");
+
+        try {
+            String statusType = jdbcTemplate.queryForObject(
+                    "SELECT udt_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'invoice' AND column_name = 'status'",
+                    String.class
+            );
+
+            if (statusType != null && "invoice_status".equalsIgnoreCase(statusType)) {
+                jdbcTemplate.execute("ALTER TABLE invoice ALTER COLUMN status TYPE VARCHAR(50) USING status::text;");
+                logger.info("Converted invoice.status from enum invoice_status to VARCHAR(50) to match the JPA entity.");
+            }
+        } catch (Exception e) {
+            logger.warn("Could not normalize invoice.status to varchar: {}", e.getMessage());
+        }
+
+        List<String> numericIdColumns = List.of(
+                "supplier_id",
+                "customer_id",
+                "account_id",
+                "load_id",
+                "trip_id",
+                "created_by",
+                "updated_by"
+        );
+
+        for (String columnName : numericIdColumns) {
+            normalizeIdColumnType("invoice", columnName, "BIGINT");
+        }
+
+        normalizeJsonColumnType("invoice", "audit_trail");
+
+        List<String> invoiceColumns = List.of(
+                "invoice_type VARCHAR(50) DEFAULT 'RECEIVABLE'",
+                "customer_id BIGINT",
+                "customer_name VARCHAR(200)",
+                "customer_email VARCHAR(200)",
+                "customer_address TEXT",
+                "currency VARCHAR(10) DEFAULT 'ZAR'",
+                "subtotal NUMERIC(15,2) DEFAULT 0",
+                "tax_total NUMERIC(15,2) DEFAULT 0",
+                "total_amount NUMERIC(15,2) DEFAULT 0",
+                "vat_rate NUMERIC(5,2) DEFAULT 15.00",
+                "paid_amount NUMERIC(15,2) DEFAULT 0",
+                "source VARCHAR(50) DEFAULT 'MANUAL'",
+                "reference_id VARCHAR(50)",
+                "notes TEXT",
+                "account_id BIGINT",
+                "load_id BIGINT",
+                "trip_id BIGINT",
+                "tax_amount NUMERIC(15,2) DEFAULT 0",
+                "net_amount NUMERIC(15,2) DEFAULT 0",
+                "payment_date TIMESTAMP",
+                "received_date TIMESTAMP",
+                "recon_status VARCHAR(50)",
+                "variance_amount NUMERIC(15,2) DEFAULT 0",
+                "audit_trail JSONB",
+                "created_by BIGINT",
+                "updated_by BIGINT"
+        );
+
+        for (String column : invoiceColumns) {
+            String columnName = column.split(" ")[0];
+            String sql = String.format("ALTER TABLE invoice ADD COLUMN IF NOT EXISTS %s;", column);
+            jdbcTemplate.execute(sql);
+            logger.info("Ensured column on invoice: {}", columnName);
+        }
+
+        jdbcTemplate.execute("""
+            CREATE TABLE IF NOT EXISTS invoice_item (
+                id BIGSERIAL PRIMARY KEY,
+                invoice_id BIGINT NOT NULL,
+                description TEXT NOT NULL,
+                quantity NUMERIC(15,2) DEFAULT 1,
+                unit_price NUMERIC(15,2) DEFAULT 0,
+                tax_rate NUMERIC(5,2) DEFAULT 15.00,
+                line_total NUMERIC(15,2) DEFAULT 0,
+                tax_amount NUMERIC(15,2) DEFAULT 0,
+                trip_id BIGINT,
+                load_id VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT fk_invoice_item_invoice FOREIGN KEY (invoice_id) REFERENCES invoice(id) ON DELETE CASCADE
+            );
+        """);
+    }
+
+    private void normalizeIdColumnType(String tableName, String columnName, String targetType) {
+        try {
+            String currentType = jdbcTemplate.queryForObject(
+                    "SELECT data_type FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?",
+                    String.class,
+                    tableName,
+                    columnName
+            );
+
+            if (currentType != null && !currentType.equalsIgnoreCase(targetType)) {
+                String castExpression = columnName + "::" + targetType.toLowerCase();
+                jdbcTemplate.execute(String.format("ALTER TABLE %s ALTER COLUMN %s TYPE %s USING %s;",
+                        tableName, columnName, targetType, castExpression));
+                logger.info("Normalized {}.{} from {} to {}", tableName, columnName, currentType, targetType);
+            }
+        } catch (Exception e) {
+            logger.warn("Could not normalize {}.{} to {}: {}", tableName, columnName, targetType, e.getMessage());
+        }
+    }
+
+    private void normalizeJsonColumnType(String tableName, String columnName) {
+        try {
+            String currentType = jdbcTemplate.queryForObject(
+                    "SELECT data_type FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?",
+                    String.class,
+                    tableName,
+                    columnName
+            );
+
+            if (currentType != null && !"jsonb".equalsIgnoreCase(currentType)) {
+                jdbcTemplate.execute(String.format("ALTER TABLE %s ALTER COLUMN %s TYPE JSONB USING %s::jsonb;",
+                        tableName, columnName, columnName));
+                logger.info("Normalized {}.{} from {} to JSONB", tableName, columnName, currentType);
+            }
+        } catch (Exception e) {
+            logger.warn("Could not normalize {}.{} to JSONB: {}", tableName, columnName, e.getMessage());
+        }
+    }
+
     /* ===================== TABLE CREATION ===================== */
     private void createTables() {
         logger.info("Creating tables...");
+
+        jdbcTemplate.execute("""
+            CREATE TABLE IF NOT EXISTS enum_master (
+                id BIGSERIAL PRIMARY KEY,
+                module_name VARCHAR(50) NOT NULL,
+                category VARCHAR(50) NOT NULL,
+                code VARCHAR(50) NOT NULL,
+                display_name VARCHAR(100) NOT NULL,
+                description TEXT,
+                sort_order INTEGER DEFAULT 0,
+                is_default BOOLEAN DEFAULT FALSE,
+                is_active BOOLEAN DEFAULT TRUE,
+                is_system BOOLEAN DEFAULT FALSE,
+                is_editable BOOLEAN DEFAULT TRUE,
+                is_deletable BOOLEAN DEFAULT TRUE,
+                color_code VARCHAR(7),
+                icon_name VARCHAR(50),
+                metadata JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_by VARCHAR(100),
+                updated_by VARCHAR(100),
+                CHECK (id IS NOT NULL),
+                CHECK (module_name IS NOT NULL),
+                CHECK (category IS NOT NULL),
+                CHECK (code IS NOT NULL),
+                CHECK (display_name IS NOT NULL)
+            );
+        """);
 
         // Create app_user table with all columns from production
         jdbcTemplate.execute("""
@@ -727,34 +884,71 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create invoice table
+        // Create invoice table with the columns used by the JPA finance entities
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS invoice (
                 id BIGSERIAL PRIMARY KEY,
                 invoice_number VARCHAR(100) NOT NULL,
+                invoice_type VARCHAR(50) DEFAULT 'RECEIVABLE',
                 supplier_id BIGINT,
+                customer_id BIGINT,
+                customer_name VARCHAR(200),
+                customer_email VARCHAR(200),
+                customer_address TEXT,
                 account_id BIGINT,
                 trip_id BIGINT,
                 load_id BIGINT,
-                invoice_date DATE NOT NULL,
-                due_date DATE,
-                total_amount DECIMAL(15,2) NOT NULL,
-                tax_amount DECIMAL(15,2) DEFAULT 0,
-                net_amount DECIMAL(15,2),
-                status invoice_status DEFAULT 'PENDING',
+                invoice_date TIMESTAMP,
+                due_date TIMESTAMP,
                 description TEXT,
+                currency VARCHAR(10) DEFAULT 'ZAR',
+                subtotal DECIMAL(15,2) DEFAULT 0,
+                tax_total DECIMAL(15,2) DEFAULT 0,
+                total_amount DECIMAL(15,2) DEFAULT 0,
+                vat_rate DECIMAL(5,2) DEFAULT 15.00,
+                paid_amount DECIMAL(15,2) DEFAULT 0,
+                status VARCHAR(50) DEFAULT 'DRAFT',
+                source VARCHAR(50) DEFAULT 'MANUAL',
+                reference_id VARCHAR(50),
+                notes TEXT,
+                tax_amount DECIMAL(15,2) DEFAULT 0,
+                net_amount DECIMAL(15,2) DEFAULT 0,
+                payment_date TIMESTAMP,
+                received_date TIMESTAMP,
+                recon_status VARCHAR(50),
+                variance_amount DECIMAL(15,2) DEFAULT 0,
+                audit_trail JSONB,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                created_by VARCHAR(255),
-                updated_by VARCHAR(255),
+                created_by BIGINT,
+                updated_by BIGINT,
                 CHECK (id IS NOT NULL),
-                CHECK (invoice_number IS NOT NULL),
-                CHECK (invoice_date IS NOT NULL),
-                CHECK (total_amount IS NOT NULL)
+                CHECK (invoice_number IS NOT NULL)
             );
         """);
 
-        // Create payment table
+        // Matching child table for invoice line items used by the billing flow
+        jdbcTemplate.execute("""
+            CREATE TABLE IF NOT EXISTS invoice_item (
+                id BIGSERIAL PRIMARY KEY,
+                invoice_id BIGINT NOT NULL,
+                description TEXT NOT NULL,
+                quantity DECIMAL(15,2) DEFAULT 1,
+                unit_price DECIMAL(15,2) DEFAULT 0,
+                tax_rate DECIMAL(5,2) DEFAULT 15.00,
+                line_total DECIMAL(15,2) DEFAULT 0,
+                tax_amount DECIMAL(15,2) DEFAULT 0,
+                trip_id BIGINT,
+                load_id VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT fk_invoice_item_invoice FOREIGN KEY (invoice_id) REFERENCES invoice(id) ON DELETE CASCADE
+            );
+        """);
+
+        ensureInvoiceSchema();
+
+        // Create payment table (no additional columns from production)
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS payment (
                 id BIGSERIAL PRIMARY KEY,
@@ -824,7 +1018,6 @@ public class DatabaseInitializer implements CommandLineRunner {
     /* ===================== FINANCE VIEWS ===================== */
     private void createFinanceViews() {
         logger.info("Creating finance reconciliation views...");
-
         // Drop all views before recreating so column type/name/order changes are allowed.
         // PostgreSQL CREATE OR REPLACE VIEW cannot change column types/order, so we drop first.
         jdbcTemplate.execute("DROP VIEW IF EXISTS finance_reconciliation_pending CASCADE");
@@ -846,10 +1039,10 @@ public class DatabaseInitializer implements CommandLineRunner {
                 at.transaction_date,
                 CONCAT(at.source_type, ' - ', at.description) AS transaction_type,
                 at.source_id,
-                at.amount,
+                CAST(at.amount AS NUMERIC(15,2)) AS amount,
                 at.direction,
                 at.description,
-                ast.variance_amount
+                CAST(ast.variance_amount AS NUMERIC(15,2)) AS variance_amount
             FROM account a
             LEFT JOIN account_statement ast ON a.id = ast.account_id
             LEFT JOIN account_transaction at ON a.id = at.account_id
@@ -871,7 +1064,7 @@ public class DatabaseInitializer implements CommandLineRunner {
                 at.transaction_date,
                 CONCAT(at.source_type, ' - ', at.description) AS transaction_type,
                 at.source_id,
-                at.amount,
+                CAST(at.amount AS NUMERIC(15,2)) AS amount,
                 at.direction,
                 at.description,
                 SUM(CASE
@@ -895,7 +1088,7 @@ public class DatabaseInitializer implements CommandLineRunner {
                 at.transaction_date,
                 CONCAT(at.source_type, ' - ', at.description) AS transaction_type,
                 at.source_id,
-                at.amount,
+                CAST(at.amount AS NUMERIC(15,2)) AS amount,
                 at.direction,
                 at.description,
                 rb.running_balance,
@@ -952,27 +1145,27 @@ public class DatabaseInitializer implements CommandLineRunner {
     private void createConstraints() {
         logger.info("Creating unique and foreign key constraints...");
 
-        // ---- Unique constraints ----
-        addConstraint("app_user",           "app_user_email_key",                          "UNIQUE (email)");
-        addConstraint("role",               "role_name_key",                               "UNIQUE (name)");
-        addConstraint("permission",         "permission_resource_action_key",              "UNIQUE (resource, action)");
-        addConstraint("account",            "account_name_key",                            "UNIQUE (name)");
-        addConstraint("suppliers",          "suppliers_name_key",                          "UNIQUE (name)");
-        addConstraint("driver",             "driver_license_number_key",                   "UNIQUE (license_number)");
-        addConstraint("vehicle",            "vehicle_registration_number_key",             "UNIQUE (registration_number)");
-        addConstraint("vehicle",            "vehicle_vin_key",                             "UNIQUE (vin)");
-        addConstraint("load",               "load_load_number_key",                        "UNIQUE (load_number)");
-        addConstraint("trip",               "trip_trip_number_key",                        "UNIQUE (trip_number)");
-        addConstraint("account_statement",  "account_statement_account_id_statement_date_key", "UNIQUE (account_id, statement_date)");
-        addConstraint("fuel_source",        "fuel_source_name_key",                        "UNIQUE (name)");
-        addConstraint("fuel_slip",          "fuel_slip_slip_number_key",                   "UNIQUE (slip_number)");
-        addConstraint("inventory_location", "inventory_location_name_key",                 "UNIQUE (name)");
-        addConstraint("inventory_item",     "inventory_item_sku_key",                      "UNIQUE (sku)");
-        addConstraint("driver_metrics",     "driver_metrics_driver_id_metric_date_key",    "UNIQUE (driver_id, metric_date)");
-        addConstraint("vehicle_metrics",    "vehicle_metrics_vehicle_id_metric_date_key",  "UNIQUE (vehicle_id, metric_date)");
-        addConstraint("invoice",            "invoice_invoice_number_key",                  "UNIQUE (invoice_number)");
+        // Unique constraints
+        addConstraint("app_user", "app_user_email_key", "UNIQUE (email)");
+        addConstraint("role", "role_name_key", "UNIQUE (name)");
+        addConstraint("permission", "permission_resource_action_key", "UNIQUE (resource, action)");
+        addConstraint("account", "account_name_key", "UNIQUE (name)");
+        addConstraint("suppliers", "suppliers_name_key", "UNIQUE (name)");
+        addConstraint("driver", "driver_license_number_key", "UNIQUE (license_number)");
+        addConstraint("vehicle", "vehicle_registration_number_key", "UNIQUE (registration_number)");
+        addConstraint("vehicle", "vehicle_vin_key", "UNIQUE (vin)");
+        addConstraint("load", "load_load_number_key", "UNIQUE (load_number)");
+        addConstraint("trip", "trip_trip_number_key", "UNIQUE (trip_number)");
+        addConstraint("account_statement", "account_statement_account_id_statement_date_key", "UNIQUE (account_id, statement_date)");
+        addConstraint("fuel_source", "fuel_source_name_key", "UNIQUE (name)");
+        addConstraint("fuel_slip", "fuel_slip_slip_number_key", "UNIQUE (slip_number)");
+        addConstraint("inventory_location", "inventory_location_name_key", "UNIQUE (name)");
+        addConstraint("inventory_item", "inventory_item_sku_key", "UNIQUE (sku)");
+        addConstraint("driver_metrics", "driver_metrics_driver_id_metric_date_key", "UNIQUE (driver_id, metric_date)");
+        addConstraint("vehicle_metrics", "vehicle_metrics_vehicle_id_metric_date_key", "UNIQUE (vehicle_id, metric_date)");
+        addConstraint("invoice", "invoice_invoice_number_key", "UNIQUE (invoice_number)");
 
-        // ---- Foreign key constraints ----
+        // Foreign key constraints
         addConstraint("user_role", "user_role_user_id_fkey",
                 "FOREIGN KEY (user_id) REFERENCES app_user(id) ON DELETE CASCADE");
         addConstraint("user_role", "user_role_role_id_fkey",

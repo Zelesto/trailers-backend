@@ -1,5 +1,7 @@
 package com.pgsa.trailers.entity.finance;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -13,11 +15,13 @@ import java.math.RoundingMode;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "invoice_item")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class InvoiceItem {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @JsonBackReference("invoice-items")
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "invoice_id", nullable = false)
     private Invoice invoice;

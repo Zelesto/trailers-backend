@@ -36,6 +36,7 @@ public class InvoiceBillingService {
     private final LoadRepository loadRepository;
     private final CustomerRepository customerRepository;
     private final TripRepository tripRepository;
+    private final BillingCalculatorService billingCalculatorService;
 
     /**
      * Generate an invoice from a Load's billing
@@ -48,7 +49,7 @@ public class InvoiceBillingService {
                 .orElseThrow(() -> new RuntimeException("Load not found: " + loadId));
 
         LoadBilling loadBilling = loadBillingRepository.findByLoadId(loadId)
-                .orElseThrow(() -> new RuntimeException("Load billing not found for: " + loadId));
+                .orElseGet(() -> billingCalculatorService.recalculateLoadBilling(loadId, userId));
 
         Customer customer = customerRepository.findById(loadBilling.getCustomerId())
                 .orElseThrow(() -> new RuntimeException("Customer not found"));
@@ -238,6 +239,7 @@ private LoadBilling createLoadBillingFromTrips(String loadId) {
         invoice.setCustomerName(customer.getName());
         invoice.setCustomerEmail(customer.getEmail());
         invoice.setCustomerAddress(buildCustomerAddress(customer));
+        invoice.setLoadId(load.getId());
         invoice.setInvoiceDate(LocalDateTime.now());
         invoice.setDueDate(LocalDateTime.now().plusDays(30));
         invoice.setCurrency("ZAR");
@@ -255,6 +257,7 @@ private LoadBilling createLoadBillingFromTrips(String loadId) {
         invoice.setCustomerName(customer.getName());
         invoice.setCustomerEmail(customer.getEmail());
         invoice.setCustomerAddress(buildCustomerAddress(customer));
+        invoice.setTripId(trip.getId());
         invoice.setInvoiceDate(LocalDateTime.now());
         invoice.setDueDate(LocalDateTime.now().plusDays(30));
         invoice.setCurrency("ZAR");
@@ -284,6 +287,7 @@ private LoadBilling createLoadBillingFromTrips(String loadId) {
             item.setTaxAmount(tb.getVat());
             item.setInvoice(invoice);
             item.setTripId(trip.getId());
+            item.setLoadId(trip.getLoadId());
             items.add(item);
         }
         return items;
@@ -303,6 +307,7 @@ private LoadBilling createLoadBillingFromTrips(String loadId) {
         summaryItem.setLineTotal(loadBilling.getSubtotal());
         summaryItem.setTaxAmount(loadBilling.getVat());
         summaryItem.setInvoice(invoice);
+        summaryItem.setLoadId(loadId);
         return summaryItem;
     }
 
@@ -323,6 +328,8 @@ private LoadBilling createLoadBillingFromTrips(String loadId) {
             distItem.setLineTotal(tripBilling.getDistanceCharge());
             distItem.setTaxAmount(tripBilling.getDistanceCharge().multiply(new BigDecimal("0.15")));
             distItem.setInvoice(invoice);
+            distItem.setTripId(tripBilling.getTrip() != null ? tripBilling.getTrip().getId() : null);
+            distItem.setLoadId(tripBilling.getTrip() != null ? tripBilling.getTrip().getLoadId() : null);
             items.add(distItem);
         }
 
@@ -339,6 +346,8 @@ private LoadBilling createLoadBillingFromTrips(String loadId) {
             tonItem.setLineTotal(tripBilling.getTonnageCharge());
             tonItem.setTaxAmount(tripBilling.getTonnageCharge().multiply(new BigDecimal("0.15")));
             tonItem.setInvoice(invoice);
+            tonItem.setTripId(tripBilling.getTrip() != null ? tripBilling.getTrip().getId() : null);
+            tonItem.setLoadId(tripBilling.getTrip() != null ? tripBilling.getTrip().getLoadId() : null);
             items.add(tonItem);
         }
 
@@ -355,6 +364,8 @@ private LoadBilling createLoadBillingFromTrips(String loadId) {
             dailyItem.setLineTotal(tripBilling.getDailyRateCharge());
             dailyItem.setTaxAmount(tripBilling.getDailyRateCharge().multiply(new BigDecimal("0.15")));
             dailyItem.setInvoice(invoice);
+            dailyItem.setTripId(tripBilling.getTrip() != null ? tripBilling.getTrip().getId() : null);
+            dailyItem.setLoadId(tripBilling.getTrip() != null ? tripBilling.getTrip().getLoadId() : null);
             items.add(dailyItem);
         }
 
@@ -371,6 +382,8 @@ private LoadBilling createLoadBillingFromTrips(String loadId) {
             labourItem.setLineTotal(tripBilling.getLabourCharge());
             labourItem.setTaxAmount(tripBilling.getLabourCharge().multiply(new BigDecimal("0.15")));
             labourItem.setInvoice(invoice);
+            labourItem.setTripId(tripBilling.getTrip() != null ? tripBilling.getTrip().getId() : null);
+            labourItem.setLoadId(tripBilling.getTrip() != null ? tripBilling.getTrip().getLoadId() : null);
             items.add(labourItem);
         }
 
@@ -384,6 +397,8 @@ private LoadBilling createLoadBillingFromTrips(String loadId) {
             fixedItem.setLineTotal(tripBilling.getFixedSurcharge());
             fixedItem.setTaxAmount(tripBilling.getFixedSurcharge().multiply(new BigDecimal("0.15")));
             fixedItem.setInvoice(invoice);
+            fixedItem.setTripId(tripBilling.getTrip() != null ? tripBilling.getTrip().getId() : null);
+            fixedItem.setLoadId(tripBilling.getTrip() != null ? tripBilling.getTrip().getLoadId() : null);
             items.add(fixedItem);
         }
 

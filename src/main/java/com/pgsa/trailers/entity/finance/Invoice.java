@@ -1,14 +1,19 @@
 package com.pgsa.trailers.entity.finance;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
+import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
+import org.hibernate.annotations.Type;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Entity
@@ -106,8 +111,9 @@ public class Invoice {
     @Column(name = "variance_amount", precision = 15, scale = 2)
     private BigDecimal varianceAmount = BigDecimal.ZERO;
 
+    @Type(JsonType.class)
     @Column(name = "audit_trail", columnDefinition = "jsonb")
-    private String auditTrail;
+    private Map<String, Object> auditTrail = new HashMap<>();
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -121,6 +127,7 @@ public class Invoice {
     @Column(name = "updated_by")
     private Long updatedBy;
 
+    @JsonManagedReference("invoice-items")
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<InvoiceItem> items = new ArrayList<>();
 

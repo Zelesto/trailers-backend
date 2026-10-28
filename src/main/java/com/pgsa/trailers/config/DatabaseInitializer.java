@@ -106,6 +106,7 @@ public class DatabaseInitializer implements CommandLineRunner {
                 DROP TABLE IF EXISTS permission CASCADE;
                 DROP TABLE IF EXISTS role CASCADE;
                 DROP TABLE IF EXISTS app_user CASCADE;
+                DROP TABLE IF EXISTS enum_master CASCADE;
 
                 -- Drop enums
                 DROP TYPE IF EXISTS account_type CASCADE;
@@ -195,9 +196,144 @@ public class DatabaseInitializer implements CommandLineRunner {
         }
     }
 
+    private void ensureInvoiceSchema() {
+        logger.info("Ensuring invoice tables match the JPA schema...");
+
+        try {
+            String statusType = jdbcTemplate.queryForObject(
+                    "SELECT udt_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'invoice' AND column_name = 'status'",
+                    String.class
+            );
+
+            if (statusType != null && "invoice_status".equalsIgnoreCase(statusType)) {
+                jdbcTemplate.execute("ALTER TABLE invoice ALTER COLUMN status TYPE VARCHAR(50) USING status::text;");
+                logger.info("Converted invoice.status from enum invoice_status to VARCHAR(50) to match the JPA entity.");
+            }
+        } catch (Exception e) {
+            logger.warn("Could not normalize invoice.status to varchar: {}", e.getMessage());
+        }
+
+        List<String> numericIdColumns = List.of(
+                "supplier_id",
+                "customer_id",
+                "account_id",
+                "load_id",
+                "trip_id",
+                "created_by",
+                "updated_by"
+        );
+
+        for (String columnName : numericIdColumns) {
+            normalizeIdColumnType("invoice", columnName, "BIGINT");
+        }
+
+        List<String> invoiceColumns = List.of(
+                "invoice_type VARCHAR(50) DEFAULT 'RECEIVABLE'",
+                "customer_id BIGINT",
+                "customer_name VARCHAR(200)",
+                "customer_email VARCHAR(200)",
+                "customer_address TEXT",
+                "currency VARCHAR(10) DEFAULT 'ZAR'",
+                "subtotal NUMERIC(15,2) DEFAULT 0",
+                "tax_total NUMERIC(15,2) DEFAULT 0",
+                "total_amount NUMERIC(15,2) DEFAULT 0",
+                "vat_rate NUMERIC(5,2) DEFAULT 15.00",
+                "paid_amount NUMERIC(15,2) DEFAULT 0",
+                "source VARCHAR(50) DEFAULT 'MANUAL'",
+                "reference_id VARCHAR(50)",
+                "notes TEXT",
+                "account_id BIGINT",
+                "load_id BIGINT",
+                "trip_id BIGINT",
+                "tax_amount NUMERIC(15,2) DEFAULT 0",
+                "net_amount NUMERIC(15,2) DEFAULT 0",
+                "payment_date TIMESTAMP",
+                "received_date TIMESTAMP",
+                "recon_status VARCHAR(50)",
+                "variance_amount NUMERIC(15,2) DEFAULT 0",
+                "audit_trail JSONB",
+                "created_by BIGINT",
+                "updated_by BIGINT"
+        );
+
+        for (String column : invoiceColumns) {
+            String columnName = column.split(" ")[0];
+            String sql = String.format("ALTER TABLE invoice ADD COLUMN IF NOT EXISTS %s;", column);
+            jdbcTemplate.execute(sql);
+            logger.info("Ensured column on invoice: {}", columnName);
+        }
+
+        jdbcTemplate.execute("""
+            CREATE TABLE IF NOT EXISTS invoice_item (
+                id BIGSERIAL PRIMARY KEY,
+                invoice_id BIGINT NOT NULL,
+                description TEXT NOT NULL,
+                quantity NUMERIC(15,2) DEFAULT 1,
+                unit_price NUMERIC(15,2) DEFAULT 0,
+                tax_rate NUMERIC(5,2) DEFAULT 15.00,
+                line_total NUMERIC(15,2) DEFAULT 0,
+                tax_amount NUMERIC(15,2) DEFAULT 0,
+                trip_id BIGINT,
+                load_id VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT fk_invoice_item_invoice FOREIGN KEY (invoice_id) REFERENCES invoice(id) ON DELETE CASCADE
+            );
+        """);
+    }
+
+    private void normalizeIdColumnType(String tableName, String columnName, String targetType) {
+        try {
+            String currentType = jdbcTemplate.queryForObject(
+                    "SELECT data_type FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?",
+                    String.class,
+                    tableName,
+                    columnName
+            );
+
+            if (currentType != null && !currentType.equalsIgnoreCase(targetType)) {
+                String castExpression = columnName + "::" + targetType.toLowerCase();
+                jdbcTemplate.execute(String.format("ALTER TABLE %s ALTER COLUMN %s TYPE %s USING %s;",
+                        tableName, columnName, targetType, castExpression));
+                logger.info("Normalized {}.{} from {} to {}", tableName, columnName, currentType, targetType);
+            }
+        } catch (Exception e) {
+            logger.warn("Could not normalize {}.{} to {}: {}", tableName, columnName, targetType, e.getMessage());
+        }
+    }
+
     /* ===================== TABLE CREATION ===================== */
     private void createTables() {
         logger.info("Creating tables...");
+
+        jdbcTemplate.execute("""
+            CREATE TABLE IF NOT EXISTS enum_master (
+                id BIGSERIAL PRIMARY KEY,
+                module_name VARCHAR(50) NOT NULL,
+                category VARCHAR(50) NOT NULL,
+                code VARCHAR(50) NOT NULL,
+                display_name VARCHAR(100) NOT NULL,
+                description TEXT,
+                sort_order INTEGER DEFAULT 0,
+                is_default BOOLEAN DEFAULT FALSE,
+                is_active BOOLEAN DEFAULT TRUE,
+                is_system BOOLEAN DEFAULT FALSE,
+                is_editable BOOLEAN DEFAULT TRUE,
+                is_deletable BOOLEAN DEFAULT TRUE,
+                color_code VARCHAR(7),
+                icon_name VARCHAR(50),
+                metadata JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_by VARCHAR(100),
+                updated_by VARCHAR(100),
+                CHECK (id IS NOT NULL),
+                CHECK (module_name IS NOT NULL),
+                CHECK (category IS NOT NULL),
+                CHECK (code IS NOT NULL),
+                CHECK (display_name IS NOT NULL)
+            );
+        """);
 
         // Create app_user table with all columns from production
         jdbcTemplate.execute("""
@@ -715,32 +851,69 @@ public class DatabaseInitializer implements CommandLineRunner {
             );
         """);
 
-        // Create invoice table (no additional columns from production)
+        // Create invoice table with the columns used by the JPA finance entities
         jdbcTemplate.execute("""
             CREATE TABLE IF NOT EXISTS invoice (
                 id BIGSERIAL PRIMARY KEY,
                 invoice_number VARCHAR(100) NOT NULL,
+                invoice_type VARCHAR(50) DEFAULT 'RECEIVABLE',
                 supplier_id BIGINT,
+                customer_id BIGINT,
+                customer_name VARCHAR(200),
+                customer_email VARCHAR(200),
+                customer_address TEXT,
                 account_id BIGINT,
                 trip_id BIGINT,
                 load_id BIGINT,
-                invoice_date DATE NOT NULL,
-                due_date DATE,
-                total_amount DECIMAL(15,2) NOT NULL,
-                tax_amount DECIMAL(15,2) DEFAULT 0,
-                net_amount DECIMAL(15,2),
-                status invoice_status DEFAULT 'PENDING',
+                invoice_date TIMESTAMP,
+                due_date TIMESTAMP,
                 description TEXT,
+                currency VARCHAR(10) DEFAULT 'ZAR',
+                subtotal DECIMAL(15,2) DEFAULT 0,
+                tax_total DECIMAL(15,2) DEFAULT 0,
+                total_amount DECIMAL(15,2) DEFAULT 0,
+                vat_rate DECIMAL(5,2) DEFAULT 15.00,
+                paid_amount DECIMAL(15,2) DEFAULT 0,
+                status VARCHAR(50) DEFAULT 'DRAFT',
+                source VARCHAR(50) DEFAULT 'MANUAL',
+                reference_id VARCHAR(50),
+                notes TEXT,
+                tax_amount DECIMAL(15,2) DEFAULT 0,
+                net_amount DECIMAL(15,2) DEFAULT 0,
+                payment_date TIMESTAMP,
+                received_date TIMESTAMP,
+                recon_status VARCHAR(50),
+                variance_amount DECIMAL(15,2) DEFAULT 0,
+                audit_trail JSONB,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                created_by VARCHAR(255),
-                updated_by VARCHAR(255),
+                created_by BIGINT,
+                updated_by BIGINT,
                 CHECK (id IS NOT NULL),
-                CHECK (invoice_number IS NOT NULL),
-                CHECK (invoice_date IS NOT NULL),
-                CHECK (total_amount IS NOT NULL)
+                CHECK (invoice_number IS NOT NULL)
             );
         """);
+
+        // Matching child table for invoice line items used by the billing flow
+        jdbcTemplate.execute("""
+            CREATE TABLE IF NOT EXISTS invoice_item (
+                id BIGSERIAL PRIMARY KEY,
+                invoice_id BIGINT NOT NULL,
+                description TEXT NOT NULL,
+                quantity DECIMAL(15,2) DEFAULT 1,
+                unit_price DECIMAL(15,2) DEFAULT 0,
+                tax_rate DECIMAL(5,2) DEFAULT 15.00,
+                line_total DECIMAL(15,2) DEFAULT 0,
+                tax_amount DECIMAL(15,2) DEFAULT 0,
+                trip_id BIGINT,
+                load_id VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT fk_invoice_item_invoice FOREIGN KEY (invoice_id) REFERENCES invoice(id) ON DELETE CASCADE
+            );
+        """);
+
+        ensureInvoiceSchema();
 
         // Create payment table (no additional columns from production)
         jdbcTemplate.execute("""
@@ -812,9 +985,13 @@ public class DatabaseInitializer implements CommandLineRunner {
     private void createFinanceViews() {
         logger.info("Creating finance reconciliation views...");
 
+        jdbcTemplate.execute("DROP VIEW IF EXISTS finance_reconciliation_pending CASCADE;");
+        jdbcTemplate.execute("DROP VIEW IF EXISTS finance_reconciliation_running_balance CASCADE;");
+        jdbcTemplate.execute("DROP VIEW IF EXISTS finance_reconciliation_view CASCADE;");
+
         // Create finance_reconciliation_view
         jdbcTemplate.execute("""
-            CREATE OR REPLACE VIEW finance_reconciliation_view AS
+            CREATE VIEW finance_reconciliation_view AS
             SELECT 
                 a.id as account_id,
                 a.name as account_name,
@@ -828,10 +1005,10 @@ public class DatabaseInitializer implements CommandLineRunner {
                 at.transaction_date,
                 CONCAT(at.source_type, ' - ', at.description) as transaction_type,
                 at.source_id,
-                at.amount,
+                CAST(at.amount AS NUMERIC(15,2)) as amount,
                 at.direction,
                 at.description,
-                ast.variance_amount
+                CAST(ast.variance_amount AS NUMERIC(15,2)) as variance_amount
             FROM account a
             LEFT JOIN account_statement ast ON a.id = ast.account_id
             LEFT JOIN account_transaction at ON a.id = at.account_id 
@@ -841,7 +1018,7 @@ public class DatabaseInitializer implements CommandLineRunner {
 
         // Create finance_reconciliation_running_balance view
         jdbcTemplate.execute("""
-            CREATE OR REPLACE VIEW finance_reconciliation_running_balance AS
+            CREATE VIEW finance_reconciliation_running_balance AS
             SELECT 
                 a.id as account_id,
                 a.name as account_name,
@@ -855,15 +1032,18 @@ public class DatabaseInitializer implements CommandLineRunner {
                 at.transaction_date,
                 CONCAT(at.source_type, ' - ', at.description) as transaction_type,
                 at.source_id,
-                at.amount,
+                CAST(at.amount AS NUMERIC(15,2)) as amount,
                 at.direction,
                 at.description,
-                SUM(CASE 
-                    WHEN at.direction = 'DEBIT' THEN -at.amount 
-                    WHEN at.direction = 'CREDIT' THEN at.amount 
-                    ELSE 0 
-                END) OVER (PARTITION BY a.id ORDER BY at.transaction_date) as running_balance,
-                ast.variance_amount
+                CAST(
+                    SUM(CASE 
+                        WHEN at.direction = 'DEBIT' THEN -at.amount 
+                        WHEN at.direction = 'CREDIT' THEN at.amount 
+                        ELSE 0 
+                    END) OVER (PARTITION BY a.id ORDER BY at.transaction_date)
+                    AS NUMERIC(15,2)
+                ) as running_balance,
+                CAST(ast.variance_amount AS NUMERIC(15,2)) as variance_amount
             FROM account a
             LEFT JOIN account_statement ast ON a.id = ast.account_id
             LEFT JOIN account_transaction at ON a.id = at.account_id 
@@ -873,7 +1053,7 @@ public class DatabaseInitializer implements CommandLineRunner {
 
         // Create finance_reconciliation_pending view
         jdbcTemplate.execute("""
-            CREATE OR REPLACE VIEW finance_reconciliation_pending AS
+            CREATE VIEW finance_reconciliation_pending AS
             SELECT 
                 a.id as account_id,
                 a.name as account_name,
@@ -881,13 +1061,13 @@ public class DatabaseInitializer implements CommandLineRunner {
                 at.transaction_date,
                 CONCAT(at.source_type, ' - ', at.description) as transaction_type,
                 at.source_id,
-                at.amount,
+                CAST(at.amount AS NUMERIC(15,2)) as amount,
                 at.direction,
                 at.description,
-                rb.running_balance,
-                ast.closing_balance as last_closing_balance,
-                a.balance as system_balance,
-                COALESCE(ast.closing_balance, 0) + rb.running_balance as projected_closing_balance,
+                CAST(rb.running_balance AS NUMERIC(15,2)) as running_balance,
+                CAST(ast.closing_balance AS NUMERIC(15,2)) as last_closing_balance,
+                CAST(a.balance AS NUMERIC(15,2)) as system_balance,
+                CAST(COALESCE(ast.closing_balance, 0) + rb.running_balance AS NUMERIC(15,2)) as projected_closing_balance,
                 CASE 
                     WHEN at.account_statement_id IS NULL THEN TRUE 
                     ELSE FALSE 
@@ -903,11 +1083,14 @@ public class DatabaseInitializer implements CommandLineRunner {
             LEFT JOIN account_transaction at ON a.id = at.account_id
             LEFT JOIN LATERAL (
                 SELECT 
-                    SUM(CASE 
-                        WHEN at2.direction = 'DEBIT' THEN -at2.amount 
-                        WHEN at2.direction = 'CREDIT' THEN at2.amount 
-                        ELSE 0 
-                    END) as running_balance
+                    CAST(
+                        SUM(CASE 
+                            WHEN at2.direction = 'DEBIT' THEN -at2.amount 
+                            WHEN at2.direction = 'CREDIT' THEN at2.amount 
+                            ELSE 0 
+                        END)
+                        AS NUMERIC(15,2)
+                    ) as running_balance
                 FROM account_transaction at2
                 WHERE at2.account_id = a.id 
                     AND at2.transaction_date > COALESCE(ast.statement_date, '1900-01-01')
@@ -922,193 +1105,111 @@ public class DatabaseInitializer implements CommandLineRunner {
     private void createConstraints() {
         logger.info("Creating unique and foreign key constraints...");
 
-        // Unique constraints
-        jdbcTemplate.execute("""
-            -- app_user
-            ALTER TABLE app_user ADD CONSTRAINT IF NOT EXISTS app_user_email_key UNIQUE (email);
-            
-            -- role
-            ALTER TABLE role ADD CONSTRAINT IF NOT EXISTS role_name_key UNIQUE (name);
-            
-            -- permission
-            ALTER TABLE permission ADD CONSTRAINT IF NOT EXISTS permission_resource_action_key UNIQUE (resource, action);
-            
-            -- account
-            ALTER TABLE account ADD CONSTRAINT IF NOT EXISTS account_name_key UNIQUE (name);
-            
-            -- suppliers
-            ALTER TABLE suppliers ADD CONSTRAINT IF NOT EXISTS suppliers_name_key UNIQUE (name);
-            
-            -- driver
-            ALTER TABLE driver ADD CONSTRAINT IF NOT EXISTS driver_license_number_key UNIQUE (license_number);
-            
-            -- vehicle
-            ALTER TABLE vehicle ADD CONSTRAINT IF NOT EXISTS vehicle_registration_number_key UNIQUE (registration_number);
-            ALTER TABLE vehicle ADD CONSTRAINT IF NOT EXISTS vehicle_vin_key UNIQUE (vin);
-            
-            -- load
-            ALTER TABLE load ADD CONSTRAINT IF NOT EXISTS load_load_number_key UNIQUE (load_number);
-            
-            -- trip
-            ALTER TABLE trip ADD CONSTRAINT IF NOT EXISTS trip_trip_number_key UNIQUE (trip_number);
-            
-            -- account_statement
-            ALTER TABLE account_statement ADD CONSTRAINT IF NOT EXISTS account_statement_account_id_statement_date_key UNIQUE (account_id, statement_date);
-            
-            -- fuel_source
-            ALTER TABLE fuel_source ADD CONSTRAINT IF NOT EXISTS fuel_source_name_key UNIQUE (name);
-            
-            -- fuel_slip
-            ALTER TABLE fuel_slip ADD CONSTRAINT IF NOT EXISTS fuel_slip_slip_number_key UNIQUE (slip_number);
-            
-            -- inventory_location
-            ALTER TABLE inventory_location ADD CONSTRAINT IF NOT EXISTS inventory_location_name_key UNIQUE (name);
-            
-            -- inventory_item
-            ALTER TABLE inventory_item ADD CONSTRAINT IF NOT EXISTS inventory_item_sku_key UNIQUE (sku);
-            
-            -- driver_metrics
-            ALTER TABLE driver_metrics ADD CONSTRAINT IF NOT EXISTS driver_metrics_driver_id_metric_date_key UNIQUE (driver_id, metric_date);
-            
-            -- vehicle_metrics
-            ALTER TABLE vehicle_metrics ADD CONSTRAINT IF NOT EXISTS vehicle_metrics_vehicle_id_metric_date_key UNIQUE (vehicle_id, metric_date);
-            
-            -- invoice
-            ALTER TABLE invoice ADD CONSTRAINT IF NOT EXISTS invoice_invoice_number_key UNIQUE (invoice_number);
-        """);
+        ensureUniqueConstraint("enum_master", new String[]{"module_name", "category", "code"}, "uk_enum_module_category_code");
+        ensureUniqueConstraint("app_user", "email", "app_user_email_key");
+        ensureUniqueConstraint("role", "name", "role_name_key");
+        ensureUniqueConstraint("permission", new String[]{"resource", "action"}, "permission_resource_action_key");
+        ensureUniqueConstraint("account", "name", "account_name_key");
+        ensureUniqueConstraint("suppliers", "name", "suppliers_name_key");
+        ensureUniqueConstraint("driver", "license_number", "driver_license_number_key");
+        ensureUniqueConstraint("vehicle", "registration_number", "vehicle_registration_number_key");
+        ensureUniqueConstraint("vehicle", "vin", "vehicle_vin_key");
+        ensureUniqueConstraint("load", "load_number", "load_load_number_key");
+        ensureUniqueConstraint("trip", "trip_number", "trip_trip_number_key");
+        ensureUniqueConstraint("account_statement", new String[]{"account_id", "statement_date"}, "account_statement_account_id_statement_date_key");
+        ensureUniqueConstraint("fuel_source", "name", "fuel_source_name_key");
+        ensureUniqueConstraint("fuel_slip", "slip_number", "fuel_slip_slip_number_key");
+        ensureUniqueConstraint("inventory_location", "name", "inventory_location_name_key");
+        ensureUniqueConstraint("inventory_item", "sku", "inventory_item_sku_key");
+        ensureUniqueConstraint("driver_metrics", new String[]{"driver_id", "metric_date"}, "driver_metrics_driver_id_metric_date_key");
+        ensureUniqueConstraint("vehicle_metrics", new String[]{"vehicle_id", "metric_date"}, "vehicle_metrics_vehicle_id_metric_date_key");
+        ensureUniqueConstraint("invoice", "invoice_number", "invoice_invoice_number_key");
 
-        // Foreign key constraints with correct ON DELETE/UPDATE rules
+        ensureForeignKeyConstraint("user_role", "user_id", "app_user", "id", "user_role_user_id_fkey", "CASCADE");
+        ensureForeignKeyConstraint("user_role", "role_id", "role", "id", "user_role_role_id_fkey", "CASCADE");
+        ensureForeignKeyConstraint("role_permission", "role_id", "role", "id", "role_permission_role_id_fkey", "CASCADE");
+        ensureForeignKeyConstraint("role_permission", "permission_id", "permission", "id", "role_permission_permission_id_fkey", "CASCADE");
+        ensureForeignKeyConstraint("driver", "app_user_id", "app_user", "id", "fk_driver_app_user", "CASCADE");
+        ensureForeignKeyConstraint("driver", "assigned_vehicle_id", "vehicle", "id", "fk_driver_vehicle", "SET NULL");
+        ensureForeignKeyConstraint("vehicle", "assigned_driver_id", "driver", "id", "fk_vehicle_driver", "SET NULL");
+        ensureForeignKeyConstraint("account_statement", "account_id", "account", "id", "account_statement_account_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("account_statement", "account_id", "account", "id", "fk_account_statement_account", "CASCADE");
+        ensureForeignKeyConstraint("account_statement", "recon_by", "app_user", "id", "fk_account_statement_recon_by", "SET NULL");
+        ensureForeignKeyConstraint("account_transaction", "account_id", "account", "id", "account_transaction_account_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("account_transaction", "account_statement_id", "account_statement", "id", "account_transaction_account_statement_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("fuel_source", "account_id", "account", "id", "fuel_source_account_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("fuel_slip", "fuel_source_id", "fuel_source", "id", "fuel_slip_fuel_source_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("fuel_slip", "trip_id", "trip", "id", "fk_fuel_slip_trip", "SET NULL");
+        ensureForeignKeyConstraint("fuel_slip", "load_id", "load", "id", "fk_fuel_slip_load", "SET NULL");
+        ensureForeignKeyConstraint("fuel_slip", "account_statement_id", "account_statement", "id", "fk_fuel_slip_account_statement", "SET NULL");
+        ensureForeignKeyConstraint("stock_count", "location_id", "inventory_location", "id", "stock_count_location_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("stock_count_line", "stock_count_id", "stock_count", "id", "stock_count_line_stock_count_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("stock_count_line", "product_id", "inventory_item", "id", "stock_count_line_product_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("stock_movement", "product_id", "inventory_item", "id", "stock_movement_product_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("stock_movement", "from_location_id", "inventory_location", "id", "stock_movement_from_location_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("stock_movement", "to_location_id", "inventory_location", "id", "stock_movement_to_location_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("driver_metrics", "driver_id", "driver", "id", "driver_metrics_driver_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("vehicle_metrics", "vehicle_id", "vehicle", "id", "vehicle_metrics_vehicle_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("trip", "vehicle_id", "vehicle", "id", "trip_vehicle_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("trip", "driver_id", "driver", "id", "trip_driver_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("trip", "load_id", "load", "id", "trip_load_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("trip", "load_id", "load", "id", "fk_trip_load", "SET NULL");
+        ensureForeignKeyConstraint("trip_metrics", "trip_id", "trip", "id", "trip_metrics_trip_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("invoice", "account_id", "account", "id", "fk_invoice_account", "CASCADE");
+        ensureForeignKeyConstraint("invoice", "trip_id", "trip", "id", "fk_invoice_trip", "SET NULL");
+        ensureForeignKeyConstraint("invoice", "load_id", "load", "id", "fk_invoice_load", "SET NULL");
+        ensureForeignKeyConstraint("payment", "account_id", "account", "id", "payment_account_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("payment_allocation", "payment_id", "payment", "id", "payment_allocation_payment_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("payment_allocation", "invoice_id", "invoice", "id", "payment_allocation_invoice_id_fkey", "NO ACTION");
+        ensureForeignKeyConstraint("reconciliation", "account_id", "account", "id", "reconciliation_account_id_fkey", "NO ACTION");
+    }
+
+    private void ensureUniqueConstraint(String tableName, String columnName, String constraintName) {
         jdbcTemplate.execute("""
-            -- user_role constraints
-            ALTER TABLE user_role ADD CONSTRAINT IF NOT EXISTS user_role_user_id_fkey 
-            FOREIGN KEY (user_id) REFERENCES app_user(id) ON DELETE CASCADE;
-            
-            ALTER TABLE user_role ADD CONSTRAINT IF NOT EXISTS user_role_role_id_fkey 
-            FOREIGN KEY (role_id) REFERENCES role(id) ON DELETE CASCADE;
-            
-            -- role_permission constraints
-            ALTER TABLE role_permission ADD CONSTRAINT IF NOT EXISTS role_permission_role_id_fkey 
-            FOREIGN KEY (role_id) REFERENCES role(id) ON DELETE CASCADE;
-            
-            ALTER TABLE role_permission ADD CONSTRAINT IF NOT EXISTS role_permission_permission_id_fkey 
-            FOREIGN KEY (permission_id) REFERENCES permission(id) ON DELETE CASCADE;
-            
-            -- driver constraints
-            ALTER TABLE driver ADD CONSTRAINT IF NOT EXISTS fk_driver_app_user 
-            FOREIGN KEY (app_user_id) REFERENCES app_user(id) ON DELETE CASCADE;
-            
-            ALTER TABLE driver ADD CONSTRAINT IF NOT EXISTS fk_driver_vehicle 
-            FOREIGN KEY (assigned_vehicle_id) REFERENCES vehicle(id) ON DELETE SET NULL;
-            
-            -- vehicle constraints
-            ALTER TABLE vehicle ADD CONSTRAINT IF NOT EXISTS fk_vehicle_driver 
-            FOREIGN KEY (assigned_driver_id) REFERENCES driver(id) ON DELETE SET NULL;
-            
-            -- account_statement constraints
-            ALTER TABLE account_statement ADD CONSTRAINT IF NOT EXISTS account_statement_account_id_fkey 
-            FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE NO ACTION;
-            
-            ALTER TABLE account_statement ADD CONSTRAINT IF NOT EXISTS fk_account_statement_account 
-            FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE CASCADE;
-            
-            ALTER TABLE account_statement ADD CONSTRAINT IF NOT EXISTS fk_account_statement_recon_by 
-            FOREIGN KEY (recon_by) REFERENCES app_user(id) ON DELETE SET NULL;
-            
-            -- account_transaction constraints
-            ALTER TABLE account_transaction ADD CONSTRAINT IF NOT EXISTS account_transaction_account_id_fkey 
-            FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE NO ACTION;
-            
-            ALTER TABLE account_transaction ADD CONSTRAINT IF NOT EXISTS account_transaction_account_statement_id_fkey 
-            FOREIGN KEY (account_statement_id) REFERENCES account_statement(id) ON DELETE NO ACTION;
-            
-            -- fuel_source constraints
-            ALTER TABLE fuel_source ADD CONSTRAINT IF NOT EXISTS fuel_source_account_id_fkey 
-            FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE NO ACTION;
-            
-            -- fuel_slip constraints
-            ALTER TABLE fuel_slip ADD CONSTRAINT IF NOT EXISTS fuel_slip_fuel_source_id_fkey 
-            FOREIGN KEY (fuel_source_id) REFERENCES fuel_source(id) ON DELETE NO ACTION;
-            
-            ALTER TABLE fuel_slip ADD CONSTRAINT IF NOT EXISTS fk_fuel_slip_trip 
-            FOREIGN KEY (trip_id) REFERENCES trip(id) ON DELETE SET NULL;
-            
-            ALTER TABLE fuel_slip ADD CONSTRAINT IF NOT EXISTS fk_fuel_slip_load 
-            FOREIGN KEY (load_id) REFERENCES load(id) ON DELETE SET NULL;
-            
-            ALTER TABLE fuel_slip ADD CONSTRAINT IF NOT EXISTS fk_fuel_slip_account_statement 
-            FOREIGN KEY (account_statement_id) REFERENCES account_statement(id) ON DELETE SET NULL;
-            
-            -- stock_count constraints
-            ALTER TABLE stock_count ADD CONSTRAINT IF NOT EXISTS stock_count_location_id_fkey 
-            FOREIGN KEY (location_id) REFERENCES inventory_location(id) ON DELETE NO ACTION;
-            
-            -- stock_count_line constraints
-            ALTER TABLE stock_count_line ADD CONSTRAINT IF NOT EXISTS stock_count_line_stock_count_id_fkey 
-            FOREIGN KEY (stock_count_id) REFERENCES stock_count(id) ON DELETE NO ACTION;
-            
-            ALTER TABLE stock_count_line ADD CONSTRAINT IF NOT EXISTS stock_count_line_product_id_fkey 
-            FOREIGN KEY (product_id) REFERENCES inventory_item(id) ON DELETE NO ACTION;
-            
-            -- stock_movement constraints
-            ALTER TABLE stock_movement ADD CONSTRAINT IF NOT EXISTS stock_movement_product_id_fkey 
-            FOREIGN KEY (product_id) REFERENCES inventory_item(id) ON DELETE NO ACTION;
-            
-            ALTER TABLE stock_movement ADD CONSTRAINT IF NOT EXISTS stock_movement_from_location_id_fkey 
-            FOREIGN KEY (from_location_id) REFERENCES inventory_location(id) ON DELETE NO ACTION;
-            
-            ALTER TABLE stock_movement ADD CONSTRAINT IF NOT EXISTS stock_movement_to_location_id_fkey 
-            FOREIGN KEY (to_location_id) REFERENCES inventory_location(id) ON DELETE NO ACTION;
-            
-            -- driver_metrics constraints
-            ALTER TABLE driver_metrics ADD CONSTRAINT IF NOT EXISTS driver_metrics_driver_id_fkey 
-            FOREIGN KEY (driver_id) REFERENCES driver(id) ON DELETE NO ACTION;
-            
-            -- vehicle_metrics constraints
-            ALTER TABLE vehicle_metrics ADD CONSTRAINT IF NOT EXISTS vehicle_metrics_vehicle_id_fkey 
-            FOREIGN KEY (vehicle_id) REFERENCES vehicle(id) ON DELETE NO ACTION;
-            
-            -- trip constraints
-            ALTER TABLE trip ADD CONSTRAINT IF NOT EXISTS trip_vehicle_id_fkey 
-            FOREIGN KEY (vehicle_id) REFERENCES vehicle(id) ON DELETE NO ACTION;
-            
-            ALTER TABLE trip ADD CONSTRAINT IF NOT EXISTS trip_driver_id_fkey 
-            FOREIGN KEY (driver_id) REFERENCES driver(id) ON DELETE NO ACTION;
-            
-            ALTER TABLE trip ADD CONSTRAINT IF NOT EXISTS trip_load_id_fkey 
-            FOREIGN KEY (load_id) REFERENCES load(id) ON DELETE NO ACTION;
-            
-            ALTER TABLE trip ADD CONSTRAINT IF NOT EXISTS fk_trip_load 
-            FOREIGN KEY (load_id) REFERENCES load(id) ON DELETE SET NULL;
-            
-            -- trip_metrics constraints
-            ALTER TABLE trip_metrics ADD CONSTRAINT IF NOT EXISTS trip_metrics_trip_id_fkey 
-            FOREIGN KEY (trip_id) REFERENCES trip(id) ON DELETE NO ACTION;
-            
-            -- invoice constraints
-            ALTER TABLE invoice ADD CONSTRAINT IF NOT EXISTS fk_invoice_account 
-            FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE CASCADE;
-            
-            ALTER TABLE invoice ADD CONSTRAINT IF NOT EXISTS fk_invoice_trip 
-            FOREIGN KEY (trip_id) REFERENCES trip(id) ON DELETE SET NULL;
-            
-            ALTER TABLE invoice ADD CONSTRAINT IF NOT EXISTS fk_invoice_load 
-            FOREIGN KEY (load_id) REFERENCES load(id) ON DELETE SET NULL;
-            
-            -- payment constraints
-            ALTER TABLE payment ADD CONSTRAINT IF NOT EXISTS payment_account_id_fkey 
-            FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE NO ACTION;
-            
-            -- payment_allocation constraints
-            ALTER TABLE payment_allocation ADD CONSTRAINT IF NOT EXISTS payment_allocation_payment_id_fkey 
-            FOREIGN KEY (payment_id) REFERENCES payment(id) ON DELETE NO ACTION;
-            
-            ALTER TABLE payment_allocation ADD CONSTRAINT IF NOT EXISTS payment_allocation_invoice_id_fkey 
-            FOREIGN KEY (invoice_id) REFERENCES invoice(id) ON DELETE NO ACTION;
-            
-            -- reconciliation constraints
-            ALTER TABLE reconciliation ADD CONSTRAINT IF NOT EXISTS reconciliation_account_id_fkey 
-            FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE NO ACTION;
-        """);
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM pg_constraint
+                    WHERE conname = '%s'
+                ) THEN
+                    ALTER TABLE %s ADD CONSTRAINT %s UNIQUE (%s);
+                END IF;
+            END $$;
+        """.formatted(constraintName, tableName, constraintName, columnName));
+    }
+
+    private void ensureUniqueConstraint(String tableName, String[] columnNames, String constraintName) {
+        String columns = String.join(", ", columnNames);
+        jdbcTemplate.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM pg_constraint
+                    WHERE conname = '%s'
+                ) THEN
+                    ALTER TABLE %s ADD CONSTRAINT %s UNIQUE (%s);
+                END IF;
+            END $$;
+        """.formatted(constraintName, tableName, constraintName, columns));
+    }
+
+    private void ensureForeignKeyConstraint(String tableName, String columnName, String targetTable, String targetColumn, String constraintName, String onDeleteAction) {
+        jdbcTemplate.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM pg_constraint
+                    WHERE conname = '%s'
+                ) THEN
+                    ALTER TABLE %s
+                        ADD CONSTRAINT %s
+                        FOREIGN KEY (%s) REFERENCES %s(%s) ON DELETE %s;
+                END IF;
+            END $$;
+        """.formatted(constraintName, tableName, constraintName, columnName, targetTable, targetColumn, onDeleteAction));
     }
 
     /* ===================== INDEX CREATION ===================== */

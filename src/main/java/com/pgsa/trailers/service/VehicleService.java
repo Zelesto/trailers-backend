@@ -56,7 +56,7 @@ public class VehicleService {
 
     public List<Vehicle> getAllActiveVehicles() {
         log.debug("Fetching all active vehicles");
-        return vehicleRepository.findByIsActiveTrue();
+        return vehicleRepository.findByStatusIn(List.of(STATUS_ACTIVE, STATUS_AVAILABLE));
     }
 
     public Vehicle getVehicleById(Long id) {
@@ -67,8 +67,12 @@ public class VehicleService {
 
     public Vehicle getActiveVehicleById(Long id) {
         log.debug("Fetching active vehicle by ID: {}", id);
-        return vehicleRepository.findByIdAndIsActiveTrue(id)
+        Vehicle vehicle = vehicleRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Active vehicle not found with ID: " + id));
+        if (!vehicle.isActive()) {
+            throw new RuntimeException("Active vehicle not found with ID: " + id);
+        }
+        return vehicle;
     }
 
     public Vehicle getVehicleByRegistration(String registrationNumber) {

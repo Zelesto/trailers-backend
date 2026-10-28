@@ -25,8 +25,8 @@ public class Account extends BaseEntity {
     @Column(length = 3)
     private String currency = "ZAR";
 
-    @Column(nullable = false)
-    private Boolean active = true;
+    @Column(name = "status", length = 50)
+    private String status = "ACTIVE";
 
     @Column(name = "account_number", unique = true, length = 50)
     private String accountNumber;
@@ -80,8 +80,19 @@ public class Account extends BaseEntity {
 
     // ---------------- HELPER METHODS ----------------
 
+    public Boolean getActive() {
+        if (status == null) {
+            return null;
+        }
+        return "ACTIVE".equalsIgnoreCase(status);
+    }
+
+    public void setActive(Boolean active) {
+        this.status = Boolean.TRUE.equals(active) ? "ACTIVE" : "INACTIVE";
+    }
+
     public boolean isActive() {
-        return active != null && active;
+        return Boolean.TRUE.equals(getActive());
     }
 
     public boolean hasSufficientBalance(BigDecimal amount) {

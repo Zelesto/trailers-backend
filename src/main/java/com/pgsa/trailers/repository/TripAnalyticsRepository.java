@@ -135,7 +135,7 @@ public interface TripAnalyticsRepository extends Repository<Trip, Long> {
         FROM trip t
         WHERE t.is_active = true
         AND t.status IN ('COMPLETED', 'CLOSED', 'FINALIZED')
-        AND DATE(t.actual_end_date) BETWEEN CAST(:startDate AS DATE) AND CAST(:endDate AS DATE)
+        AND CAST(t.actual_end_date AS DATE) BETWEEN CAST(:startDate AS DATE) AND CAST(:endDate AS DATE)
         ORDER BY t.actual_end_date DESC
     """, nativeQuery = true)
     List<Object[]> findTripProfitabilityRaw(

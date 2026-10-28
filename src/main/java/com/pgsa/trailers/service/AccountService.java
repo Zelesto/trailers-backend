@@ -84,7 +84,7 @@ public class AccountService {
      */
     public List<Account> getActiveAccounts() {
         log.debug("Fetching active accounts");
-        return accountRepository.findByActiveTrue();
+        return accountRepository.findByStatus("ACTIVE");
     }
 
     /**
@@ -135,14 +135,14 @@ public class AccountService {
      */
     public Account updateAccount(Long id, Account account) {
         log.info("Updating account: {}", id);
-        
+
         Account existing = getAccountById(id);
-        
+
         if (account.getName() != null) {
             existing.setName(account.getName());
         }
         if (account.getType() != null) {
-            existing.setType(account.getType());
+            existing.setType(account.getType().toUpperCase());
         }
         if (account.getProvider() != null) {
             existing.setProvider(account.getProvider());
@@ -156,9 +156,48 @@ public class AccountService {
         if (account.getAccountNumber() != null) {
             existing.setAccountNumber(account.getAccountNumber());
         }
-        
+        if (account.getBalance() != null) {
+            existing.setBalance(account.getBalance());
+        }
+        if (account.getAvailableBalance() != null) {
+            existing.setAvailableBalance(account.getAvailableBalance());
+        }
+        if (account.getCreditLimit() != null) {
+            existing.setCreditLimit(account.getCreditLimit());
+        }
+        if (account.getInterestRate() != null) {
+            existing.setInterestRate(account.getInterestRate());
+        }
+        if (account.getAccountSubType() != null) {
+            existing.setAccountSubType(account.getAccountSubType());
+        }
+        if (account.getProviderContact() != null) {
+            existing.setProviderContact(account.getProviderContact());
+        }
+        if (account.getOpeningBalance() != null) {
+            existing.setOpeningBalance(account.getOpeningBalance());
+        }
+        if (account.getOpeningBalanceDate() != null) {
+            existing.setOpeningBalanceDate(account.getOpeningBalanceDate());
+        }
+        if (account.getLastReconciliationDate() != null) {
+            existing.setLastReconciliationDate(account.getLastReconciliationDate());
+        }
+        if (account.getNextReconciliationDate() != null) {
+            existing.setNextReconciliationDate(account.getNextReconciliationDate());
+        }
+        if (account.getReconciliationFrequency() != null) {
+            existing.setReconciliationFrequency(account.getReconciliationFrequency());
+        }
+        if (account.getDescription() != null) {
+            existing.setDescription(account.getDescription());
+        }
+        if (account.getNotes() != null) {
+            existing.setNotes(account.getNotes());
+        }
+
         existing.setUpdatedAt(java.time.LocalDateTime.now());
-        
+
         return accountRepository.save(existing);
     }
 

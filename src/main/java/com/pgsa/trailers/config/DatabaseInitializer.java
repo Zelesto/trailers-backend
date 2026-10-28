@@ -173,6 +173,28 @@ public class DatabaseInitializer implements CommandLineRunner {
         }
     }
 
+    private void ensureAccountSchema() {
+        logger.info("Ensuring account table matches the JPA schema...");
+
+        List<String> additions = List.of(
+                "provider_contact VARCHAR(100)",
+                "opening_balance NUMERIC(19,2) DEFAULT 0.00",
+                "opening_balance_date TIMESTAMP",
+                "last_reconciliation_date TIMESTAMP",
+                "next_reconciliation_date TIMESTAMP",
+                "reconciliation_frequency VARCHAR(20)",
+                "description TEXT",
+                "interest_rate NUMERIC(5,2)"
+        );
+
+        for (String addition : additions) {
+            String columnName = addition.split(" ")[0];
+            String sql = String.format("ALTER TABLE account ADD COLUMN IF NOT EXISTS %s;", addition);
+            jdbcTemplate.execute(sql);
+            logger.info("Ensured column on account: {}", columnName);
+        }
+    }
+
     /* ===================== TABLE CREATION ===================== */
     private void createTables() {
         logger.info("Creating tables...");
@@ -285,11 +307,21 @@ public class DatabaseInitializer implements CommandLineRunner {
                 next_recon_due TIMESTAMP,
                 notes TEXT,
                 audit_trail JSON,
+                provider_contact VARCHAR(100),
+                opening_balance DECIMAL(19,2) DEFAULT 0.00,
+                opening_balance_date TIMESTAMP,
+                last_reconciliation_date TIMESTAMP,
+                next_reconciliation_date TIMESTAMP,
+                reconciliation_frequency VARCHAR(20),
+                description TEXT,
+                interest_rate NUMERIC(5,2),
                 CHECK (id IS NOT NULL),
                 CHECK (name IS NOT NULL),
                 CHECK (type IS NOT NULL)
             );
         """);
+
+        ensureAccountSchema();
 
         // Create suppliers table (no additional columns from production)
         jdbcTemplate.execute("""

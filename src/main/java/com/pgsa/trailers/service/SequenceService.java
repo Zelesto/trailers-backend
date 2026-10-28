@@ -48,7 +48,7 @@ public class SequenceService {
             }
 
             // Do the same for other sequences
-            String[] otherTables = {"load", "pod", "customer", "invoice"};
+            String[] otherTables = {"load", "pod", "customer", "invoice", "expenses"};
             for (String tableName : otherTables) {
                 if (findSequenceByTableNameAndYear(tableName, currentYear).isEmpty()) {
                     log.info("📝 Creating sequence for {} in year {}", tableName, currentYear);

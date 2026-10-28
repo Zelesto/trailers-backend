@@ -24,10 +24,6 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
     List<Driver> findByStatus(String status);
     List<Driver> findByStatusIn(List<String> statuses);
     
-    // Active finders
-    List<Driver> findByIsActiveTrue();
-    List<Driver> findByIsActiveTrueAndStatus(String status);
-    
     // License expiry
     List<Driver> findByLicenseExpiryBefore(LocalDate date);
     List<Driver> findByLicenseExpiryBetween(LocalDate start, LocalDate end);
@@ -49,9 +45,8 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
     
     // Counts
     long countByStatus(String status);
-    long countByIsActiveTrue();
     
     // Available for assignment
-   @Query("SELECT d FROM Driver d WHERE d.status = :status AND d.isActive = true AND d.assignedVehicleId IS NULL")
+    @Query("SELECT d FROM Driver d WHERE d.status = :status AND d.assignedVehicleId IS NULL")
     List<Driver> findAvailableDrivers(@Param("status") String status);
 }

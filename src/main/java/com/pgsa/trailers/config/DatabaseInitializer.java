@@ -1024,20 +1024,6 @@ public class DatabaseInitializer implements CommandLineRunner {
         jdbcTemplate.execute("DROP VIEW IF EXISTS finance_reconciliation_running_balance CASCADE");
         jdbcTemplate.execute("DROP VIEW IF EXISTS finance_reconciliation_view CASCADE");
 
-<<<<<<< HEAD
-        jdbcTemplate.execute("DROP VIEW IF EXISTS finance_reconciliation_pending CASCADE;");
-        jdbcTemplate.execute("DROP VIEW IF EXISTS finance_reconciliation_running_balance CASCADE;");
-        jdbcTemplate.execute("DROP VIEW IF EXISTS finance_reconciliation_view CASCADE;");
-
-        // Create finance_reconciliation_view
-        jdbcTemplate.execute("""
-            CREATE VIEW finance_reconciliation_view AS
-            SELECT 
-                a.id as account_id,
-                a.name as account_name,
-                a.type as account_type,
-                ast.id as statement_id,
-=======
         jdbcTemplate.execute("""
             CREATE VIEW finance_reconciliation_view AS
             SELECT
@@ -1045,7 +1031,6 @@ public class DatabaseInitializer implements CommandLineRunner {
                 a.name              AS account_name,
                 a.type              AS account_type,
                 ast.id              AS statement_id,
->>>>>>> 563210e
                 ast.statement_date,
                 ast.opening_balance,
                 ast.closing_balance,
@@ -1054,17 +1039,10 @@ public class DatabaseInitializer implements CommandLineRunner {
                 at.transaction_date,
                 CONCAT(at.source_type, ' - ', at.description) AS transaction_type,
                 at.source_id,
-<<<<<<< HEAD
-                CAST(at.amount AS NUMERIC(15,2)) as amount,
-                at.direction,
-                at.description,
-                CAST(ast.variance_amount AS NUMERIC(15,2)) as variance_amount
-=======
                 CAST(at.amount AS NUMERIC(15,2)) AS amount,
                 at.direction,
                 at.description,
                 CAST(ast.variance_amount AS NUMERIC(15,2)) AS variance_amount
->>>>>>> 563210e
             FROM account a
             LEFT JOIN account_statement ast ON a.id = ast.account_id
             LEFT JOIN account_transaction at ON a.id = at.account_id
@@ -1073,19 +1051,11 @@ public class DatabaseInitializer implements CommandLineRunner {
 
         jdbcTemplate.execute("""
             CREATE VIEW finance_reconciliation_running_balance AS
-<<<<<<< HEAD
-            SELECT 
-                a.id as account_id,
-                a.name as account_name,
-                a.type as account_type,
-                ast.id as statement_id,
-=======
             SELECT
                 a.id                AS account_id,
                 a.name              AS account_name,
                 a.type              AS account_type,
                 ast.id              AS statement_id,
->>>>>>> 563210e
                 ast.statement_date,
                 ast.opening_balance,
                 ast.closing_balance,
@@ -1094,20 +1064,6 @@ public class DatabaseInitializer implements CommandLineRunner {
                 at.transaction_date,
                 CONCAT(at.source_type, ' - ', at.description) AS transaction_type,
                 at.source_id,
-<<<<<<< HEAD
-                CAST(at.amount AS NUMERIC(15,2)) as amount,
-                at.direction,
-                at.description,
-                CAST(
-                    SUM(CASE 
-                        WHEN at.direction = 'DEBIT' THEN -at.amount 
-                        WHEN at.direction = 'CREDIT' THEN at.amount 
-                        ELSE 0 
-                    END) OVER (PARTITION BY a.id ORDER BY at.transaction_date)
-                    AS NUMERIC(15,2)
-                ) as running_balance,
-                CAST(ast.variance_amount AS NUMERIC(15,2)) as variance_amount
-=======
                 CAST(at.amount AS NUMERIC(15,2)) AS amount,
                 at.direction,
                 at.description,
@@ -1117,7 +1073,6 @@ public class DatabaseInitializer implements CommandLineRunner {
                     ELSE 0
                 END) OVER (PARTITION BY a.id ORDER BY at.transaction_date) AS running_balance,
                 ast.variance_amount
->>>>>>> 563210e
             FROM account a
             LEFT JOIN account_statement ast ON a.id = ast.account_id
             LEFT JOIN account_transaction at ON a.id = at.account_id
@@ -1126,33 +1081,13 @@ public class DatabaseInitializer implements CommandLineRunner {
 
         jdbcTemplate.execute("""
             CREATE VIEW finance_reconciliation_pending AS
-<<<<<<< HEAD
-            SELECT 
-                a.id as account_id,
-                a.name as account_name,
-                a.type as account_type,
-=======
             SELECT
                 a.id                AS account_id,
                 a.name              AS account_name,
                 a.type              AS account_type,
->>>>>>> 563210e
                 at.transaction_date,
                 CONCAT(at.source_type, ' - ', at.description) AS transaction_type,
                 at.source_id,
-<<<<<<< HEAD
-                CAST(at.amount AS NUMERIC(15,2)) as amount,
-                at.direction,
-                at.description,
-                CAST(rb.running_balance AS NUMERIC(15,2)) as running_balance,
-                CAST(ast.closing_balance AS NUMERIC(15,2)) as last_closing_balance,
-                CAST(a.balance AS NUMERIC(15,2)) as system_balance,
-                CAST(COALESCE(ast.closing_balance, 0) + rb.running_balance AS NUMERIC(15,2)) as projected_closing_balance,
-                CASE 
-                    WHEN at.account_statement_id IS NULL THEN TRUE 
-                    ELSE FALSE 
-                END as pending_reconciliation
-=======
                 CAST(at.amount AS NUMERIC(15,2)) AS amount,
                 at.direction,
                 at.description,
@@ -1161,7 +1096,6 @@ public class DatabaseInitializer implements CommandLineRunner {
                 a.balance           AS system_balance,
                 COALESCE(ast.closing_balance, 0) + rb.running_balance AS projected_closing_balance,
                 CASE WHEN at.account_statement_id IS NULL THEN TRUE ELSE FALSE END AS pending_reconciliation
->>>>>>> 563210e
             FROM account a
             LEFT JOIN account_statement ast ON a.id = ast.account_id
                 AND ast.status = 'CLOSED'
@@ -1172,24 +1106,12 @@ public class DatabaseInitializer implements CommandLineRunner {
                 )
             LEFT JOIN account_transaction at ON a.id = at.account_id
             LEFT JOIN LATERAL (
-<<<<<<< HEAD
-                SELECT 
-                    CAST(
-                        SUM(CASE 
-                            WHEN at2.direction = 'DEBIT' THEN -at2.amount 
-                            WHEN at2.direction = 'CREDIT' THEN at2.amount 
-                            ELSE 0 
-                        END)
-                        AS NUMERIC(15,2)
-                    ) as running_balance
-=======
                 SELECT
                     SUM(CASE
                         WHEN at2.direction = 'DEBIT' THEN -at2.amount
                         WHEN at2.direction = 'CREDIT' THEN at2.amount
                         ELSE 0
                     END) AS running_balance
->>>>>>> 563210e
                 FROM account_transaction at2
                 WHERE at2.account_id = a.id
                   AND at2.transaction_date > COALESCE(ast.statement_date, DATE '1900-01-01')
@@ -1223,113 +1145,6 @@ public class DatabaseInitializer implements CommandLineRunner {
     private void createConstraints() {
         logger.info("Creating unique and foreign key constraints...");
 
-<<<<<<< HEAD
-        ensureUniqueConstraint("enum_master", new String[]{"module_name", "category", "code"}, "uk_enum_module_category_code");
-        ensureUniqueConstraint("app_user", "email", "app_user_email_key");
-        ensureUniqueConstraint("role", "name", "role_name_key");
-        ensureUniqueConstraint("permission", new String[]{"resource", "action"}, "permission_resource_action_key");
-        ensureUniqueConstraint("account", "name", "account_name_key");
-        ensureUniqueConstraint("suppliers", "name", "suppliers_name_key");
-        ensureUniqueConstraint("driver", "license_number", "driver_license_number_key");
-        ensureUniqueConstraint("vehicle", "registration_number", "vehicle_registration_number_key");
-        ensureUniqueConstraint("vehicle", "vin", "vehicle_vin_key");
-        ensureUniqueConstraint("load", "load_number", "load_load_number_key");
-        ensureUniqueConstraint("trip", "trip_number", "trip_trip_number_key");
-        ensureUniqueConstraint("account_statement", new String[]{"account_id", "statement_date"}, "account_statement_account_id_statement_date_key");
-        ensureUniqueConstraint("fuel_source", "name", "fuel_source_name_key");
-        ensureUniqueConstraint("fuel_slip", "slip_number", "fuel_slip_slip_number_key");
-        ensureUniqueConstraint("inventory_location", "name", "inventory_location_name_key");
-        ensureUniqueConstraint("inventory_item", "sku", "inventory_item_sku_key");
-        ensureUniqueConstraint("driver_metrics", new String[]{"driver_id", "metric_date"}, "driver_metrics_driver_id_metric_date_key");
-        ensureUniqueConstraint("vehicle_metrics", new String[]{"vehicle_id", "metric_date"}, "vehicle_metrics_vehicle_id_metric_date_key");
-        ensureUniqueConstraint("invoice", "invoice_number", "invoice_invoice_number_key");
-
-        ensureForeignKeyConstraint("user_role", "user_id", "app_user", "id", "user_role_user_id_fkey", "CASCADE");
-        ensureForeignKeyConstraint("user_role", "role_id", "role", "id", "user_role_role_id_fkey", "CASCADE");
-        ensureForeignKeyConstraint("role_permission", "role_id", "role", "id", "role_permission_role_id_fkey", "CASCADE");
-        ensureForeignKeyConstraint("role_permission", "permission_id", "permission", "id", "role_permission_permission_id_fkey", "CASCADE");
-        ensureForeignKeyConstraint("driver", "app_user_id", "app_user", "id", "fk_driver_app_user", "CASCADE");
-        ensureForeignKeyConstraint("driver", "assigned_vehicle_id", "vehicle", "id", "fk_driver_vehicle", "SET NULL");
-        ensureForeignKeyConstraint("vehicle", "assigned_driver_id", "driver", "id", "fk_vehicle_driver", "SET NULL");
-        ensureForeignKeyConstraint("account_statement", "account_id", "account", "id", "account_statement_account_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("account_statement", "account_id", "account", "id", "fk_account_statement_account", "CASCADE");
-        ensureForeignKeyConstraint("account_statement", "recon_by", "app_user", "id", "fk_account_statement_recon_by", "SET NULL");
-        ensureForeignKeyConstraint("account_transaction", "account_id", "account", "id", "account_transaction_account_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("account_transaction", "account_statement_id", "account_statement", "id", "account_transaction_account_statement_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("fuel_source", "account_id", "account", "id", "fuel_source_account_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("fuel_slip", "fuel_source_id", "fuel_source", "id", "fuel_slip_fuel_source_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("fuel_slip", "trip_id", "trip", "id", "fk_fuel_slip_trip", "SET NULL");
-        ensureForeignKeyConstraint("fuel_slip", "load_id", "load", "id", "fk_fuel_slip_load", "SET NULL");
-        ensureForeignKeyConstraint("fuel_slip", "account_statement_id", "account_statement", "id", "fk_fuel_slip_account_statement", "SET NULL");
-        ensureForeignKeyConstraint("stock_count", "location_id", "inventory_location", "id", "stock_count_location_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("stock_count_line", "stock_count_id", "stock_count", "id", "stock_count_line_stock_count_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("stock_count_line", "product_id", "inventory_item", "id", "stock_count_line_product_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("stock_movement", "product_id", "inventory_item", "id", "stock_movement_product_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("stock_movement", "from_location_id", "inventory_location", "id", "stock_movement_from_location_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("stock_movement", "to_location_id", "inventory_location", "id", "stock_movement_to_location_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("driver_metrics", "driver_id", "driver", "id", "driver_metrics_driver_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("vehicle_metrics", "vehicle_id", "vehicle", "id", "vehicle_metrics_vehicle_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("trip", "vehicle_id", "vehicle", "id", "trip_vehicle_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("trip", "driver_id", "driver", "id", "trip_driver_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("trip", "load_id", "load", "id", "trip_load_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("trip", "load_id", "load", "id", "fk_trip_load", "SET NULL");
-        ensureForeignKeyConstraint("trip_metrics", "trip_id", "trip", "id", "trip_metrics_trip_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("invoice", "account_id", "account", "id", "fk_invoice_account", "CASCADE");
-        ensureForeignKeyConstraint("invoice", "trip_id", "trip", "id", "fk_invoice_trip", "SET NULL");
-        ensureForeignKeyConstraint("invoice", "load_id", "load", "id", "fk_invoice_load", "SET NULL");
-        ensureForeignKeyConstraint("payment", "account_id", "account", "id", "payment_account_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("payment_allocation", "payment_id", "payment", "id", "payment_allocation_payment_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("payment_allocation", "invoice_id", "invoice", "id", "payment_allocation_invoice_id_fkey", "NO ACTION");
-        ensureForeignKeyConstraint("reconciliation", "account_id", "account", "id", "reconciliation_account_id_fkey", "NO ACTION");
-    }
-
-    private void ensureUniqueConstraint(String tableName, String columnName, String constraintName) {
-        jdbcTemplate.execute("""
-            DO $$
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT 1
-                    FROM pg_constraint
-                    WHERE conname = '%s'
-                ) THEN
-                    ALTER TABLE %s ADD CONSTRAINT %s UNIQUE (%s);
-                END IF;
-            END $$;
-        """.formatted(constraintName, tableName, constraintName, columnName));
-    }
-
-    private void ensureUniqueConstraint(String tableName, String[] columnNames, String constraintName) {
-        String columns = String.join(", ", columnNames);
-        jdbcTemplate.execute("""
-            DO $$
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT 1
-                    FROM pg_constraint
-                    WHERE conname = '%s'
-                ) THEN
-                    ALTER TABLE %s ADD CONSTRAINT %s UNIQUE (%s);
-                END IF;
-            END $$;
-        """.formatted(constraintName, tableName, constraintName, columns));
-    }
-
-    private void ensureForeignKeyConstraint(String tableName, String columnName, String targetTable, String targetColumn, String constraintName, String onDeleteAction) {
-        jdbcTemplate.execute("""
-            DO $$
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT 1
-                    FROM pg_constraint
-                    WHERE conname = '%s'
-                ) THEN
-                    ALTER TABLE %s
-                        ADD CONSTRAINT %s
-                        FOREIGN KEY (%s) REFERENCES %s(%s) ON DELETE %s;
-                END IF;
-            END $$;
-        """.formatted(constraintName, tableName, constraintName, columnName, targetTable, targetColumn, onDeleteAction));
-=======
         // Unique constraints
         addConstraint("app_user", "app_user_email_key", "UNIQUE (email)");
         addConstraint("role", "role_name_key", "UNIQUE (name)");
@@ -1437,7 +1252,6 @@ public class DatabaseInitializer implements CommandLineRunner {
 
         addConstraint("reconciliation", "reconciliation_account_id_fkey",
                 "FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE NO ACTION");
->>>>>>> 563210e
     }
 
     /* ===================== INDEX CREATION ===================== */

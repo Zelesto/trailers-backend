@@ -187,6 +187,39 @@ public class BillingCalculatorService {
 
         return defaultHours;
     }
+/**
+ * Resolves a Load by:
+ *   1. loadNumber (string business key, e.g. "LOAD-2026-001")
+ *   2. numeric DB id (fallback, e.g. "3")
+ *
+ * This makes endpoints tolerant of either value being sent from the frontend.
+ */
+private Load resolveLoad(String loadIdOrNumber) {
+    if (loadIdOrNumber == null || loadIdOrNumber.isBlank()) {
+        throw new RuntimeException("loadId is required");
+    }
+
+    // 1. Try loadNumber first (business key — always a String)
+    var byNumber = loadRepository.findByLoadNumber(loadIdOrNumber);
+    if (byNumber.isPresent()) {
+        log.info("  → resolved load by loadNumber: {}", loadIdOrNumber);
+        return byNumber.get();
+    }
+
+    // 2. Fallback: numeric DB primary key
+    try {
+        Long numericId = Long.parseLong(loadIdOrNumber);
+        Load load = loadRepository.findById(numericId)
+                .orElseThrow(() -> new RuntimeException(
+                    "Load not found by loadNumber '" + loadIdOrNumber +
+                    "' or id " + numericId));
+        log.info("  → resolved load by numeric id: {} → loadNumber: {}",
+                numericId, load.getLoadNumber());
+        return load;
+    } catch (NumberFormatException e) {
+        throw new RuntimeException("Load not found: " + loadIdOrNumber);
+    }
+}
 
 
     /**
@@ -194,23 +227,27 @@ public class BillingCalculatorService {
  */
 @Transactional
 public LoadBilling recalculateLoadBilling(String loadId, Long userId) {
-    log.info("🔄 Recalculating all billings for Load: {}", loadId);
+    log.info("🔄 Recalculating billing for Load: {}", loadId);
 
-    // Delete existing trip billings
-    List<Trip> trips = tripRepository.findByLoadId(loadId);
-    
+    // Resolve to a canonical load + canonical loadNumber
+    Load load = resolveLoad(loadId);
+    String canonicalLoadNumber = load.getLoadNumber();
+    log.info("  → canonical loadNumber: {}", canonicalLoadNumber);
+
+    // Delete existing trip billings for this load
+    List<Trip> trips = tripRepository.findByLoadId(canonicalLoadNumber);
+
     for (Trip trip : trips) {
-        // Delete existing billing
         TripBilling existing = tripBillingRepository.findByTripId(trip.getId());
         if (existing != null) {
             tripBillingRepository.delete(existing);
         }
-        // Recalculate
         calculateTripBilling(trip.getId(), userId);
     }
 
-    // Update load billing
-    return updateLoadBilling(loadId, userId);
+    // Update the LoadBilling — use the canonical loadNumber so the
+    // LoadBilling.loadId field matches what findByLoadId queries use
+    return updateLoadBilling(canonicalLoadNumber, userId);
 }
     
     // ==================== CHARGE CALCULATIONS ====================
@@ -319,88 +356,97 @@ public LoadBilling recalculateLoadBilling(String loadId, Long userId) {
 
     // ==================== LOAD BILLING METHODS ====================
 
-    public LoadBilling updateLoadBilling(String loadId, Long userId) {
-        log.info("📦 Updating billing for Load: {}", loadId);
+public LoadBilling updateLoadBilling(String loadId, Long userId) {
+    log.info("📦 Updating billing for Load: {}", loadId);
 
-        Load load = loadRepository.findByLoadNumber(loadId)
-                .orElseThrow(() -> new RuntimeException("Load not found: " + loadId));
+    // Use the shared resolver — tolerant of both loadNumber and numeric id
+    Load load = resolveLoad(loadId);
+    String canonicalLoadNumber = load.getLoadNumber();
+    log.info("  → using loadNumber: {}", canonicalLoadNumber);
 
-        List<Trip> trips = tripRepository.findByLoadId(loadId);
-        List<TripBilling> billings = tripBillingRepository.findByTrip_LoadId(loadId);
+    List<Trip> trips = tripRepository.findByLoadId(canonicalLoadNumber);
+    List<TripBilling> billings = tripBillingRepository.findByTrip_LoadId(canonicalLoadNumber);
 
-        LoadBilling loadBilling = loadBillingRepository.findByLoadId(loadId)
-                .orElse(LoadBilling.builder().loadId(loadId).build());
+    LoadBilling loadBilling = loadBillingRepository.findByLoadId(canonicalLoadNumber)
+            .orElse(LoadBilling.builder().loadId(canonicalLoadNumber).build());
 
-        loadBilling.setCustomerId(load.getCustomerId());
-        loadBilling.setTotalTrips(trips.size());
+    loadBilling.setCustomerId(load.getCustomerId());
+    loadBilling.setTotalTrips(trips.size());
 
-        BigDecimal totalDistance = trips.stream()
-                .map(t -> t.getCalculatedDistanceKm() != null ? t.getCalculatedDistanceKm() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        loadBilling.setTotalDistanceKm(totalDistance);
+    BigDecimal totalDistance = trips.stream()
+            .map(t -> t.getCalculatedDistanceKm() != null ? t.getCalculatedDistanceKm() : BigDecimal.ZERO)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    loadBilling.setTotalDistanceKm(totalDistance);
 
-        BigDecimal totalTonnage = trips.stream()
-                .map(t -> t.getCargoWeight() != null ? t.getCargoWeight().divide(TON_CONVERSION, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        loadBilling.setTotalTonnage(totalTonnage);
+    BigDecimal totalTonnage = trips.stream()
+            .map(t -> t.getCargoWeight() != null
+                    ? t.getCargoWeight().divide(TON_CONVERSION, 2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    loadBilling.setTotalTonnage(totalTonnage);
 
-        loadBilling.setTotalDistanceCharge(billings.stream()
-                .map(TripBilling::getDistanceCharge)
-                .filter(c -> c != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
+    loadBilling.setTotalDistanceCharge(billings.stream()
+            .map(TripBilling::getDistanceCharge)
+            .filter(c -> c != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add));
+    loadBilling.setTotalTonnageCharge(billings.stream()
+            .map(TripBilling::getTonnageCharge)
+            .filter(c -> c != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add));
+    loadBilling.setTotalDailyCharge(billings.stream()
+            .map(TripBilling::getDailyRateCharge)
+            .filter(c -> c != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add));
+    loadBilling.setTotalLabourCharge(billings.stream()
+            .map(TripBilling::getLabourCharge)
+            .filter(c -> c != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add));
+    loadBilling.setTotalCraneCharge(billings.stream()
+            .map(TripBilling::getCraneCharge)
+            .filter(c -> c != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add));
+    loadBilling.setTotalFixedSurcharge(billings.stream()
+            .map(TripBilling::getFixedSurcharge)
+            .filter(c -> c != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add));
 
-        loadBilling.setTotalTonnageCharge(billings.stream()
-                .map(TripBilling::getTonnageCharge)
-                .filter(c -> c != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
+    BigDecimal subtotal = BigDecimal.ZERO;
+    subtotal = subtotal.add(loadBilling.getTotalDistanceCharge());
+    subtotal = subtotal.add(loadBilling.getTotalTonnageCharge());
+    subtotal = subtotal.add(loadBilling.getTotalDailyCharge());
+    subtotal = subtotal.add(loadBilling.getTotalLabourCharge());
+    subtotal = subtotal.add(loadBilling.getTotalCraneCharge());
+    subtotal = subtotal.add(loadBilling.getTotalFixedSurcharge());
 
-        loadBilling.setTotalDailyCharge(billings.stream()
-                .map(TripBilling::getDailyRateCharge)
-                .filter(c -> c != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
+    loadBilling.setSubtotal(subtotal);
+    loadBilling.setVat(subtotal.multiply(VAT_RATE).setScale(2, RoundingMode.HALF_UP));
+    loadBilling.setTotal(subtotal.add(loadBilling.getVat()));
 
-        loadBilling.setTotalLabourCharge(billings.stream()
-                .map(TripBilling::getLabourCharge)
-                .filter(c -> c != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-
-        loadBilling.setTotalCraneCharge(billings.stream()
-                .map(TripBilling::getCraneCharge)
-                .filter(c -> c != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-
-        loadBilling.setTotalFixedSurcharge(billings.stream()
-                .map(TripBilling::getFixedSurcharge)
-                .filter(c -> c != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-
-        BigDecimal subtotal = BigDecimal.ZERO;
-        subtotal = subtotal.add(loadBilling.getTotalDistanceCharge());
-        subtotal = subtotal.add(loadBilling.getTotalTonnageCharge());
-        subtotal = subtotal.add(loadBilling.getTotalDailyCharge());
-        subtotal = subtotal.add(loadBilling.getTotalLabourCharge());
-        subtotal = subtotal.add(loadBilling.getTotalCraneCharge());
-        subtotal = subtotal.add(loadBilling.getTotalFixedSurcharge());
-
-        loadBilling.setSubtotal(subtotal);
-        loadBilling.setVat(subtotal.multiply(VAT_RATE).setScale(2, RoundingMode.HALF_UP));
-        loadBilling.setTotal(subtotal.add(loadBilling.getVat()));
-
-        if (loadBilling.getStatus() == null) {
-            loadBilling.setStatus("CALCULATED");
-        }
-        loadBilling.setCalculatedAt(LocalDateTime.now());
-        loadBilling.setCalculatedBy(userId);
-
-        return loadBillingRepository.save(loadBilling);
+    if (loadBilling.getStatus() == null) {
+        loadBilling.setStatus("CALCULATED");
     }
+    loadBilling.setCalculatedAt(LocalDateTime.now());
+    loadBilling.setCalculatedBy(userId);
+
+    return loadBillingRepository.save(loadBilling);
+}
 
     // ==================== QUERY METHODS ====================
 
-    public LoadBilling getLoadBilling(String loadId) {
-        return loadBillingRepository.findByLoadId(loadId)
+   public LoadBilling getLoadBilling(String loadId) {
+    // Try the string loadId first (the "correct" business key)
+    var byLoadId = loadBillingRepository.findByLoadId(loadId);
+    if (byLoadId.isPresent()) return byLoadId.get();
+
+    // Fallback: numeric loadBilling PK
+    try {
+        Long numericId = Long.parseLong(loadId);
+        return loadBillingRepository.findById(numericId)
                 .orElseThrow(() -> new RuntimeException("Load billing not found: " + loadId));
+    } catch (NumberFormatException e) {
+        throw new RuntimeException("Load billing not found: " + loadId);
     }
+}
 
     public TripBilling getTripBilling(Long tripId) {
         TripBilling billing = tripBillingRepository.findByTripId(tripId);

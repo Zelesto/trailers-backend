@@ -462,7 +462,6 @@ public class DriverIssueService {
         request.setDriverId(oldIssue.getDriverId());
         // NOTE: DriverIssueRequestDTO still has a tripId field, but the DriverIssue
         // entity does not track it — so we leave it null here.
-        request.setTripId(null);
         request.setIssueDate(LocalDateTime.now());
         request.setNotes(String.format("SWAP: Replacing damaged item. Original Issue: %s, Damage: %s",
             oldIssue.getIssueNumber(), swapRequest.getDamagedCondition()));

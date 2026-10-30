@@ -18,6 +18,7 @@ public class VehicleIssueRequestDTO {
     private Long driverId;
     private Long tripId;
     private LocalDateTime issueDate;
+    private String status; 
     private String notes;
     private List<VehicleIssueItemRequestDTO> items;
 }

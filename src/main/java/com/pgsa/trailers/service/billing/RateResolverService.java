@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Comparator;
 
 @Service
 @RequiredArgsConstructor
@@ -90,24 +91,16 @@ public class RateResolverService {
      * which is {@code @Transactional}, so it joins that transaction and rolls
      * back cleanly on failure.
      */
-    @Transactional
-    public Rate getOrCreateDefaultRate() {
-        // Default identification: priority == 0 AND no customer override
-        List<Rate> existingDefaults = rateRepository.findAll().stream()
-                .filter(r -> r.getCustomer() == null
-                        && r.getPriority() != null
-                        && r.getPriority() == 0)
-                .toList();
-
-        if (!existingDefaults.isEmpty()) {
-            Rate r = existingDefaults.get(0);
-            log.debug("♻️ Reusing existing default rate id={}", r.getId());
-            return r;
-        }
-
-        log.info("🆕 Creating new default rate");
-        return rateRepository.save(buildDefaultRate());
-    }
+   @Transactional
+public Rate getOrCreateDefaultRate() {
+    return rateRepository.findAll().stream()
+            .filter(r -> r.getCustomer() == null)     // ✅ any customer-less rate is a candidate
+            .min(Comparator.comparing(Rate::getId))   // ✅ deterministic — picks rate #1
+            .orElseGet(() -> {
+                log.info("🆕 No default rate exists — creating one");
+                return rateRepository.save(buildDefaultRate());
+            });
+}
 
     private boolean matchesSchedule(Rate rate, LocalDate tripDate, LocalTime tripTime) {
         RateSchedule schedule = rate.getSchedule();

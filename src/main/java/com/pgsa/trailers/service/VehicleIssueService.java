@@ -105,6 +105,127 @@ public class VehicleIssueService {
         return mapToResponseDTO(issue);
     }
 
+    /**
+ * Update a vehicle issue — used by the edit dialog.
+ *
+ * Only updates:
+ *   - issueDate    (the backdating requirement)
+ *   - status       (ISSUED / PARTIALLY_RETURNED / RETURNED)
+ *   - notes        (free-text)
+ *   - per-item condition and notes (matched by itemId)
+ *
+ * Does NOT change quantities — that would corrupt stock accounting.
+ * Use the Return/Swap endpoints to adjust quantities.
+ */
+@Transactional
+public VehicleIssueResponseDTO updateVehicleIssue(
+        Long issueId,
+        VehicleIssueRequestDTO request,
+        Long userId) {
+
+    VehicleIssue issue = vehicleIssueRepository.findById(issueId)
+            .orElseThrow(() -> new RuntimeException("Vehicle issue not found: " + issueId));
+
+    // 1. Metadata
+    if (request.getIssueDate() != null) issue.setIssueDate(request.getIssueDate());
+    if (request.getNotes() != null) issue.setNotes(request.getNotes());
+
+    // 2. Status — safety check: can't jump to RETURNED if items are outstanding
+    if (request.getStatus() != null) {
+        String newStatus = request.getStatus().toUpperCase();
+
+        if ("RETURNED".equals(newStatus) && issue.getItems() != null) {
+            boolean stillOutstanding = issue.getItems().stream().anyMatch(line -> {
+                java.math.BigDecimal issued = line.getQuantityIssued();
+                java.math.BigDecimal returned = line.getQuantityReturned();
+                if (issued == null) return false;
+                if (returned == null) return true;
+                return returned.compareTo(issued) < 0;
+            });
+
+            if (stillOutstanding) {
+                log.warn("Issue {}: cannot set status=RETURNED via edit — items still outstanding. " +
+                         "Use POST /{issueId}/return to reconcile stock first.", issueId);
+                throw new RuntimeException(
+                        "Cannot set status to RETURNED — items are still outstanding on this issue. " +
+                        "Return the items first, then try again.");
+            }
+        }
+
+        issue.setStatus(newStatus);
+    }
+
+    // 3. Items — match by itemId, update metadata only
+    if (request.getItems() != null && !request.getItems().isEmpty() && issue.getItems() != null) {
+        java.util.Map<Long, VehicleIssueItem> existingByItemId = new java.util.HashMap<>();
+        for (VehicleIssueItem line : issue.getItems()) {
+            Long key = line.getItem() != null ? line.getItem().getId() : null;
+            if (key != null) existingByItemId.put(key, line);
+        }
+
+        for (VehicleIssueItemRequestDTO itemReq : request.getItems()) {
+            Long incomingId = itemReq.getItemId();
+            if (incomingId == null) continue;
+
+            VehicleIssueItem line = existingByItemId.get(incomingId);
+            if (line == null) {
+                log.warn("Issue {}: item {} is not part of this issue — skipping. " +
+                         "Create a new issue to add items.", issueId, incomingId);
+                continue;
+            }
+
+            if (itemReq.getCondition() != null) line.setCondition(itemReq.getCondition());
+            if (itemReq.getNotes() != null) line.setNotes(itemReq.getNotes());
+
+            // Warn if quantity differs — silently ignored to protect stock integrity
+            if (itemReq.getQuantity() != null && line.getQuantityIssued() != null) {
+                if (line.getQuantityIssued().compareTo(itemReq.getQuantity()) != 0) {
+                    log.warn("Issue {}: item {} quantity change from {} to {} IGNORED. " +
+                             "Use Return/Swap to change quantities.",
+                             issueId, incomingId,
+                             line.getQuantityIssued(), itemReq.getQuantity());
+                }
+            }
+        }
+    }
+
+    VehicleIssue saved = vehicleIssueRepository.save(issue);
+    log.info("✅ Vehicle issue {} updated by user {}", issueId, userId);
+    return mapToResponseDTO(saved);
+}
+
+/**
+ * Delete a vehicle issue.
+ * Refuses if any items are still outstanding (must return them first).
+ */
+@Transactional
+public void deleteVehicleIssue(Long issueId, Long userId) {
+    VehicleIssue issue = vehicleIssueRepository.findById(issueId)
+            .orElseThrow(() -> new RuntimeException("Vehicle issue not found: " + issueId));
+
+    // Safety: block delete if items still outstanding
+    if (issue.getItems() != null && !issue.getItems().isEmpty()) {
+        boolean stillOutstanding = issue.getItems().stream().anyMatch(line -> {
+            java.math.BigDecimal issued = line.getQuantityIssued();
+            java.math.BigDecimal returned = line.getQuantityReturned();
+            if (issued == null) return false;
+            if (returned == null) return true;
+            return returned.compareTo(issued) < 0;
+        });
+
+        if (stillOutstanding) {
+            log.warn("Cannot delete issue {} — items still outstanding", issueId);
+            throw new RuntimeException(
+                    "Cannot delete this issue — some items are still outstanding. " +
+                    "Return them first, then delete.");
+        }
+    }
+
+    vehicleIssueRepository.delete(issue);
+    log.info("🗑️ Vehicle issue {} deleted by user {}", issueId, userId);
+}
+    
+
     @Transactional
     public VehicleIssueResponseDTO swapItem(Long oldIssueId, SwapItemRequestDTO swapRequest, Long userId) {
         log.info("🔄 Swapping item from issue: {}, Type: {}", oldIssueId, swapRequest.getIssueType());

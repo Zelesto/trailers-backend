@@ -148,6 +148,38 @@ public ResponseEntity<List<StockOnHandDTO>> getStockOnHand(@RequestBody(required
                     .body(Map.of("error", e.getMessage()));
         }
     }
+    /**
+ * Update a vehicle issue — used by the frontend edit dialog for backdating.
+ * Only updates issueDate, status, notes and item condition/notes.
+ * Quantity changes are NOT accepted here (would corrupt stock accounting) —
+ * use the Return or Swap endpoints to change item quantities.
+ */
+@PutMapping("/{issueId}")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'MANAGER')")
+public ResponseEntity<VehicleIssueResponseDTO> updateVehicleIssue(
+        @PathVariable Long issueId,
+        @RequestBody @Valid VehicleIssueRequestDTO request,
+        Authentication authentication) {
+    Long userId = getUserId(authentication);
+    log.info("✏️ Updating vehicle issue: {}", issueId);
+    VehicleIssueResponseDTO response = vehicleIssueService.updateVehicleIssue(issueId, request, userId);
+    return ResponseEntity.ok(response);
+}
+
+/**
+ * Delete a vehicle issue.
+ * Blocks deletion if the issue has outstanding (unreturned) items.
+ */
+@DeleteMapping("/{issueId}")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'MANAGER')")
+public ResponseEntity<Void> deleteVehicleIssue(
+        @PathVariable Long issueId,
+        Authentication authentication) {
+    Long userId = getUserId(authentication);
+    log.info("🗑️ Deleting vehicle issue: {}", issueId);
+    vehicleIssueService.deleteVehicleIssue(issueId, userId);
+    return ResponseEntity.noContent().build();
+}
 
     /**
      * Debug endpoint - Get issue count

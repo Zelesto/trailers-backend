@@ -96,6 +96,29 @@ public ResponseEntity<DriverIssueResponseDTO> swapDriverItem(
         log.info("👤 Fetching issues for driver: {}", driverId);
         return ResponseEntity.ok(driverIssueService.getIssuesByDriver(driverId));
     }
+    
+    @PutMapping("/{issueId}")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'MANAGER')")
+public ResponseEntity<DriverIssueResponseDTO> updateDriverIssue(
+        @PathVariable Long issueId,
+        @RequestBody @Valid DriverIssueRequestDTO request,
+        Authentication authentication) {
+    Long userId = getUserId(authentication);
+    log.info("✏️ Updating driver issue: {}", issueId);
+    DriverIssueResponseDTO response = driverIssueService.updateDriverIssue(issueId, request, userId);
+    return ResponseEntity.ok(response);
+}
+
+@DeleteMapping("/{issueId}")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISPATCHER', 'MANAGER')")
+public ResponseEntity<Void> deleteDriverIssue(
+        @PathVariable Long issueId,
+        Authentication authentication) {
+    Long userId = getUserId(authentication);
+    log.info("🗑️ Deleting driver issue: {}", issueId);
+    driverIssueService.deleteDriverIssue(issueId, userId);
+    return ResponseEntity.noContent().build();
+}
 
     /**
      * Get issue by ID

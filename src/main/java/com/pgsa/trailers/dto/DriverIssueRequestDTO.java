@@ -14,8 +14,9 @@ import java.util.List;
 @AllArgsConstructor
 public class DriverIssueRequestDTO {
     private Long driverId;
+    private Long tripId;
     private LocalDateTime issueDate;
-    private String status; 
+    private String status;         
     private String notes;
     private List<DriverIssueItemRequestDTO> items;
 }

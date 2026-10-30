@@ -40,10 +40,6 @@ public class InvoiceService {
                 .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id));
     }
 
-    /**
-     * Create an invoice from caller-supplied data. Defaults are applied, then
-     * totals are recalculated from line items.
-     */
     @Transactional
     public Invoice createInvoice(Invoice invoice) {
         log.info("Creating invoice: {}", invoice.getInvoiceNumber());
@@ -54,19 +50,16 @@ public class InvoiceService {
 
     /**
      * ✅ Persist an invoice whose subtotal/VAT/total were set explicitly by the
-     *    caller (e.g. {@code InvoiceBillingService}) from an authoritative source
-     *    such as {@code LoadBilling} or {@code TripBilling}. Audit defaults are
-     *    applied, but {@link Invoice#recalculateTotals()} is NOT invoked.
+     * caller (e.g. {@code InvoiceBillingService}) from an authoritative source
+     * such as {@code LoadBilling} or {@code TripBilling}. Audit defaults are
+     * applied, but {@link Invoice#recalculateTotals()} is NOT invoked.
      */
     @Transactional
     public Invoice createInvoicePreservingTotals(Invoice invoice) {
         log.info("Creating invoice (explicit totals): {} subtotal={} vat={} total={}",
-                invoice.getInvoiceNumber(),
-                invoice.getSubtotal(),
-                invoice.getTaxTotal(),
-                invoice.getTotalAmount());
+                invoice.getInvoiceNumber(), invoice.getSubtotal(),
+                invoice.getTaxTotal(), invoice.getTotalAmount());
         applyDefaults(invoice);
-        // Defensive coalesce in case a caller forgot to set one of the three
         if (invoice.getSubtotal()    == null) invoice.setSubtotal(BigDecimal.ZERO);
         if (invoice.getTaxTotal()    == null) invoice.setTaxTotal(BigDecimal.ZERO);
         if (invoice.getTotalAmount() == null) invoice.setTotalAmount(BigDecimal.ZERO);
@@ -76,7 +69,6 @@ public class InvoiceService {
     @Transactional
     public Invoice updateInvoice(Long id, Invoice invoice) {
         Invoice existing = getInvoiceById(id);
-
         if (invoice.getCustomerId() != null)      existing.setCustomerId(invoice.getCustomerId());
         if (invoice.getCustomerName() != null)    existing.setCustomerName(invoice.getCustomerName());
         if (invoice.getCustomerEmail() != null)   existing.setCustomerEmail(invoice.getCustomerEmail());
@@ -85,7 +77,6 @@ public class InvoiceService {
         if (invoice.getDueDate() != null)         existing.setDueDate(invoice.getDueDate());
         if (invoice.getStatus() != null)          existing.setStatus(invoice.getStatus());
         if (invoice.getNotes() != null)           existing.setNotes(invoice.getNotes());
-
         if (invoice.getItems() != null && !invoice.getItems().isEmpty()) {
             existing.getItems().clear();
             for (InvoiceItem item : invoice.getItems()) {
@@ -93,17 +84,11 @@ public class InvoiceService {
                 existing.getItems().add(item);
             }
         }
-
         existing.setUpdatedAt(LocalDateTime.now());
         existing.recalculateTotals();
         return invoiceRepository.save(existing);
     }
 
-    /**
-     * ✅ Refuse to delete invoices that are linked to a Load or Trip. Deleting
-     *    them would leave the LoadBilling pointing at a dead invoice and
-     *    permanently block re-invoicing that load.
-     */
     @Transactional
     public void deleteInvoice(Long id) {
         Invoice invoice = getInvoiceById(id);
@@ -139,11 +124,10 @@ public class InvoiceService {
     @Transactional(readOnly = true)
     public InvoiceStats getInvoiceStats() {
         try {
-            Long totalInvoices        = invoiceRepository.count();
-            Long overdueCount         = invoiceRepository.countOverdue();
-            BigDecimal totalPaid      = invoiceRepository.sumPaidAmount();
+            Long totalInvoices          = invoiceRepository.count();
+            Long overdueCount           = invoiceRepository.countOverdue();
+            BigDecimal totalPaid        = invoiceRepository.sumPaidAmount();
             BigDecimal totalOutstanding = invoiceRepository.sumOutstandingAmount();
-
             return InvoiceStats.builder()
                     .totalInvoices(totalInvoices != null ? totalInvoices : 0L)
                     .overdueCount(overdueCount != null ? overdueCount : 0L)
@@ -153,10 +137,8 @@ public class InvoiceService {
         } catch (Exception e) {
             log.error("Error calculating invoice stats: {}", e.getMessage(), e);
             return InvoiceStats.builder()
-                    .totalInvoices(0L)
-                    .overdueCount(0L)
-                    .totalPaid(BigDecimal.ZERO)
-                    .totalOutstanding(BigDecimal.ZERO)
+                    .totalInvoices(0L).overdueCount(0L)
+                    .totalPaid(BigDecimal.ZERO).totalOutstanding(BigDecimal.ZERO)
                     .build();
         }
     }
@@ -172,18 +154,15 @@ public class InvoiceService {
     }
 
     // ---------------------------------------------------------------------
-    // Private helpers
-    // ---------------------------------------------------------------------
 
-    /** ✅ Extracted so both create paths share identical audit defaults. */
     private void applyDefaults(Invoice invoice) {
         LocalDateTime now = LocalDateTime.now();
-        if (invoice.getCreatedAt() == null) invoice.setCreatedAt(now);
-        if (invoice.getUpdatedAt() == null) invoice.setUpdatedAt(now);
-        if (invoice.getStatus()    == null) invoice.setStatus("DRAFT");
-        if (invoice.getSource()    == null) invoice.setSource("MANUAL");
-        if (invoice.getVatRate()   == null) invoice.setVatRate(DEFAULT_VAT_RATE);
-        if (invoice.getCurrency()  == null) invoice.setCurrency("ZAR");
+        if (invoice.getCreatedAt()   == null) invoice.setCreatedAt(now);
+        if (invoice.getUpdatedAt()   == null) invoice.setUpdatedAt(now);
+        if (invoice.getStatus()      == null) invoice.setStatus("DRAFT");
+        if (invoice.getSource()      == null) invoice.setSource("MANUAL");
+        if (invoice.getVatRate()     == null) invoice.setVatRate(DEFAULT_VAT_RATE);
+        if (invoice.getCurrency()    == null) invoice.setCurrency("ZAR");
         if (invoice.getInvoiceDate() == null) invoice.setInvoiceDate(now);
     }
 }

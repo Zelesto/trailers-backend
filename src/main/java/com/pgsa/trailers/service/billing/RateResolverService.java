@@ -127,21 +127,15 @@ private Rate buildDefaultRate() {
     LocalDate today = LocalDate.now();
 
     Rate r = new Rate();
-    r.setPerKm(new BigDecimal("1.50"));
-    r.setPerTon(new BigDecimal("50.00"));
-    r.setPerDay(new BigDecimal("2500.00"));
-    r.setLabourHourlyRate(new BigDecimal("200.00"));
-    r.setCraneHourlyRate(new BigDecimal("350.00"));
+    r.setPerKm(new BigDecimal("18.50"));
+    r.setPerTon(null);
+    r.setPerDay(null);
+    r.setLabourHourlyRate(null);
+    r.setCraneHourlyRate(new BigDecimal("750.00"));
     r.setFixedAmount(BigDecimal.ZERO);
-    r.setPriority(0);
-
-    // ✅ NOT NULL in DB — this was the missing field
-    r.setValidFrom(today);
-
-    // Set an open-ended upper bound so this default never "expires".
-    // If validTo is also NOT NULL, this is required; if nullable, harmless.
-    r.setValidTo(today.plusYears(10));
-
+    r.setPriority(-100);               // ✅ matches your existing defaults
+    r.setValidFrom(today);             // ✅ REQUIRED — DB column is NOT NULL
+    r.setValidTo(today.plusYears(10)); // ✅ open-ended default
     return r;
 }
 }

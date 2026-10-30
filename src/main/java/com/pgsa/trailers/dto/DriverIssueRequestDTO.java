@@ -15,6 +15,7 @@ import java.util.List;
 public class DriverIssueRequestDTO {
     private Long driverId;
     private LocalDateTime issueDate;
+    private String status; 
     private String notes;
     private List<DriverIssueItemRequestDTO> items;
 }

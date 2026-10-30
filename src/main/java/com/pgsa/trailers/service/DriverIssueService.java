@@ -309,10 +309,10 @@ public class DriverIssueService {
     }
 
     private DriverIssue createDriverIssue(DriverIssueRequestDTO request, Long userId) {
+        // DriverIssue entity does NOT track tripId — trip info is stored on the Trip entity.
         DriverIssue issue = DriverIssue.builder()
                 .issueNumber(generateIssueNumber())
                 .driverId(request.getDriverId())
-                .tripId(request.getTripId())
                 .issueDate(request.getIssueDate() != null ? request.getIssueDate() : LocalDateTime.now())
                 .status(STATUS_ISSUED)
                 .notes(request.getNotes())
@@ -345,11 +345,10 @@ public class DriverIssueService {
                 .quantity(itemReq.getQuantity().intValue())
                 .movementType("OUT")
                 .reason("Driver Issue")
-                .notes(String.format("Issued to driver: %d, Trip: %d",
-                    issue.getDriverId(), issue.getTripId()))
+                .notes(String.format("Issued to driver: %d", issue.getDriverId()))
                 .referenceNumber(issue.getIssueNumber())
                 .performedBy(String.valueOf(userId))
-                .tripId(issue.getTripId())
+                .tripId(null)
                 .referenceType("DRIVER_ISSUE")
                 .requiresApproval(false)
                 .approvalStatus("APPROVED")
@@ -461,7 +460,9 @@ public class DriverIssueService {
     private DriverIssueRequestDTO buildSwapIssueRequest(DriverIssue oldIssue, SwapItemRequestDTO swapRequest) {
         DriverIssueRequestDTO request = new DriverIssueRequestDTO();
         request.setDriverId(oldIssue.getDriverId());
-        request.setTripId(oldIssue.getTripId());
+        // NOTE: DriverIssueRequestDTO still has a tripId field, but the DriverIssue
+        // entity does not track it — so we leave it null here.
+        request.setTripId(null);
         request.setIssueDate(LocalDateTime.now());
         request.setNotes(String.format("SWAP: Replacing damaged item. Original Issue: %s, Damage: %s",
             oldIssue.getIssueNumber(), swapRequest.getDamagedCondition()));
@@ -560,7 +561,6 @@ public class DriverIssueService {
                 .id(issue.getId())
                 .issueNumber(issue.getIssueNumber())
                 .driverId(issue.getDriverId())
-                .tripId(issue.getTripId())
                 .issueDate(issue.getIssueDate())
                 .status(issue.getStatus())
                 .notes(issue.getNotes())
@@ -583,9 +583,6 @@ public class DriverIssueService {
                 .quantityOutstanding(item.getQuantityIssued().subtract(item.getQuantityReturned()))
                 .conditionIssued(item.getConditionIssued())
                 .conditionReturned(item.getConditionReturned())
-                .isSwap(item.getIsSwap())
-                .swapReason(item.getSwapReason())
-                .swapIssueId(item.getSwapIssueId())
                 .notes(item.getNotes())
                 .build();
     }

@@ -26,9 +26,8 @@ public class InvoiceService {
 
     @Transactional(readOnly = true)
     public Page<Invoice> getAllInvoices(Pageable pageable) {
-        try {
-            return invoiceRepository.findAll(pageable);
-        } catch (Exception e) {
+        try { return invoiceRepository.findAll(pageable); }
+        catch (Exception e) {
             log.error("Error fetching invoices: {}", e.getMessage(), e);
             return Page.empty(pageable);
         }
@@ -42,23 +41,13 @@ public class InvoiceService {
 
     @Transactional
     public Invoice createInvoice(Invoice invoice) {
-        log.info("Creating invoice: {}", invoice.getInvoiceNumber());
         applyDefaults(invoice);
         invoice.recalculateTotals();
         return invoiceRepository.save(invoice);
     }
 
-    /**
-     * ✅ Persist an invoice whose subtotal/VAT/total were set explicitly by the
-     * caller (e.g. {@code InvoiceBillingService}) from an authoritative source
-     * such as {@code LoadBilling} or {@code TripBilling}. Audit defaults are
-     * applied, but {@link Invoice#recalculateTotals()} is NOT invoked.
-     */
     @Transactional
     public Invoice createInvoicePreservingTotals(Invoice invoice) {
-        log.info("Creating invoice (explicit totals): {} subtotal={} vat={} total={}",
-                invoice.getInvoiceNumber(), invoice.getSubtotal(),
-                invoice.getTaxTotal(), invoice.getTotalAmount());
         applyDefaults(invoice);
         if (invoice.getSubtotal()    == null) invoice.setSubtotal(BigDecimal.ZERO);
         if (invoice.getTaxTotal()    == null) invoice.setTaxTotal(BigDecimal.ZERO);
@@ -118,7 +107,6 @@ public class InvoiceService {
     public void sendInvoiceEmail(Long id) {
         Invoice invoice = getInvoiceById(id);
         log.info("Sending invoice {} to {}", invoice.getInvoiceNumber(), invoice.getCustomerEmail());
-        // TODO: implement actual email sending
     }
 
     @Transactional(readOnly = true)
@@ -152,8 +140,6 @@ public class InvoiceService {
     public List<Invoice> getOverdueInvoices() {
         return invoiceRepository.findOverdueInvoices(LocalDateTime.now());
     }
-
-    // ---------------------------------------------------------------------
 
     private void applyDefaults(Invoice invoice) {
         LocalDateTime now = LocalDateTime.now();

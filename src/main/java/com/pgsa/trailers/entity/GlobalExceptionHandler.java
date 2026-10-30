@@ -179,6 +179,33 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(problemDetail);
     }
 
+
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+public ResponseEntity<Map<String, Object>> handleMethodNotSupported(
+        org.springframework.web.HttpRequestMethodNotSupportedException ex) {
+    return ResponseEntity
+            .status(org.springframework.http.HttpStatus.METHOD_NOT_ALLOWED)
+            .body(Map.of(
+                    "status", 405,
+                    "error", "Method Not Allowed",
+                    "message", "HTTP method " + ex.getMethod() + " is not supported for this endpoint",
+                    "supportedMethods", ex.getSupportedHttpMethods() != null ? ex.getSupportedHttpMethods().toString() : "unknown"
+            ));
+}
+
+@ExceptionHandler(org.springframework.web.servlet.NoHandlerFoundException.class)
+public ResponseEntity<Map<String, Object>> handleNoHandlerFound(
+        org.springframework.web.servlet.NoHandlerFoundException ex) {
+    return ResponseEntity
+            .status(org.springframework.http.HttpStatus.NOT_FOUND)
+            .body(Map.of(
+                    "status", 404,
+                    "error", "Not Found",
+                    "message", "No endpoint for " + ex.getHttpMethod() + " " + ex.getRequestURL()
+            ));
+}
+
+    
     // ========== DATA/DB EXCEPTIONS ==========
 
     @ExceptionHandler(DataIntegrityViolationException.class)

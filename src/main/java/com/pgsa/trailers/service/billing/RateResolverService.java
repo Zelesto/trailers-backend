@@ -26,18 +26,7 @@ public class RateResolverService {
 
     /**
      * Resolve the best matching rate for a trip.
-     * <p>
-     * ✅ Guarantees the returned {@link Rate} is <b>persisted (managed)</b>, so it
-     * can be safely assigned to a {@code TripBilling} without triggering
-     * {@code TransientPropertyValueException} on the next auto-flush.
-     * <p>
-     * Strategy:
-     * <ol>
-     *   <li>Load all rates valid on the trip date (NULL-safe date filter).</li>
-     *   <li>Filter in Java, treating {@code null} on the rate side as "matches anything".</li>
-     *   <li>Sort so customer-specific rates beat generic, then higher priority wins.</li>
-     *   <li>If nothing matches, fall back to the persisted DEFAULT rate.</li>
-     * </ol>
+     * ✅ Guarantees the returned {@link Rate} is <b>persisted (managed)</b>.
      */
     public Rate resolveRate(Trip trip) {
         log.info("🔍 Resolving rate for Trip: {}", trip.getTripNumber());
@@ -52,7 +41,6 @@ public class RateResolverService {
 
         Long customerId = trip.getCustomerId();
 
-        // ✅ Simple, NULL-safe query — only constrains on validFrom/validTo.
         List<Rate> allValid = rateRepository.findAllValidAtDate(tripDate);
         log.debug("Loaded {} rates valid on {}", allValid.size(), tripDate);
 
@@ -67,7 +55,6 @@ public class RateResolverService {
             return getOrCreateDefaultRate();
         }
 
-        // Sort: customer-specific first, then higher priority
         Rate best = matching.stream()
                 .min(Comparator
                         .comparing((Rate r) -> r.getCustomer() == null ? 1 : 0)
@@ -82,9 +69,8 @@ public class RateResolverService {
 
     /**
      * ✅ Return a persisted default rate. Any customer-agnostic rate is a
-     * candidate (matches your production rows with {@code priority = -100}).
-     * Picks lowest {@code id} deterministically so duplicates never cause
-     * unpredictable behaviour.
+     * candidate (matches production rows with {@code priority = -100}).
+     * Picks lowest {@code id} deterministically.
      */
     @Transactional
     public Rate getOrCreateDefaultRate() {
@@ -98,12 +84,7 @@ public class RateResolverService {
     }
 
     // ---------------------------------------------------------------------
-    // Private helpers
-    // ---------------------------------------------------------------------
 
-    /**
-     * {@code null} customer on the rate = "applies to any customer".
-     */
     private boolean matchesCustomer(Rate rate, Long customerId) {
         if (rate.getCustomer() == null) return true;   // generic rate
         if (customerId == null) return false;
@@ -112,10 +93,9 @@ public class RateResolverService {
 
     private boolean matchesSchedule(Rate rate, LocalDate tripDate, LocalTime tripTime) {
         RateSchedule schedule = rate.getSchedule();
-        if (schedule == null) return true; // always applies
-
+        if (schedule == null) return true;
         String applyOn = schedule.getApplyOn();
-        if (applyOn == null) return true;
+        if (applyOn == null) return true;   // ✅ null-safe switch
 
         return switch (applyOn) {
             case "WEEKDAY" -> tripDate.getDayOfWeek().getValue() <= 5;
@@ -129,12 +109,8 @@ public class RateResolverService {
     }
 
     /**
-     * ✅ Mirrors the existing production defaults in your DB:
-     * per_km = 18.50, crane_hourly = 750.00, priority = -100,
-     * valid_from = today, valid_to = 2099-12-31.
-     * <p>
-     * <b>validFrom MUST be set</b> — the {@code rates.valid_from} column is
-     * NOT NULL in your schema.
+     * ✅ Mirrors production defaults: per_km=18.50, crane=750, priority=-100.
+     * <b>validFrom MUST be set</b> — the {@code rates.valid_from} column is NOT NULL.
      */
     private Rate buildDefaultRate() {
         Rate r = new Rate();
@@ -145,8 +121,8 @@ public class RateResolverService {
         r.setCraneHourlyRate(new BigDecimal("750.00"));
         r.setFixedAmount(BigDecimal.ZERO);
         r.setPriority(-100);
-        r.setValidFrom(LocalDate.now());                 // ✅ NOT NULL in DB
-        r.setValidTo(LocalDate.of(2099, 12, 31));        // ✅ matches existing rows
+        r.setValidFrom(LocalDate.now());
+        r.setValidTo(LocalDate.of(2099, 12, 31));
         return r;
     }
 }

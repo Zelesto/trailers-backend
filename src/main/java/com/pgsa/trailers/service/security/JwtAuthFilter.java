@@ -138,13 +138,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             return bearerToken.substring(7).trim();
         }
 
-        // Also check for token in query parameter (for debugging/testing)
-        String tokenParam = request.getParameter("token");
-        if (StringUtils.hasText(tokenParam)) {
-            log.debug("📝 Found token in query parameter");
-            return tokenParam.trim();
-        }
-
         return null;
     }
 
@@ -172,7 +165,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
      */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        String path = request.getServletPath();
+        String contextPath = request.getContextPath();
+        String path = request.getRequestURI();
+        if (StringUtils.hasText(contextPath) && path.startsWith(contextPath)) {
+            path = path.substring(contextPath.length());
+        }
 
         // List of public endpoints that don't require authentication
         List<String> publicEndpoints = List.of(

@@ -14,10 +14,24 @@ services:
       - key: APP_DB_INIT_DROP
         value: "false"
       - key: OPENROUTESERVICE_API_KEY
-        value: "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImE4ZmFlZjFiNmFmMjQyNjQ4ZDA5MzBiOGRjMzIzMDlhIiwiaCI6Im11cm11cjY0In0="
-      - key: JWT_SECRET
-        value: "Y2hpZWZzdHJhaWdodHN1Y2Nlc3NmdWxiYXNpY2FueW9uZXN0YXl0cmlwY2xpbWJ1c2U="
+        sync: false
+      - key: SECURITY_JWT_SECRET
+        sync: false
       - key: JWT_EXPIRATION
         value: "86400000"
-    healthCheckPath: /api/actuator/health
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      - key: SUPABASE_S3_ENDPOINT
+        sync: false
+      - key: SUPABASE_ACCESS_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+    healthCheckPath: /actuator/health
     autoDeploy: true

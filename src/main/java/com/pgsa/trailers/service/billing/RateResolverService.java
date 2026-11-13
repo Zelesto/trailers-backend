@@ -75,6 +75,7 @@ public class RateResolverService {
     @Transactional
     public Rate getOrCreateDefaultRate() {
         return rateRepository.findAll().stream()
+                .filter(r -> Boolean.TRUE.equals(r.getIsActive()))
                 .filter(r -> r.getCustomer() == null)
                 .min(Comparator.comparing(Rate::getId))
                 .orElseGet(() -> {

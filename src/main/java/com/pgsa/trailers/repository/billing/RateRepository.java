@@ -29,7 +29,8 @@ public interface RateRepository extends JpaRepository<Rate, Long> {
      */
     @Query("""
         SELECT r FROM Rate r
-        WHERE r.validFrom <= :tripDate
+        WHERE r.isActive = true
+          AND r.validFrom <= :tripDate
           AND (r.validTo IS NULL OR r.validTo >= :tripDate)
         ORDER BY r.priority DESC, r.id ASC
     """)
@@ -47,7 +48,8 @@ public interface RateRepository extends JpaRepository<Rate, Long> {
      */
     @Query("""
         SELECT r FROM Rate r
-        WHERE (:customerId  IS NULL OR r.customer IS NULL OR r.customer.id = :customerId)
+        WHERE r.isActive = true
+          AND (:customerId  IS NULL OR r.customer IS NULL OR r.customer.id = :customerId)
           AND (:vehicleType IS NULL OR r.vehicleType IS NULL
                                    OR r.vehicleType.name = :vehicleType)
           AND (r.destinationPattern IS NULL
@@ -74,7 +76,8 @@ public interface RateRepository extends JpaRepository<Rate, Long> {
      */
     @Query("""
         SELECT r FROM Rate r
-        WHERE r.customer.id = :customerId
+        WHERE r.isActive = true
+          AND r.customer.id = :customerId
           AND r.validFrom <= :tripDate
           AND (r.validTo IS NULL OR r.validTo >= :tripDate)
         ORDER BY r.priority DESC
@@ -88,7 +91,8 @@ public interface RateRepository extends JpaRepository<Rate, Long> {
      */
     @Query("""
         SELECT r FROM Rate r
-        WHERE r.customer IS NULL
+        WHERE r.isActive = true
+          AND r.customer IS NULL
           AND r.validFrom <= :tripDate
           AND (r.validTo IS NULL OR r.validTo >= :tripDate)
         ORDER BY r.priority DESC
@@ -103,7 +107,8 @@ public interface RateRepository extends JpaRepository<Rate, Long> {
      */
     @Query("""
         SELECT r FROM Rate r
-        WHERE r.vehicleType.name = :vehicleType
+        WHERE r.isActive = true
+          AND r.vehicleType.name = :vehicleType
           AND r.validFrom <= :tripDate
           AND (r.validTo IS NULL OR r.validTo >= :tripDate)
     """)

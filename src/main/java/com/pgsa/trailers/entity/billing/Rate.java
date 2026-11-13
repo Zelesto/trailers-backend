@@ -70,6 +70,9 @@ public class Rate {
     @Column(name = "priority")
     private Integer priority = 0;
 
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
+
     @Column(name = "valid_from", nullable = false)
     private LocalDate validFrom;
 
@@ -94,6 +97,7 @@ public class Rate {
         updatedAt = LocalDateTime.now();
         if (fixedAmount == null) fixedAmount = BigDecimal.ZERO;
         if (priority == null) priority = 0;
+        if (isActive == null) isActive = true;
     }
 
     @PreUpdate

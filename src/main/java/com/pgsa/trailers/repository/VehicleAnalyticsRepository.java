@@ -28,10 +28,10 @@ public interface VehicleAnalyticsRepository extends JpaRepository<Vehicle, Long>
         LEFT JOIN trip t ON t.vehicle_id = v.id 
             AND t.status IN ('COMPLETED', 'CLOSED', 'FINALIZED')
             AND t.is_active = true
-            AND DATE(t.actual_end_date) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
+            AND CAST(t.actual_end_date AS DATE) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
         LEFT JOIN fuel_slip fs ON fs.vehicle_id = v.id 
             AND fs.is_active = true
-            AND DATE(fs.transaction_date) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
+            AND CAST(fs.transaction_date AS DATE) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
         WHERE v.is_active = true
         GROUP BY v.registration_number
         ORDER BY kmPerLiter DESC
@@ -56,7 +56,7 @@ public interface VehicleAnalyticsRepository extends JpaRepository<Vehicle, Long>
         LEFT JOIN trip t ON t.vehicle_id = v.id 
             AND t.status IN ('COMPLETED', 'CLOSED', 'FINALIZED')
             AND t.is_active = true
-            AND DATE(t.actual_end_date) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
+            AND CAST(t.actual_end_date AS DATE) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
         WHERE v.is_active = true
         GROUP BY v.registration_number, v.make, v.model, v.year
         HAVING COUNT(DISTINCT t.id) > 0

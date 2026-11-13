@@ -21,10 +21,6 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
     Optional<Vehicle> findByVinIgnoreCase(String vin);
     Optional<Vehicle> findByFleetNumber(String fleetNumber);
     
-    // Active status with finders
-    Optional<Vehicle> findByIdAndIsActiveTrue(Long id);
-    List<Vehicle> findByIsActiveTrue();
-
     // ====== Status Finders ======
     List<Vehicle> findByStatus(String status);
     List<Vehicle> findByStatusIn(List<String> statuses);
@@ -66,5 +62,4 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
 
     // ====== Counts ======
     long countByStatus(String status);
-    long countByIsActiveTrue();
 }

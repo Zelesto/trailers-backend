@@ -1,5 +1,3 @@
-// src/main/java/com/pgsa/trailers/service/billing/BillingCalculatorService.java
-
 package com.pgsa.trailers.service.billing;
 
 import com.pgsa.trailers.entity.billing.LoadBilling;
@@ -7,10 +5,10 @@ import com.pgsa.trailers.entity.billing.Rate;
 import com.pgsa.trailers.entity.billing.TripBilling;
 import com.pgsa.trailers.entity.ops.Load;
 import com.pgsa.trailers.entity.ops.Trip;
-import com.pgsa.trailers.repository.billing.TripBillingRepository;
-import com.pgsa.trailers.repository.billing.LoadBillingRepository;
 import com.pgsa.trailers.repository.LoadRepository;
 import com.pgsa.trailers.repository.TripRepository;
+import com.pgsa.trailers.repository.billing.LoadBillingRepository;
+import com.pgsa.trailers.repository.billing.TripBillingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,9 +19,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Function;
 
 @Service
 @RequiredArgsConstructor
@@ -36,383 +34,310 @@ public class BillingCalculatorService {
     private final LoadRepository loadRepository;
     private final TripRepository tripRepository;
 
-    private static final BigDecimal VAT_RATE = new BigDecimal("0.15");
-    private static final BigDecimal TON_CONVERSION = new BigDecimal("1000");
+    private static final BigDecimal VAT_RATE          = new BigDecimal("0.15");
+    private static final BigDecimal TON_CONVERSION    = new BigDecimal("1000");
     private static final BigDecimal CRANE_BASE_CHARGE = new BigDecimal("150.00");
 
-    // ==================== MAIN CALCULATION METHOD ====================
+    // ============ MAIN CALCULATION ============
 
     @Transactional
     public TripBilling calculateTripBilling(Long tripId, Long userId) {
         log.info("💰 Calculating billing for Trip ID: {}", tripId);
 
-        try {
-            Trip trip = tripRepository.findByIdWithAllRelations(tripId)
-                    .orElseThrow(() -> new RuntimeException("Trip not found: " + tripId));
+        Trip trip = tripRepository.findByIdWithAllRelations(tripId)
+                .orElseThrow(() -> new IllegalArgumentException("Trip not found: " + tripId));
 
-            // Check if already calculated
-            TripBilling existing = tripBillingRepository.findByTripId(tripId);
-            if (existing != null && "CALCULATED".equals(existing.getStatus())) {
-                log.info("Trip {} already has billing calculated", tripId);
-                return existing;
-            }
-
-            // 1. Resolve rate
-            Rate rate = rateResolverService.resolveRate(trip);
-            if (rate == null) {
-                log.warn("⚠️ No rate found for trip {}, using default", tripId);
-                rate = createDefaultRate();
-            }
-
-            // 2. Get trip metrics
-            BigDecimal distance = getTripDistance(trip);
-            BigDecimal tonnage = getTripTonnage(trip);
-            Integer days = calculateTripDays(trip);
-            BigDecimal labourHours = estimateLabourHours(trip);
-            BigDecimal craneHours = getCraneHours(trip);
-
-            // 3. Calculate each component
-            BigDecimal distanceCharge = calculateDistanceCharge(rate, distance);
-            BigDecimal tonnageCharge = calculateTonnageCharge(rate, tonnage);
-            BigDecimal dailyRateCharge = calculateDailyRateCharge(rate, days);
-            BigDecimal labourCharge = calculateLabourCharge(rate, labourHours);
-            BigDecimal craneCharge = calculateCraneCharge(rate, craneHours);
-            BigDecimal fixedSurcharge = rate.getFixedAmount() != null ? rate.getFixedAmount() : BigDecimal.ZERO;
-
-            // 4. Build TripBilling
-            TripBilling billing = TripBilling.builder()
-                    .trip(trip)
-                    .rate(rate)
-                    .customerId(trip.getCustomerId() != null ? trip.getCustomerId() : 0L)
-                    .distanceKm(distance)
-                    .tonnage(tonnage)
-                    .days(days)
-                    .labourHours(labourHours)
-                    .craneHours(craneHours)
-                    .baseRate(rate.getPerKm() != null ? rate.getPerKm() : BigDecimal.ZERO)
-                    .distanceCharge(distanceCharge)
-                    .tonnageCharge(tonnageCharge)
-                    .dailyRateCharge(dailyRateCharge)
-                    .labourCharge(labourCharge)
-                    .craneCharge(craneCharge)
-                    .fixedSurcharge(fixedSurcharge)
-                    .status("CALCULATED")
-                    .calculatedAt(LocalDateTime.now())
-                    .calculatedBy(userId)
-                    .isVatApplicable(true)
-                    .vatRate(new BigDecimal("15.00"))
-                    .build();
-
-            billing.calculateTotals();
-            TripBilling saved = tripBillingRepository.save(billing);
-
-            log.info("✅ Trip billing calculated: {} | Distance: {} km | Tonnage: {} tons | Total: {}",
-                    trip.getTripNumber(), distance, tonnage, saved.getTotal());
-
-            // 5. Update load billing
-            if (trip.getLoadId() != null && !trip.getLoadId().isEmpty()) {
-                updateLoadBilling(trip.getLoadId(), userId);
-            }
-
-            return saved;
-
-        } catch (Exception e) {
-            log.error("❌ Error calculating billing for trip {}: {}", tripId, e.getMessage(), e);
-            return createDefaultTripBilling(tripId, userId);
+        TripBilling existing = tripBillingRepository.findByTripId(tripId);
+        if (existing != null && "CALCULATED".equals(existing.getStatus())) {
+            log.info("Trip {} already has billing calculated", tripId);
+            return existing;
         }
+
+        Rate rate = rateResolverService.resolveRate(trip);
+        if (rate == null || rate.getId() == null) {
+            log.warn("⚠️ Resolver returned a transient rate for trip {}, forcing default", tripId);
+            rate = rateResolverService.getOrCreateDefaultRate();
+        }
+
+        BigDecimal distance    = getTripDistance(trip);
+        BigDecimal tonnage     = getTripTonnage(trip);
+        Integer    days        = calculateTripDays(trip);
+        BigDecimal labourHours = estimateLabourHours(trip);
+        BigDecimal craneHours  = getCraneHours(trip);
+
+        TripBilling billing = TripBilling.builder()
+                .trip(trip)
+                .rate(rate)
+                .customerId(trip.getCustomerId() != null ? trip.getCustomerId() : 0L)
+                .distanceKm(distance)
+                .tonnage(tonnage)
+                .days(days)
+                .labourHours(labourHours)
+                .craneHours(craneHours)
+                .baseRate(rate.getPerKm() != null ? rate.getPerKm() : BigDecimal.ZERO)
+                .distanceCharge(calculateDistanceCharge(rate, distance))
+                .tonnageCharge(calculateTonnageCharge(rate, tonnage))
+                .dailyRateCharge(calculateDailyRateCharge(rate, days))
+                .labourCharge(calculateLabourCharge(rate, labourHours))
+                .craneCharge(calculateCraneCharge(rate, craneHours))
+                .fixedSurcharge(rate.getFixedAmount() != null
+                        ? rate.getFixedAmount() : BigDecimal.ZERO)
+                .status("CALCULATED")
+                .calculatedAt(LocalDateTime.now())
+                .calculatedBy(userId)
+                .isVatApplicable(true)
+                .vatRate(new BigDecimal("15.00"))
+                .build();
+
+        billing.calculateTotals();
+        TripBilling saved = tripBillingRepository.save(billing);
+
+        log.info("✅ Trip billing calculated: {} | Distance: {} km | Tonnage: {} tons | Total: {}",
+                trip.getTripNumber(), distance, tonnage, saved.getTotal());
+
+        if (trip.getLoadId() != null && !trip.getLoadId().isEmpty()) {
+            updateLoadBilling(trip.getLoadId(), userId);
+        }
+        return saved;
     }
 
-    // ==================== HELPER METHODS ====================
+    // ============ TRIP METRICS ============
 
     private BigDecimal getTripDistance(Trip trip) {
-        BigDecimal distance = trip.getActualDistanceKm() != null && trip.getActualDistanceKm().compareTo(BigDecimal.ZERO) > 0
-                ? trip.getActualDistanceKm()
-                : trip.getCalculatedDistanceKm();
-        if (distance == null || distance.compareTo(BigDecimal.ZERO) <= 0) {
-            distance = trip.getPlannedDistanceKm() != null ? trip.getPlannedDistanceKm() : BigDecimal.ZERO;
+        BigDecimal d = trip.getActualDistanceKm() != null
+                && trip.getActualDistanceKm().compareTo(BigDecimal.ZERO) > 0
+                ? trip.getActualDistanceKm() : trip.getCalculatedDistanceKm();
+        if (d == null || d.compareTo(BigDecimal.ZERO) <= 0) {
+            d = trip.getPlannedDistanceKm() != null ? trip.getPlannedDistanceKm() : BigDecimal.ZERO;
         }
-        return distance;
+        return d;
     }
 
     private BigDecimal getTripTonnage(Trip trip) {
-        BigDecimal weightKg = trip.getCargoWeight() != null ? trip.getCargoWeight() : BigDecimal.ZERO;
-        return weightKg.divide(TON_CONVERSION, 2, RoundingMode.HALF_UP);
+        BigDecimal kg = trip.getCargoWeight() != null ? trip.getCargoWeight() : BigDecimal.ZERO;
+        return kg.divide(TON_CONVERSION, 2, RoundingMode.HALF_UP);
     }
 
     private BigDecimal getCraneHours(Trip trip) {
-        if (Boolean.TRUE.equals(trip.getCraneUsed())) {
-            return BigDecimal.ONE; // Default 1 hour if crane was used
-        }
-        return BigDecimal.ZERO;
+        return Boolean.TRUE.equals(trip.getCraneUsed()) ? BigDecimal.ONE : BigDecimal.ZERO;
     }
 
     private Integer calculateTripDays(Trip trip) {
         if (trip.getActualStartDate() != null && trip.getActualEndDate() != null) {
-            long days = Duration.between(trip.getActualStartDate(), trip.getActualEndDate()).toDays();
-            return Math.max(1, (int) days);
+            long d = Duration.between(trip.getActualStartDate(), trip.getActualEndDate()).toDays();
+            return Math.max(1, (int) d);
         }
         if (trip.getPlannedStartDate() != null && trip.getPlannedEndDate() != null) {
-            long days = Duration.between(trip.getPlannedStartDate(), trip.getPlannedEndDate()).toDays();
-            return Math.max(1, (int) days);
+            long d = Duration.between(trip.getPlannedStartDate(), trip.getPlannedEndDate()).toDays();
+            return Math.max(1, (int) d);
         }
         if (trip.getEstimatedDurationHours() != null) {
-            int days = trip.getEstimatedDurationHours().divide(new BigDecimal("24"), 0, RoundingMode.HALF_UP).intValue();
-            return Math.max(1, days);
+            int d = trip.getEstimatedDurationHours()
+                    .divide(new BigDecimal("24"), 0, RoundingMode.HALF_UP).intValue();
+            return Math.max(1, d);
         }
         return 1;
     }
 
     private BigDecimal estimateLabourHours(Trip trip) {
-        BigDecimal defaultHours = new BigDecimal("2.0");
-
         if (trip.getCommodityType() != null) {
-            String commodity = trip.getCommodityType().toLowerCase();
-            if (commodity.contains("transformer") || commodity.contains("heavy")) {
-                return new BigDecimal("4.0");
-            }
-            if (commodity.contains("chemical") || commodity.contains("hazardous")) {
-                return new BigDecimal("3.5");
-            }
+            String c = trip.getCommodityType().toLowerCase();
+            if (c.contains("transformer") || c.contains("heavy"))   return new BigDecimal("4.0");
+            if (c.contains("chemical")   || c.contains("hazardous")) return new BigDecimal("3.5");
         }
-
-        BigDecimal distance = trip.getCalculatedDistanceKm() != null 
-                ? trip.getCalculatedDistanceKm() 
-                : trip.getPlannedDistanceKm();
-        
-        if (distance != null) {
-            if (distance.compareTo(new BigDecimal("1000")) > 0) return new BigDecimal("4.0");
-            if (distance.compareTo(new BigDecimal("500")) > 0) return new BigDecimal("3.0");
-            if (distance.compareTo(new BigDecimal("200")) > 0) return new BigDecimal("2.5");
+        BigDecimal dist = trip.getCalculatedDistanceKm() != null
+                ? trip.getCalculatedDistanceKm() : trip.getPlannedDistanceKm();
+        if (dist != null) {
+            if (dist.compareTo(new BigDecimal("1000")) > 0) return new BigDecimal("4.0");
+            if (dist.compareTo(new BigDecimal("500"))  > 0) return new BigDecimal("3.0");
+            if (dist.compareTo(new BigDecimal("200"))  > 0) return new BigDecimal("2.5");
         }
-
-        return defaultHours;
+        return new BigDecimal("2.0");
     }
 
-
-    /**
- * Recalculate all billings for a load
- */
-@Transactional
-public LoadBilling recalculateLoadBilling(String loadId, Long userId) {
-    log.info("🔄 Recalculating all billings for Load: {}", loadId);
-
-    // Delete existing trip billings
-    List<Trip> trips = tripRepository.findByLoadId(loadId);
-    
-    for (Trip trip : trips) {
-        // Delete existing billing
-        TripBilling existing = tripBillingRepository.findByTripId(trip.getId());
-        if (existing != null) {
-            tripBillingRepository.delete(existing);
-        }
-        // Recalculate
-        calculateTripBilling(trip.getId(), userId);
-    }
-
-    // Update load billing
-    return updateLoadBilling(loadId, userId);
-}
-    
-    // ==================== CHARGE CALCULATIONS ====================
+    // ============ CHARGE CALCULATIONS ============
 
     private BigDecimal calculateDistanceCharge(Rate rate, BigDecimal distance) {
-        if (rate.getPerKm() == null || distance == null || distance.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO;
-        }
-        BigDecimal ratePerKm = rate.getPerKm();
-        if (distance.compareTo(new BigDecimal("500")) > 0) {
-            ratePerKm = ratePerKm.multiply(new BigDecimal("0.90"));
-        } else if (distance.compareTo(new BigDecimal("200")) > 0) {
-            ratePerKm = ratePerKm.multiply(new BigDecimal("0.95"));
-        }
-        return distance.multiply(ratePerKm).setScale(2, RoundingMode.HALF_UP);
+        if (rate.getPerKm() == null || distance == null
+                || distance.compareTo(BigDecimal.ZERO) <= 0) return BigDecimal.ZERO;
+        BigDecimal perKm = rate.getPerKm();
+        if (distance.compareTo(new BigDecimal("500")) > 0)      perKm = perKm.multiply(new BigDecimal("0.90"));
+        else if (distance.compareTo(new BigDecimal("200")) > 0) perKm = perKm.multiply(new BigDecimal("0.95"));
+        return distance.multiply(perKm).setScale(2, RoundingMode.HALF_UP);
     }
 
     private BigDecimal calculateTonnageCharge(Rate rate, BigDecimal tonnage) {
-        if (rate.getPerTon() == null || tonnage == null || tonnage.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO;
-        }
+        if (rate.getPerTon() == null || tonnage == null
+                || tonnage.compareTo(BigDecimal.ZERO) <= 0) return BigDecimal.ZERO;
         return tonnage.multiply(rate.getPerTon()).setScale(2, RoundingMode.HALF_UP);
     }
 
     private BigDecimal calculateDailyRateCharge(Rate rate, Integer days) {
-        if (rate.getPerDay() == null || days == null || days <= 0) {
-            return BigDecimal.ZERO;
-        }
+        if (rate.getPerDay() == null || days == null || days <= 0) return BigDecimal.ZERO;
         return BigDecimal.valueOf(days).multiply(rate.getPerDay()).setScale(2, RoundingMode.HALF_UP);
     }
 
-    private BigDecimal calculateLabourCharge(Rate rate, BigDecimal labourHours) {
-        if (rate.getLabourHourlyRate() == null || labourHours == null || labourHours.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO;
-        }
-        return labourHours.multiply(rate.getLabourHourlyRate()).setScale(2, RoundingMode.HALF_UP);
+    private BigDecimal calculateLabourCharge(Rate rate, BigDecimal hours) {
+        if (rate.getLabourHourlyRate() == null || hours == null
+                || hours.compareTo(BigDecimal.ZERO) <= 0) return BigDecimal.ZERO;
+        return hours.multiply(rate.getLabourHourlyRate()).setScale(2, RoundingMode.HALF_UP);
     }
 
-    private BigDecimal calculateCraneCharge(Rate rate, BigDecimal craneHours) {
-        if (craneHours == null || craneHours.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO;
-        }
-        BigDecimal craneRate = rate.getCraneHourlyRate() != null 
-                ? rate.getCraneHourlyRate() 
-                : CRANE_BASE_CHARGE;
-        return craneHours.multiply(craneRate).setScale(2, RoundingMode.HALF_UP);
+    private BigDecimal calculateCraneCharge(Rate rate, BigDecimal hours) {
+        if (hours == null || hours.compareTo(BigDecimal.ZERO) <= 0) return BigDecimal.ZERO;
+        BigDecimal craneRate = rate.getCraneHourlyRate() != null
+                ? rate.getCraneHourlyRate() : CRANE_BASE_CHARGE;
+        return hours.multiply(craneRate).setScale(2, RoundingMode.HALF_UP);
     }
 
-    // ==================== DEFAULT CREATION ====================
+    // ============ LOAD BILLING ============
 
-    private Rate createDefaultRate() {
-        Rate defaultRate = new Rate();
-        defaultRate.setPerKm(new BigDecimal("1.50"));
-        defaultRate.setPerTon(new BigDecimal("50.00"));
-        defaultRate.setPerDay(new BigDecimal("2500.00"));
-        defaultRate.setLabourHourlyRate(new BigDecimal("200.00"));
-        defaultRate.setCraneHourlyRate(new BigDecimal("350.00"));
-        defaultRate.setFixedAmount(BigDecimal.ZERO);
-        defaultRate.setPriority(0);
-        return defaultRate;
-    }
-
-    /**
-     * Create a default TripBilling when calculation fails
-     */
-    private TripBilling createDefaultTripBilling(Long tripId, Long userId) {
-        log.info("📝 Creating default billing for Trip ID: {}", tripId);
-        try {
-            Trip trip = tripRepository.findByIdWithAllRelations(tripId)
-                    .orElseThrow(() -> new RuntimeException("Trip not found: " + tripId));
-
-            TripBilling billing = TripBilling.builder()
-                    .trip(trip)
-                    .customerId(trip.getCustomerId() != null ? trip.getCustomerId() : 0L)
-                    .distanceKm(BigDecimal.ZERO)
-                    .tonnage(BigDecimal.ZERO)
-                    .days(1)
-                    .labourHours(BigDecimal.ZERO)
-                    .craneHours(BigDecimal.ZERO)
-                    .baseRate(BigDecimal.ZERO)
-                    .distanceCharge(BigDecimal.ZERO)
-                    .tonnageCharge(BigDecimal.ZERO)
-                    .dailyRateCharge(BigDecimal.ZERO)
-                    .labourCharge(BigDecimal.ZERO)
-                    .craneCharge(BigDecimal.ZERO)
-                    .fixedSurcharge(BigDecimal.ZERO)
-                    .status("DRAFT")
-                    .calculatedAt(LocalDateTime.now())
-                    .calculatedBy(userId)
-                    .isVatApplicable(true)
-                    .vatRate(new BigDecimal("15.00"))
-                    .build();
-            
-            // ✅ Calculate totals using the existing method
-            billing.calculateTotals();
-            
-            TripBilling saved = tripBillingRepository.save(billing);
-            log.info("✅ Default billing created for trip {}: Total = {}", tripId, saved.getTotal());
-            return saved;
-            
-        } catch (Exception e) {
-            log.error("❌ Default billing creation failed for trip {}: {}", tripId, e.getMessage(), e);
-            return null;
-        }
-    }
-
-    // ==================== LOAD BILLING METHODS ====================
-
+    @Transactional
     public LoadBilling updateLoadBilling(String loadId, Long userId) {
         log.info("📦 Updating billing for Load: {}", loadId);
 
-        Load load = loadRepository.findByLoadNumber(loadId)
-                .orElseThrow(() -> new RuntimeException("Load not found: " + loadId));
+        Load load = resolveLoad(loadId);
+        String canonicalLoadNumber = load.getLoadNumber();
+        log.info("  → using loadNumber: {}", canonicalLoadNumber);
 
-        List<Trip> trips = tripRepository.findByLoadId(loadId);
-        List<TripBilling> billings = tripBillingRepository.findByTrip_LoadId(loadId);
+        List<Trip> trips = tripRepository.findByLoadId(canonicalLoadNumber);
+        List<TripBilling> billings = tripBillingRepository.findByTrip_LoadId(canonicalLoadNumber);
 
-        LoadBilling loadBilling = loadBillingRepository.findByLoadId(loadId)
-                .orElse(LoadBilling.builder().loadId(loadId).build());
+        LoadBilling lb = loadBillingRepository.findByLoadId(canonicalLoadNumber)
+                .orElse(LoadBilling.builder().loadId(canonicalLoadNumber).build());
 
-        loadBilling.setCustomerId(load.getCustomerId());
-        loadBilling.setTotalTrips(trips.size());
-
-        BigDecimal totalDistance = trips.stream()
-                .map(t -> t.getCalculatedDistanceKm() != null ? t.getCalculatedDistanceKm() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        loadBilling.setTotalDistanceKm(totalDistance);
-
-        BigDecimal totalTonnage = trips.stream()
-                .map(t -> t.getCargoWeight() != null ? t.getCargoWeight().divide(TON_CONVERSION, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        loadBilling.setTotalTonnage(totalTonnage);
-
-        loadBilling.setTotalDistanceCharge(billings.stream()
-                .map(TripBilling::getDistanceCharge)
-                .filter(c -> c != null)
+        lb.setCustomerId(load.getCustomerId());
+        lb.setTotalTrips(trips.size());
+        lb.setTotalDistanceKm(trips.stream()
+                .map(t -> t.getCalculatedDistanceKm() != null
+                        ? t.getCalculatedDistanceKm() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        lb.setTotalTonnage(trips.stream()
+                .map(t -> t.getCargoWeight() != null
+                        ? t.getCargoWeight().divide(TON_CONVERSION, 2, RoundingMode.HALF_UP)
+                        : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
 
-        loadBilling.setTotalTonnageCharge(billings.stream()
-                .map(TripBilling::getTonnageCharge)
-                .filter(c -> c != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        lb.setTotalDistanceCharge(sum(billings, TripBilling::getDistanceCharge));
+        lb.setTotalTonnageCharge(sum(billings, TripBilling::getTonnageCharge));
+        lb.setTotalDailyCharge(sum(billings, TripBilling::getDailyRateCharge));
+        lb.setTotalLabourCharge(sum(billings, TripBilling::getLabourCharge));
+        lb.setTotalCraneCharge(sum(billings, TripBilling::getCraneCharge));
+        lb.setTotalFixedSurcharge(sum(billings, TripBilling::getFixedSurcharge));
 
-        loadBilling.setTotalDailyCharge(billings.stream()
-                .map(TripBilling::getDailyRateCharge)
-                .filter(c -> c != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        BigDecimal subtotal = BigDecimal.ZERO
+                .add(lb.getTotalDistanceCharge())
+                .add(lb.getTotalTonnageCharge())
+                .add(lb.getTotalDailyCharge())
+                .add(lb.getTotalLabourCharge())
+                .add(lb.getTotalCraneCharge())
+                .add(lb.getTotalFixedSurcharge());
 
-        loadBilling.setTotalLabourCharge(billings.stream()
-                .map(TripBilling::getLabourCharge)
-                .filter(c -> c != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        lb.setSubtotal(subtotal);
+        lb.setVat(subtotal.multiply(VAT_RATE).setScale(2, RoundingMode.HALF_UP));
+        lb.setTotal(subtotal.add(lb.getVat()));
 
-        loadBilling.setTotalCraneCharge(billings.stream()
-                .map(TripBilling::getCraneCharge)
-                .filter(c -> c != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        if (lb.getStatus() == null) lb.setStatus("CALCULATED");
+        lb.setCalculatedAt(LocalDateTime.now());
+        lb.setCalculatedBy(userId);
 
-        loadBilling.setTotalFixedSurcharge(billings.stream()
-                .map(TripBilling::getFixedSurcharge)
-                .filter(c -> c != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-
-        BigDecimal subtotal = BigDecimal.ZERO;
-        subtotal = subtotal.add(loadBilling.getTotalDistanceCharge());
-        subtotal = subtotal.add(loadBilling.getTotalTonnageCharge());
-        subtotal = subtotal.add(loadBilling.getTotalDailyCharge());
-        subtotal = subtotal.add(loadBilling.getTotalLabourCharge());
-        subtotal = subtotal.add(loadBilling.getTotalCraneCharge());
-        subtotal = subtotal.add(loadBilling.getTotalFixedSurcharge());
-
-        loadBilling.setSubtotal(subtotal);
-        loadBilling.setVat(subtotal.multiply(VAT_RATE).setScale(2, RoundingMode.HALF_UP));
-        loadBilling.setTotal(subtotal.add(loadBilling.getVat()));
-
-        if (loadBilling.getStatus() == null) {
-            loadBilling.setStatus("CALCULATED");
-        }
-        loadBilling.setCalculatedAt(LocalDateTime.now());
-        loadBilling.setCalculatedBy(userId);
-
-        return loadBillingRepository.save(loadBilling);
+        return loadBillingRepository.save(lb);
     }
 
-    // ==================== QUERY METHODS ====================
+    private static BigDecimal sum(List<TripBilling> list,
+                                  Function<TripBilling, BigDecimal> getter) {
+        return list.stream().map(getter).filter(v -> v != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private Load resolveLoad(String loadIdOrNumber) {
+        if (loadIdOrNumber == null || loadIdOrNumber.isBlank()) {
+            throw new IllegalArgumentException("loadId is required");
+        }
+        var byNumber = loadRepository.findByLoadNumber(loadIdOrNumber);
+        if (byNumber.isPresent()) {
+            log.info("  → resolved load by loadNumber: {}", loadIdOrNumber);
+            return byNumber.get();
+        }
+        try {
+            Long numericId = Long.parseLong(loadIdOrNumber);
+            Load load = loadRepository.findById(numericId)
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Load not found by loadNumber '" + loadIdOrNumber
+                                    + "' or id " + numericId));
+            log.info("  → resolved load by numeric id: {} → loadNumber: {}",
+                    numericId, load.getLoadNumber());
+            return load;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Load not found: " + loadIdOrNumber);
+        }
+    }
+
+    // ============ RECALCULATION ============
+
+    @Transactional
+    public LoadBilling recalculateLoadBilling(String loadId, Long userId) {
+        log.info("🔄 Recalculating billing for Load: {}", loadId);
+
+        Load load = resolveLoad(loadId);
+        String canonicalLoadNumber = load.getLoadNumber();
+        log.info("  → canonical loadNumber: {}", canonicalLoadNumber);
+
+        List<Trip> trips = tripRepository.findByLoadId(canonicalLoadNumber);
+        for (Trip trip : trips) {
+            TripBilling existing = tripBillingRepository.findByTripId(trip.getId());
+            if (existing != null) tripBillingRepository.delete(existing);
+            calculateTripBilling(trip.getId(), userId);
+        }
+        return updateLoadBilling(canonicalLoadNumber, userId);
+    }
+
+    // ============ QUERIES ============
 
     public LoadBilling getLoadBilling(String loadId) {
-        return loadBillingRepository.findByLoadId(loadId)
-                .orElseThrow(() -> new RuntimeException("Load billing not found: " + loadId));
+        var byLoadId = loadBillingRepository.findByLoadId(loadId);
+        if (byLoadId.isPresent()) return byLoadId.get();
+        try {
+            Long numericId = Long.parseLong(loadId);
+            return loadBillingRepository.findById(numericId)
+                    .orElseThrow(() -> new IllegalArgumentException("Load billing not found: " + loadId));
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Load billing not found: " + loadId);
+        }
     }
 
     public TripBilling getTripBilling(Long tripId) {
-        TripBilling billing = tripBillingRepository.findByTripId(tripId);
-        if (billing == null) {
-            throw new RuntimeException("Trip billing not found for trip: " + tripId);
-        }
-        return billing;
+        TripBilling b = tripBillingRepository.findByTripId(tripId);
+        if (b == null) throw new IllegalArgumentException("Trip billing not found: " + tripId);
+        return b;
     }
 
     public List<LoadBilling> getBillableLoads() {
         try {
-            return loadBillingRepository.findBillableLoads();
+            List<LoadBilling> billable = loadBillingRepository.findBillableLoads();
+            if (billable != null && !billable.isEmpty()) return billable;
+
+            List<LoadBilling> generated = new ArrayList<>();
+            for (Load load : loadRepository.findAll()) {
+                if (load == null || load.getLoadNumber() == null
+                        || load.getLoadNumber().isBlank()) continue;
+                try {
+                    List<Trip> trips = tripRepository.findByLoadId(load.getLoadNumber());
+                    if (trips == null || trips.isEmpty()) continue;
+                    LoadBilling lb = loadBillingRepository
+                            .findByLoadId(load.getLoadNumber()).orElse(null);
+                    if (lb == null) lb = recalculateLoadBilling(load.getLoadNumber(), 0L);
+                    if (lb != null && lb.getInvoiceId() == null
+                            && ("CALCULATED".equalsIgnoreCase(lb.getStatus())
+                                || "DRAFT".equalsIgnoreCase(lb.getStatus()))) {
+                        generated.add(lb);
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to backfill billable load {}: {}",
+                            load.getLoadNumber(), e.getMessage());
+                }
+            }
+            return generated;
         } catch (Exception e) {
             log.error("Error fetching billable loads: {}", e.getMessage());
             return new ArrayList<>();

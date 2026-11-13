@@ -42,19 +42,71 @@ public class InventoryController {
     // Inventory Items
     // =============================================
 
+    /**
+     * ⚠️ IMPORTANT: The `sort = "name"` was removed from @PageableDefault.
+     *
+     * If `name` is not a sortable property on the InventoryItem entity
+     * (e.g. it's @Transient, or the entity field is actually called `itemName`),
+     * Spring Data throws a PropertyReferenceException. If any global exception
+     * handler converts that to Page.empty(), the frontend receives a valid
+     * 200 OK with { content: [], totalElements: 0, size: 0 } — which is exactly
+     * what we observed in the logs.
+     *
+     * Now the default sort is "natural order" (whatever the DB returns), and
+     * the client can still request ?sort=name if it wants to. If `name` isn't
+     * sortable, the client will get a clear 400 instead of a silent empty page.
+     */
     @GetMapping("/items")
     public ResponseEntity<Page<InventoryItemResponseDTO>> getAllItems(
-            @PageableDefault(size = 20, sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
-        log.info("Fetching all inventory items");
-        return ResponseEntity.ok(inventoryItemService.getAllItems(pageable));
+            @PageableDefault(size = 20) Pageable pageable) {
+
+        log.info("📋 GET /inventory/items — page={}, size={}, sort={}",
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                pageable.getSort().isSorted() ? pageable.getSort().toString() : "UNSORTED");
+
+        try {
+            Page<InventoryItemResponseDTO> result = inventoryItemService.getAllItems(pageable);
+
+            log.info("📋 GET /inventory/items RESULT — content={}, totalElements={}, totalPages={}, pageableSize={}",
+                    result.getContent().size(),
+                    result.getTotalElements(),
+                    result.getTotalPages(),
+                    result.getSize());
+
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("❌ GET /inventory/items FAILED — class={}, message={}",
+                    e.getClass().getName(), e.getMessage(), e);
+            throw e;
+        }
     }
 
     @GetMapping("/items/search")
     public ResponseEntity<Page<InventoryItemResponseDTO>> searchItems(
             @RequestParam(required = false) String search,
-            @PageableDefault(size = 20, sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
-        log.info("Searching inventory items with term: {}", search);
-        return ResponseEntity.ok(inventoryItemService.searchItems(search, pageable));
+            @PageableDefault(size = 20) Pageable pageable) {   // ← sort = "name" removed
+
+        log.info("🔍 GET /inventory/items/search — search='{}', page={}, size={}, sort={}",
+                search,
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                pageable.getSort().isSorted() ? pageable.getSort().toString() : "UNSORTED");
+
+        try {
+            Page<InventoryItemResponseDTO> result = inventoryItemService.searchItems(search, pageable);
+
+            log.info("🔍 GET /inventory/items/search RESULT — content={}, totalElements={}, pageableSize={}",
+                    result.getContent().size(),
+                    result.getTotalElements(),
+                    result.getSize());
+
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("❌ GET /inventory/items/search FAILED — class={}, message={}",
+                    e.getClass().getName(), e.getMessage(), e);
+            throw e;
+        }
     }
 
     @GetMapping("/items/{id}")
@@ -132,7 +184,7 @@ public class InventoryController {
                 .collect(Collectors.toList());
         return ResponseEntity.ok(outOfStockItems);
     }
-    
+
     // =============================================
     // Inventory Locations
     // =============================================
@@ -267,5 +319,102 @@ public class InventoryController {
     public ResponseEntity<InventoryStatisticsDTO> getStatistics() {
         log.info("Fetching inventory statistics");
         return ResponseEntity.ok(inventoryItemService.getStatistics());
+    }
+
+    // =============================================
+    // DIAGNOSTICS — /api/inventory/debug
+    // Bypasses pageable / service / DTO pipeline and reports raw DB truth.
+    // Hit this in the browser after deploy if items still don't appear:
+    //   GET https://trailers-backend.onrender.com/api/inventory/debug
+    //   (must be logged in — Authorization: Bearer <token>)
+    // =============================================
+
+    @GetMapping("/debug")
+    public ResponseEntity<Map<String, Object>> debugInventory() {
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        try {
+            // 1. Raw count — no filters, no paging
+            long totalRows = inventoryItemRepository.count();
+            result.put("totalRowsInDb", totalRows);
+
+            // 2. Raw entities — full table load
+            List<com.pgsa.trailers.entity.inventory.InventoryItem> raw =
+                    inventoryItemRepository.findAll();
+            result.put("rawFindAllCount", raw.size());
+            result.put("sampleRows", raw.stream().limit(5).map(i -> {
+                Map<String, Object> m = new java.util.LinkedHashMap<>();
+                m.put("id", i.getId());
+                m.put("name", i.getName());
+                m.put("sku", i.getSku());
+                m.put("isActive", i.getIsActive());
+                m.put("isHeld", i.getIsHeld());
+                m.put("quantity", i.getQuantity());
+                return m;
+            }).toList());
+
+            // 3. findAll with NO sort — the actual bug if contentSize comes back 0
+            try {
+                var pageNoSort = inventoryItemRepository.findAll(
+                        org.springframework.data.domain.PageRequest.of(0, 100));
+                result.put("pageNoSort", Map.of(
+                        "contentSize", pageNoSort.getContent().size(),
+                        "totalElements", pageNoSort.getTotalElements(),
+                        "size", pageNoSort.getSize()
+                ));
+            } catch (Exception e) {
+                result.put("pageNoSortError",
+                        e.getClass().getSimpleName() + ": " + e.getMessage());
+            }
+
+            // 4. findAll with sort=name — proves/denies the sort-name theory
+            try {
+                var pageSortName = inventoryItemRepository.findAll(
+                        org.springframework.data.domain.PageRequest.of(0, 100,
+                                org.springframework.data.domain.Sort.by("name").ascending()));
+                result.put("pageSortName", Map.of(
+                        "contentSize", pageSortName.getContent().size(),
+                        "totalElements", pageSortName.getTotalElements(),
+                        "size", pageSortName.getSize()
+                ));
+            } catch (Exception e) {
+                result.put("pageSortNameError",
+                        e.getClass().getSimpleName() + ": " + e.getMessage());
+            }
+
+            // 5. findAll with sort=id — should always work
+            try {
+                var pageSortId = inventoryItemRepository.findAll(
+                        org.springframework.data.domain.PageRequest.of(0, 100,
+                                org.springframework.data.domain.Sort.by("id").ascending()));
+                result.put("pageSortId", Map.of(
+                        "contentSize", pageSortId.getContent().size(),
+                        "totalElements", pageSortId.getTotalElements(),
+                        "size", pageSortId.getSize()
+                ));
+            } catch (Exception e) {
+                result.put("pageSortIdError",
+                        e.getClass().getSimpleName() + ": " + e.getMessage());
+            }
+
+            // 6. Also test the SERVICE method (same pageable as the controller uses)
+            try {
+                var servicePage = inventoryItemService.getAllItems(
+                        org.springframework.data.domain.PageRequest.of(0, 100));
+                result.put("servicePageNoSort", Map.of(
+                        "contentSize", servicePage.getContent().size(),
+                        "totalElements", servicePage.getTotalElements(),
+                        "size", servicePage.getSize()
+                ));
+            } catch (Exception e) {
+                result.put("servicePageNoSortError",
+                        e.getClass().getSimpleName() + ": " + e.getMessage());
+            }
+        } catch (Exception e) {
+            result.put("errorClass", e.getClass().getName());
+            result.put("errorMessage", e.getMessage());
+            result.put("stackTrace", java.util.Arrays.stream(e.getStackTrace())
+                    .limit(15).map(StackTraceElement::toString).toList());
+        }
+        return ResponseEntity.ok(result);
     }
 }

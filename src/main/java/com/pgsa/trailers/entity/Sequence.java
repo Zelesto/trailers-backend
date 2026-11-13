@@ -24,8 +24,8 @@ public class Sequence {
     @Column(name = "table_name", nullable = false, length = 50)
     private String tableName;
 
-    @Column(name = "year", nullable = false, length = 4)  // Changed to VARCHAR(4)
-    private String year; 
+    @Column(name = "\"year\"", nullable = false, length = 4)
+    private String year;
 
     @Column(name = "next_number", nullable = false)
     private Long nextNumber;

@@ -377,7 +377,7 @@ public class AuthController {
         }
     }
 
-    @GetMapping("/verify-token")
+    @GetMapping({"/verify", "/verify-token"})
     public ResponseEntity<?> verifyToken(@RequestHeader(value = "Authorization", required = false) String authHeader) {
         log.info("=== VERIFY TOKEN ENDPOINT ===");
 

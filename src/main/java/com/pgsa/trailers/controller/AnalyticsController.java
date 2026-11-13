@@ -50,7 +50,7 @@ public class AnalyticsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
     ) {
         log.info("📊 Dashboard requested by: {}", authentication != null ? authentication.getName() : "anonymous");
-        
+
         // Default to current month if not specified
         if (endDate == null) endDate = LocalDate.now();
         if (startDate == null) startDate = endDate.minusDays(30);
@@ -71,7 +71,7 @@ public class AnalyticsController {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
         response.put("timestamp", System.currentTimeMillis());
-        response.put("period", Map.of(
+        response.put("period", buildSafeMap(
                 "startDate", startDate.toString(),
                 "endDate", endDate.toString(),
                 "days", java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate)
@@ -93,53 +93,53 @@ public class AnalyticsController {
         response.put("summary", summaryData);
 
         // === VEHICLE STATS ===
-        response.put("vehicleStats", Map.of(
-                "activeVehicles", vehicleStats.get("activeVehicles"),
-                "vehiclesInTrip", vehicleStats.get("vehiclesInTrip"),
-                "vehiclesNotAvailable", vehicleStats.get("vehiclesNotAvailable"),
-                "plannedKm", vehicleStats.get("plannedKm"),
-                "travelledKm", vehicleStats.get("travelledKm"),
-                "totalVehicles", vehicleStats.get("totalVehicles")
+        response.put("vehicleStats", buildSafeMap(
+                "activeVehicles", safeValue(vehicleStats, "activeVehicles"),
+                "vehiclesInTrip", safeValue(vehicleStats, "vehiclesInTrip"),
+                "vehiclesNotAvailable", safeValue(vehicleStats, "vehiclesNotAvailable"),
+                "plannedKm", safeValue(vehicleStats, "plannedKm"),
+                "travelledKm", safeValue(vehicleStats, "travelledKm"),
+                "totalVehicles", safeValue(vehicleStats, "totalVehicles")
         ));
 
         // === DRIVER STATS ===
-        response.put("driverStats", Map.of(
-                "activeDrivers", driverStats.get("activeDrivers"),
-                "driversInTrip", driverStats.get("driversInTrip"),
-                "driversNotAvailable", driverStats.get("driversNotAvailable"),
-                "plannedDrivers", driverStats.get("driversWithPlanned"),
-                "totalDrivers", driverStats.get("totalDrivers"),
-                "totalTrips", driverStats.get("totalTrips")
+        response.put("driverStats", buildSafeMap(
+                "activeDrivers", safeValue(driverStats, "activeDrivers"),
+                "driversInTrip", safeValue(driverStats, "driversInTrip"),
+                "driversNotAvailable", safeValue(driverStats, "driversNotAvailable"),
+                "plannedDrivers", safeValue(driverStats, "driversWithPlanned"),
+                "totalDrivers", safeValue(driverStats, "totalDrivers"),
+                "totalTrips", safeValue(driverStats, "totalTrips")
         ));
 
         // === FUEL STATS ===
-        response.put("fuelStats", Map.of(
-                "totalKm", fuelStats.get("totalKm"),
-                "totalFuel", fuelStats.get("totalFuel"),
-                "totalFuelCost", fuelStats.get("totalFuelCost"),
-                "avgEfficiency", fuelStats.get("avgEfficiency"),
-                "avgCostPerKm", fuelStats.get("avgCostPerKm"),
-                "vehicleEfficiency", fuelStats.get("vehicleEfficiency"),
-                "driverEfficiency", fuelStats.get("driverEfficiency")
+        response.put("fuelStats", buildSafeMap(
+                "totalKm", safeValue(fuelStats, "totalKm"),
+                "totalFuel", safeValue(fuelStats, "totalFuel"),
+                "totalFuelCost", safeValue(fuelStats, "totalFuelCost"),
+                "avgEfficiency", safeValue(fuelStats, "avgEfficiency"),
+                "avgCostPerKm", safeValue(fuelStats, "avgCostPerKm"),
+                "vehicleEfficiency", safeValue(fuelStats, "vehicleEfficiency"),
+                "driverEfficiency", safeValue(fuelStats, "driverEfficiency")
         ));
 
         // === DISTANCE STATS ===
-        response.put("distanceStats", Map.of(
-                "totalKm", distanceStats.get("totalKm"),
-                "totalTrips", distanceStats.get("totalTrips"),
-                "completedTrips", distanceStats.get("completedTrips"),
-                "avgKmPerTrip", distanceStats.get("avgKmPerTrip")
+        response.put("distanceStats", buildSafeMap(
+                "totalKm", safeValue(distanceStats, "totalKm"),
+                "totalTrips", safeValue(distanceStats, "totalTrips"),
+                "completedTrips", safeValue(distanceStats, "completedTrips"),
+                "avgKmPerTrip", safeValue(distanceStats, "avgKmPerTrip")
         ));
 
         // === VEHICLE KPIs ===
         response.put("vehicleKpis", vehicleKpis.stream()
-                .map(v -> Map.of(
-                        "registrationNumber", v.registrationNumber(),
-                        "totalKm", v.totalKm(),
-                        "fuelLiters", v.fuelLiters(),
-                        "fuelCost", v.fuelCost(),
-                        "kmPerLiter", v.kmPerLiter(),
-                        "costPerKm", v.costPerKm()
+                .map(v -> buildSafeMap(
+                        "registrationNumber", safeValue(v.registrationNumber(), "Unknown"),
+                        "totalKm", safeValue(v.totalKm(), BigDecimal.ZERO),
+                        "fuelLiters", safeValue(v.fuelLiters(), BigDecimal.ZERO),
+                        "fuelCost", safeValue(v.fuelCost(), BigDecimal.ZERO),
+                        "kmPerLiter", safeValue(v.kmPerLiter(), BigDecimal.ZERO),
+                        "costPerKm", safeValue(v.costPerKm(), BigDecimal.ZERO)
                 ))
                 .collect(Collectors.toList()));
 
@@ -147,17 +147,17 @@ public class AnalyticsController {
         response.put("driverKpis", driverKpis.stream()
                 .map(d -> {
                     Map<String, Object> map = new LinkedHashMap<>();
-                    map.put("driverName", d.driver());
-                    map.put("tripsCompleted", d.tripsCompleted());
-                    map.put("totalKm", d.totalKm());
-                    map.put("fuelCost", d.fuelCost());
-                    map.put("totalRevenue", d.totalRevenue());
-                    map.put("totalCost", d.totalCost());
-                    map.put("profit", d.profit());
-                    map.put("efficiencyScore", d.efficiencyScore());
-                    map.put("costPerKm", d.getCostPerKm());
-                    map.put("revenuePerTrip", d.getRevenuePerTrip());
-                    map.put("profitMargin", d.getProfitMargin());
+                    map.put("driverName", safeValue(d.driver(), "Unknown"));
+                    map.put("tripsCompleted", safeValue(d.tripsCompleted(), 0));
+                    map.put("totalKm", safeValue(d.totalKm(), BigDecimal.ZERO));
+                    map.put("fuelCost", safeValue(d.fuelCost(), BigDecimal.ZERO));
+                    map.put("totalRevenue", safeValue(d.totalRevenue(), BigDecimal.ZERO));
+                    map.put("totalCost", safeValue(d.totalCost(), BigDecimal.ZERO));
+                    map.put("profit", safeValue(d.profit(), BigDecimal.ZERO));
+                    map.put("efficiencyScore", safeValue(d.efficiencyScore(), BigDecimal.ZERO));
+                    map.put("costPerKm", safeValue(d.getCostPerKm(), BigDecimal.ZERO));
+                    map.put("revenuePerTrip", safeValue(d.getRevenuePerTrip(), BigDecimal.ZERO));
+                    map.put("profitMargin", safeValue(d.getProfitMargin(), BigDecimal.ZERO));
                     return map;
                 })
                 .collect(Collectors.toList()));
@@ -170,9 +170,9 @@ public class AnalyticsController {
             VehicleKpiDTO mostEfficient = vehicleKpis.stream()
                     .max(Comparator.comparing(VehicleKpiDTO::kmPerLiter))
                     .orElse(vehicleKpis.get(0));
-            response.put("mostEfficientVehicle", Map.of(
-                    "registration", mostEfficient.registrationNumber(),
-                    "efficiency", mostEfficient.kmPerLiter()
+            response.put("mostEfficientVehicle", buildSafeMap(
+                    "registration", safeValue(mostEfficient.registrationNumber(), "N/A"),
+                    "efficiency", safeValue(mostEfficient.kmPerLiter(), BigDecimal.ZERO)
             ));
         }
 
@@ -181,10 +181,10 @@ public class AnalyticsController {
             DriverKpiDTO topDriver = driverKpis.stream()
                     .max(Comparator.comparing(DriverKpiDTO::profit))
                     .orElse(driverKpis.get(0));
-            response.put("topDriver", Map.of(
-                    "name", topDriver.driver(),
-                    "profit", topDriver.profit(),
-                    "tripsCompleted", topDriver.tripsCompleted()
+            response.put("topDriver", buildSafeMap(
+                    "name", safeValue(topDriver.driver(), "N/A"),
+                    "profit", safeValue(topDriver.profit(), BigDecimal.ZERO),
+                    "tripsCompleted", safeValue(topDriver.tripsCompleted(), 0)
             ));
         }
 
@@ -192,6 +192,26 @@ public class AnalyticsController {
                 vehicleKpis.size(), driverKpis.size(), summary.getTotalTrips());
 
         return ResponseEntity.ok(response);
+    }
+
+    private Map<String, Object> buildSafeMap(Object... keyValuePairs) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        for (int i = 0; i + 1 < keyValuePairs.length; i += 2) {
+            String key = String.valueOf(keyValuePairs[i]);
+            Object value = keyValuePairs[i + 1];
+            map.put(key, value == null ? 0 : value);
+        }
+        return map;
+    }
+
+    private Object safeValue(Map<String, Object> source, String key) {
+        if (source == null) return 0;
+        Object value = source.get(key);
+        return value == null ? 0 : value;
+    }
+
+    private Object safeValue(Object value, Object fallback) {
+        return value == null ? fallback : value;
     }
 
     @GetMapping("/vehicles")

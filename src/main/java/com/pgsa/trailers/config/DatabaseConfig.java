@@ -10,12 +10,15 @@ import java.net.URI;
 import java.net.URISyntaxException;
 
 @Configuration
-@Profile("production")
+@Profile({"prod", "production"})
 public class DatabaseConfig {
 
     @Bean
     public DataSource dataSource() throws URISyntaxException {
-        String databaseUrl = System.getenv("DATABASE_URL");
+        String databaseUrl = System.getenv("SPRING_DATASOURCE_URL");
+        if (databaseUrl == null || databaseUrl.isBlank()) {
+            databaseUrl = System.getenv("DATABASE_URL");
+        }
 
         if (databaseUrl == null) {
             // Use default for local development

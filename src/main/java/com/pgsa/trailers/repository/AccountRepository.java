@@ -12,7 +12,7 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 
     List<Account> findByType(String type);
 
-    List<Account> findByActiveTrue();
+    List<Account> findByStatus(String status);
 
     List<Account> findByNameContainingIgnoreCase(String name);
 

@@ -32,10 +32,10 @@ public interface DriverAnalyticsRepository extends JpaRepository<Driver, Long> {
         LEFT JOIN trip t ON t.driver_id = d.id 
             AND t.status IN ('COMPLETED', 'CLOSED', 'FINALIZED')
             AND t.is_active = true
-            AND DATE(t.actual_end_date) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
+            AND CAST(t.actual_end_date AS DATE) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
         LEFT JOIN fuel_slip fs ON fs.driver_id = d.id 
             AND fs.is_active = true
-            AND DATE(fs.transaction_date) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
+            AND CAST(fs.transaction_date AS DATE) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
         WHERE d.is_active = true AND d.status = 'ACTIVE'
         GROUP BY d.id, d.first_name, d.last_name
         HAVING COALESCE(COUNT(DISTINCT t.id), 0) > 0
@@ -66,10 +66,10 @@ public interface DriverAnalyticsRepository extends JpaRepository<Driver, Long> {
         LEFT JOIN trip t ON t.driver_id = d.id 
             AND t.status IN ('COMPLETED', 'CLOSED', 'FINALIZED')
             AND t.is_active = true
-            AND DATE(t.actual_end_date) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
+            AND CAST(t.actual_end_date AS DATE) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
         LEFT JOIN fuel_slip fs ON fs.driver_id = d.id 
             AND fs.is_active = true
-            AND DATE(fs.transaction_date) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
+            AND CAST(fs.transaction_date AS DATE) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE)
         WHERE d.is_active = true AND d.status = 'ACTIVE'
         GROUP BY d.id, d.first_name, d.last_name
         HAVING COALESCE(COUNT(DISTINCT t.id), 0) > 0

@@ -69,17 +69,21 @@ public class ExpenseController {
     public ResponseEntity<?> createExpense(@RequestBody Expense expense) {
         log.info("POST /api/expenses - Creating expense");
         try {
-            // ✅ Use SequenceService to generate expense number
-            if (expense.getExpenseNumber() == null || expense.getExpenseNumber().isEmpty()) {
+            // Ensure every new expense gets a unique, non-blank number and never reuses a stale duplicate.
+            if (expense.getExpenseNumber() == null || expense.getExpenseNumber().isBlank()
+                    || expenseRepository.findByExpenseNumber(expense.getExpenseNumber()).isPresent()) {
                 String year = String.valueOf(Year.now().getValue());
-                String expenseNumber = sequenceService.generateFormattedSequence(
-                    TABLE_NAME,
-                    PREFIX,
-                    year,
-                    PADDING
-                );
+                String expenseNumber;
+                do {
+                    expenseNumber = sequenceService.generateFormattedSequence(
+                            TABLE_NAME,
+                            PREFIX,
+                            year,
+                            PADDING
+                    );
+                } while (expenseRepository.findByExpenseNumber(expenseNumber).isPresent());
                 expense.setExpenseNumber(expenseNumber);
-                log.info("Generated expense number from sequence: {}", expenseNumber);
+                log.info("Generated unique expense number from sequence: {}", expenseNumber);
             }
 
             // Set defaults
@@ -129,12 +133,34 @@ public class ExpenseController {
     public ResponseEntity<?> updateExpense(@PathVariable Long id, @RequestBody Expense expense) {
         log.info("PUT /api/expenses/{}", id);
         try {
-            if (!expenseRepository.existsById(id)) {
-                return ResponseEntity.notFound().build();
-            }
+            Expense existingExpense = expenseRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Expense not found: " + id));
 
+            if (expense.getExpenseNumber() == null || expense.getExpenseNumber().isBlank()) {
+                expense.setExpenseNumber(existingExpense.getExpenseNumber());
+            }
             expense.setId(id);
+            expense.setCreatedAt(existingExpense.getCreatedAt());
+            expense.setCreatedBy(existingExpense.getCreatedBy());
             expense.setUpdatedAt(LocalDateTime.now());
+            if (expense.getStatus() == null) {
+                expense.setStatus(existingExpense.getStatus());
+            }
+            if (expense.getApprovalStatus() == null) {
+                expense.setApprovalStatus(existingExpense.getApprovalStatus());
+            }
+            if (expense.getTaxRate() == null) {
+                expense.setTaxRate(existingExpense.getTaxRate());
+            }
+            if (expense.getTaxDeductible() == null) {
+                expense.setTaxDeductible(existingExpense.getTaxDeductible());
+            }
+            if (expense.getReimbursementEligible() == null) {
+                expense.setReimbursementEligible(existingExpense.getReimbursementEligible());
+            }
+            if (expense.getCurrency() == null) {
+                expense.setCurrency(existingExpense.getCurrency());
+            }
 
             // Recalculate tax amount
             if (expense.getAmount() != null && expense.getTaxRate() != null) {

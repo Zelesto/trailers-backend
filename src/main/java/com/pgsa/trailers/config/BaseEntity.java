@@ -51,7 +51,13 @@ public abstract class BaseEntity {
     @Column(name = "version")
     private Integer version;
 
-    @Column(name = "is_active", nullable = false)
+    /**
+     * Compatibility note:
+     * Several live schemas in this project persist active state via a status column instead of is_active.
+     * Keeping this as transient avoids Hibernate schema-validation failures against tables that do not have
+     * an is_active column while preserving the in-memory helper methods used throughout the application.
+     */
+    @Transient
     private Boolean isActive = true;
 
     /**

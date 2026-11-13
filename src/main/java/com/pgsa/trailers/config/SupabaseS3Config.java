@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
+import org.springframework.util.StringUtils;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
@@ -43,11 +44,19 @@ public class SupabaseS3Config {
         this.environment = environment;
     }
 
+    private boolean isStorageConfigured() {
+        return StringUtils.hasText(endpoint)
+                && StringUtils.hasText(accessKeyId)
+                && StringUtils.hasText(secretAccessKey)
+                && StringUtils.hasText(bucketName)
+                && StringUtils.hasText(supabaseUrl);
+    }
+
     @Bean
     public S3Client supabaseS3Client() {
         String[] activeProfiles = environment.getActiveProfiles();
         String profile = activeProfiles.length > 0 ? activeProfiles[0] : "default";
-        
+
         log.info("========================================");
         log.info("Supabase S3 Configuration");
         log.info("Active Profile: {}", profile);
@@ -57,14 +66,16 @@ public class SupabaseS3Config {
         log.info("Supabase URL: {}", supabaseUrl);
         log.info("========================================");
 
-        // Validate credentials
-        if (accessKeyId == null || accessKeyId.isEmpty()) {
-            log.error("Supabase Access Key ID is missing!");
-            throw new IllegalStateException("Supabase Access Key ID is required");
+        if (!isStorageConfigured()) {
+            log.warn("Supabase storage is not configured; skipping S3 client initialization for local/test boot.");
+            return S3Client.builder()
+                    .region(Region.of(region))
+                    .credentialsProvider(StaticCredentialsProvider.create(
+                            AwsBasicCredentials.create("local-dev-access-key", "local-dev-secret-key")
+                    ))
+                    .build();
         }
 
-        // AWS SDK will automatically use the best available HTTP client
-        // (Netty is available since you have netty-nio-client dependency)
         return S3Client.builder()
                 .endpointOverride(URI.create(endpoint))
                 .region(Region.of(region))
@@ -80,6 +91,16 @@ public class SupabaseS3Config {
 
     @Bean
     public S3Presigner supabaseS3Presigner() {
+        if (!isStorageConfigured()) {
+            log.warn("Supabase storage is not configured; skipping S3 presigner initialization for local/test boot.");
+            return S3Presigner.builder()
+                    .region(Region.of(region))
+                    .credentialsProvider(StaticCredentialsProvider.create(
+                            AwsBasicCredentials.create("local-dev-access-key", "local-dev-secret-key")
+                    ))
+                    .build();
+        }
+
         return S3Presigner.builder()
                 .endpointOverride(URI.create(endpoint))
                 .region(Region.of(region))

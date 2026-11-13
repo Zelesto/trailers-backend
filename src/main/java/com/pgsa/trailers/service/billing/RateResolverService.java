@@ -3,16 +3,17 @@ package com.pgsa.trailers.service.billing;
 import com.pgsa.trailers.entity.billing.Rate;
 import com.pgsa.trailers.entity.billing.RateSchedule;
 import com.pgsa.trailers.entity.ops.Trip;
-import com.pgsa.trailers.repository.billing.RateRepository;
 import com.pgsa.trailers.repository.billing.HolidayRepository;
+import com.pgsa.trailers.repository.billing.RateRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -24,85 +25,83 @@ public class RateResolverService {
     private final HolidayRepository holidayRepository;
 
     /**
-     * Resolve the best matching rate for a trip
+     * Resolve the best matching rate for a trip.
+     * ✅ Guarantees the returned {@link Rate} is <b>persisted (managed)</b>.
      */
     public Rate resolveRate(Trip trip) {
         log.info("🔍 Resolving rate for Trip: {}", trip.getTripNumber());
 
-        LocalDate tripDate = trip.getPlannedStartDate() != null 
-            ? trip.getPlannedStartDate().toLocalDate() 
-            : LocalDate.now();
+        LocalDate tripDate = trip.getPlannedStartDate() != null
+                ? trip.getPlannedStartDate().toLocalDate()
+                : LocalDate.now();
 
-        LocalTime tripTime = trip.getPlannedStartDate() != null 
-            ? trip.getPlannedStartDate().toLocalTime() 
-            : LocalTime.now();
+        LocalTime tripTime = trip.getPlannedStartDate() != null
+                ? trip.getPlannedStartDate().toLocalTime()
+                : LocalTime.now();
 
-        // Get vehicle type string from vehicle
-        String vehicleType = trip.getVehicle() != null 
-            ? trip.getVehicle().getVehicleType() 
-            : "TRUCK";
+        Long customerId = trip.getCustomerId();
 
-        // Get commodity from trip
-        String commodity = trip.getCommodityType();
+        List<Rate> allValid = rateRepository.findAllValidAtDate(tripDate);
+        log.debug("Loaded {} rates valid on {}", allValid.size(), tripDate);
 
-        // Get destination (for pattern matching)
-        String destination = trip.getDestinationLocation();
+        List<Rate> matching = allValid.stream()
+                .filter(r -> matchesCustomer(r, customerId))
+                .filter(r -> matchesSchedule(r, tripDate, tripTime))
+                .toList();
 
-        // 1. Find candidate rates with best match
-        List<Rate> candidates = rateRepository.findBestMatchingRates(
-            trip.getCustomerId(),
-            vehicleType,
-            destination,
-            commodity,
-            tripDate
-        );
-
-        log.debug("Found {} candidate rates", candidates.size());
-
-        // 2. Filter by schedule
-        List<Rate> scheduledRates = candidates.stream()
-            .filter(rate -> matchesSchedule(rate, tripDate, tripTime))
-            .toList();
-
-        if (scheduledRates.isEmpty()) {
-            log.warn("⚠️ No matching rate found for Trip: {}, using default", trip.getTripNumber());
-            return createDefaultRate();
+        if (matching.isEmpty()) {
+            log.warn("⚠️ No matching rate found for Trip: {}, using default",
+                    trip.getTripNumber());
+            return getOrCreateDefaultRate();
         }
 
-        // 3. Sort by priority (customer-specific first)
-        scheduledRates.sort((r1, r2) -> {
-            // Customer-specific rates beat defaults
-            boolean r1HasCustomer = r1.getCustomer() != null;
-            boolean r2HasCustomer = r2.getCustomer() != null;
-            
-            if (r1HasCustomer && !r2HasCustomer) return -1;
-            if (!r1HasCustomer && r2HasCustomer) return 1;
-            
-            // Then by priority (higher first)
-            return r2.getPriority().compareTo(r1.getPriority());
-        });
+        Rate best = matching.stream()
+                .min(Comparator
+                        .comparing((Rate r) -> r.getCustomer() == null ? 1 : 0)
+                        .thenComparing(r -> r.getPriority() == null
+                                ? Integer.MIN_VALUE
+                                : -r.getPriority()))
+                .orElseThrow();
 
-        Rate bestRate = scheduledRates.get(0);
-        log.info("✅ Resolved rate {} for Trip: {}", bestRate.getId(), trip.getTripNumber());
-        
-        return bestRate;
+        log.info("✅ Resolved rate {} for Trip: {}", best.getId(), trip.getTripNumber());
+        return best;
     }
 
     /**
-     * Check if rate schedule matches trip date/time
+     * ✅ Return a persisted default rate. Any customer-agnostic rate is a
+     * candidate (matches production rows with {@code priority = -100}).
+     * Picks lowest {@code id} deterministically.
      */
+    @Transactional
+    public Rate getOrCreateDefaultRate() {
+        return rateRepository.findAll().stream()
+                .filter(r -> r.getCustomer() == null)
+                .min(Comparator.comparing(Rate::getId))
+                .orElseGet(() -> {
+                    log.info("🆕 No default rate exists — creating one");
+                    return rateRepository.save(buildDefaultRate());
+                });
+    }
+
+    // ---------------------------------------------------------------------
+
+    private boolean matchesCustomer(Rate rate, Long customerId) {
+        if (rate.getCustomer() == null) return true;   // generic rate
+        if (customerId == null) return false;
+        return customerId.equals(rate.getCustomer().getId());
+    }
+
     private boolean matchesSchedule(Rate rate, LocalDate tripDate, LocalTime tripTime) {
         RateSchedule schedule = rate.getSchedule();
-        
-        if (schedule == null) {
-            return true; // Always applies
-        }
+        if (schedule == null) return true;
+        String applyOn = schedule.getApplyOn();
+        if (applyOn == null) return true;   // ✅ null-safe switch
 
-        return switch (schedule.getApplyOn()) {
+        return switch (applyOn) {
             case "WEEKDAY" -> tripDate.getDayOfWeek().getValue() <= 5;
             case "WEEKEND" -> tripDate.getDayOfWeek().getValue() >= 6;
-            case "OVERNIGHT" -> tripTime.isBefore(LocalTime.of(6, 0)) || 
-                               tripTime.isAfter(LocalTime.of(22, 0));
+            case "OVERNIGHT" -> tripTime.isBefore(LocalTime.of(6, 0))
+                    || tripTime.isAfter(LocalTime.of(22, 0));
             case "HOLIDAY" -> holidayRepository.existsByHolidayDate(tripDate);
             case "SPECIFIC_DATE" -> tripDate.equals(schedule.getSpecificDate());
             default -> true;
@@ -110,23 +109,20 @@ public class RateResolverService {
     }
 
     /**
-     * Check if destination matches pattern
+     * ✅ Mirrors production defaults: per_km=18.50, crane=750, priority=-100.
+     * <b>validFrom MUST be set</b> — the {@code rates.valid_from} column is NOT NULL.
      */
-    private boolean destinationMatches(String destination, String pattern) {
-        if (pattern == null) return true;
-        if (destination == null) return false;
-        return destination.toUpperCase().contains(pattern.toUpperCase());
-    }
-
-    private Rate createDefaultRate() {
-        Rate defaultRate = new Rate();
-        defaultRate.setPerKm(new BigDecimal("1.50"));
-        defaultRate.setPerTon(new BigDecimal("50.00"));
-        defaultRate.setPerDay(new BigDecimal("2500.00"));
-        defaultRate.setLabourHourlyRate(new BigDecimal("200.00"));
-        defaultRate.setCraneHourlyRate(new BigDecimal("350.00"));
-        defaultRate.setFixedAmount(BigDecimal.ZERO);
-        defaultRate.setPriority(0);
-        return defaultRate;
+    private Rate buildDefaultRate() {
+        Rate r = new Rate();
+        r.setPerKm(new BigDecimal("18.50"));
+        r.setPerTon(null);
+        r.setPerDay(null);
+        r.setLabourHourlyRate(null);
+        r.setCraneHourlyRate(new BigDecimal("750.00"));
+        r.setFixedAmount(BigDecimal.ZERO);
+        r.setPriority(-100);
+        r.setValidFrom(LocalDate.now());
+        r.setValidTo(LocalDate.of(2099, 12, 31));
+        return r;
     }
 }

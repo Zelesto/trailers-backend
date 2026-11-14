@@ -34,7 +34,7 @@
     <parameter name="reportGenerated" class="java.lang.String"/>
 
     <!-- Styles -->
-    <style name="Title" isDefault="false" fontName="Arial" fontSize="18" isBold="true"/>
+    <style name="Title" fontName="Arial" fontSize="18" isBold="true"/>
     <style name="Subtitle" isDefault="false" fontName="Arial" fontSize="14" isBold="true"/>
     <style name="SectionHeader" isDefault="false" fontName="Arial" fontSize="12" isBold="true" forecolor="#4F46E5"/>
     <style name="Label" isDefault="false" fontName="Arial" fontSize="10" forecolor="#6B7280"/>

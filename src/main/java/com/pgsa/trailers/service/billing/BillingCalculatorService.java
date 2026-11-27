@@ -3,6 +3,7 @@ package com.pgsa.trailers.service.billing;
 import com.pgsa.trailers.entity.billing.LoadBilling;
 import com.pgsa.trailers.entity.billing.Rate;
 import com.pgsa.trailers.entity.billing.TripBilling;
+import com.pgsa.trailers.entity.ResourceNotFoundException;
 import com.pgsa.trailers.entity.ops.Load;
 import com.pgsa.trailers.entity.ops.Trip;
 import com.pgsa.trailers.repository.LoadRepository;
@@ -308,7 +309,9 @@ public class BillingCalculatorService {
 
     public TripBilling getTripBilling(Long tripId) {
         TripBilling b = tripBillingRepository.findByTripId(tripId);
-        if (b == null) throw new IllegalArgumentException("Trip billing not found: " + tripId);
+        if (b == null) {
+            throw new ResourceNotFoundException("Trip billing", "tripId", tripId);
+        }
         return b;
     }
 

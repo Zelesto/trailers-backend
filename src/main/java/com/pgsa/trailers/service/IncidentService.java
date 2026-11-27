@@ -79,37 +79,26 @@ public class IncidentService {
 
     /**
      * Get all incidents for a trip (non-paginated)
-     * ✅ Returns empty list if no incidents or error
      */
     @Transactional(readOnly = true)
     public List<IncidentDTO> getIncidentsByTripId(Long tripId) {
         log.info("Getting all incidents for tripId: {}", tripId);
-        
-        try {
-            // Check if trip exists
-            if (tripId == null || !tripRepository.existsById(tripId)) {
-                log.warn("Trip not found with id: {}", tripId);
-                return new ArrayList<>();
-            }
-            
-            List<Incident> incidents = incidentRepository.findByTripId(tripId);
-            
-            if (incidents == null || incidents.isEmpty()) {
-                log.info("No incidents found for trip {}", tripId);
-                return new ArrayList<>();
-            }
-            
-            log.info("Found {} incidents for trip {}", incidents.size(), tripId);
-            
-            return incidents.stream()
-                    .map(this::toDTO)
-                    .collect(Collectors.toList());
-                    
-        } catch (Exception e) {
-            log.error("Error fetching incidents for trip {}: {}", tripId, e.getMessage(), e);
-            // ✅ Return empty list instead of throwing
+
+        if (tripId == null || !tripRepository.existsById(tripId)) {
+            log.warn("Trip not found with id: {}", tripId);
             return new ArrayList<>();
         }
+
+        List<Incident> incidents = incidentRepository.findByTripId(tripId);
+        if (incidents.isEmpty()) {
+            log.info("No incidents found for trip {}", tripId);
+            return new ArrayList<>();
+        }
+
+        log.info("Found {} incidents for trip {}", incidents.size(), tripId);
+        return incidents.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -118,20 +107,14 @@ public class IncidentService {
     @Transactional(readOnly = true)
     public Page<IncidentDTO> getIncidentsByTripId(Long tripId, Pageable pageable) {
         log.info("Getting paginated incidents for tripId: {}", tripId);
-        
-        try {
-            if (tripId == null || !tripRepository.existsById(tripId)) {
-                log.warn("Trip not found with id: {}", tripId);
-                return Page.empty(pageable);
-            }
-            
-            Page<Incident> incidents = incidentRepository.findByTripId(tripId, pageable);
-            return incidents.map(this::toDTO);
-            
-        } catch (Exception e) {
-            log.error("Error fetching paginated incidents for trip {}: {}", tripId, e.getMessage(), e);
+
+        if (tripId == null || !tripRepository.existsById(tripId)) {
+            log.warn("Trip not found with id: {}", tripId);
             return Page.empty(pageable);
         }
+
+        return incidentRepository.findByTripId(tripId, pageable)
+                .map(this::toDTO);
     }
 
     /**

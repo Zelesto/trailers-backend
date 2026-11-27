@@ -1,6 +1,7 @@
 package com.pgsa.trailers.service.billing;
 
 import com.pgsa.trailers.entity.billing.LoadBilling;
+import com.pgsa.trailers.entity.ResourceNotFoundException;
 import com.pgsa.trailers.entity.ops.Load;
 import com.pgsa.trailers.entity.ops.Trip;
 import com.pgsa.trailers.repository.LoadRepository;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
@@ -70,5 +72,14 @@ class BillingCalculatorServiceTest {
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getLoadId()).isEqualTo("LD-100");
         assertThat(result.get(0).getStatus()).isEqualTo("CALCULATED");
+    }
+
+    @Test
+    void getTripBillingThrowsNotFoundWhenBillingDoesNotExist() {
+        when(tripBillingRepository.findByTripId(275L)).thenReturn(null);
+
+        assertThatThrownBy(() -> billingCalculatorService.getTripBilling(275L))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Trip billing not found");
     }
 }
